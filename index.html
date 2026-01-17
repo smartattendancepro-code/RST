@@ -356,6 +356,51 @@
             </div>
 
             <div class="card-body-content">
+                <!-- ✅✅✅ ضع هذا الكود داخل card-body-content بدلاً من القديم ✅✅✅ -->
+                <div id="screenFaceCheck" class="section">
+                    <!-- زر الرجوع -->
+                    <button onclick="goBackToWelcome()" class="floating-back-btn">
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+
+                    <div style="padding-top: 20px; width: 100%; text-align: center;">
+                        <h1 style="margin-bottom: 20px;">التعرف على الهوية</h1>
+
+                        <!-- حاوية الكاميرا بالتصميم الجديد -->
+                        <div class="camera-wrapper"
+                            style="position: relative; width: 100%; height: 50vh; background: #000; display: flex; justify-content: center; align-items: center; overflow: hidden; border-radius: 20px; margin: 0 auto; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+
+                            <!-- عنصر الفيديو -->
+                            <video id="video" autoplay muted playsinline
+                                style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);"></video>
+
+                            <!-- الرسوم المتحركة للتحميل -->
+                            <div id="loaderSpinner" class="spinner-overlay" style="display: none;">
+                                <i class="fa-solid fa-user-shield large-loader-icon"></i>
+                                <div class="spinner"></div>
+                            </div>
+
+                            <!-- إطار الوجه -->
+                            <div class="face-overlay"
+                                style="position: absolute; width: 220px; height: 220px; border: 3px solid rgba(255, 255, 255, 0.6); border-radius: 50%; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);">
+                            </div>
+                        </div>
+
+                        <!-- نصوص الحالة -->
+                        <h3 id="statusTxt" style="color:#0ea5e9; font-weight:bold; margin-top:20px; font-size: 1.2rem;">
+                            جاري تشغيل الكاميرا...
+                        </h3>
+                        <p style="font-size:13px; color: #64748b; margin-top:5px;">
+                            يرجى تثبيت وجهك داخل الإطار وعدم التحرك
+                        </p>
+
+                        <!-- زر الطوارئ -->
+                        <button onclick="window.goBackToWelcome()"
+                            style="margin-top: 20px; background: #fee2e2; color: #ef4444; border: none; padding: 10px 20px; border-radius: 10px; font-weight: bold; cursor: pointer;">
+                            إلغاء وعودة
+                        </button>
+                    </div>
+                </div>
                 <div id="screenWelcome" class="section active">
                     <div class="halo-container-v2">
 
@@ -888,35 +933,6 @@
                                 </div>
                             </div>
                         </div>
-                        <div id="screenFaceCheck" class="section">
-                            <h1>التعرف على الهوية</h1>
-                            <div class="cam-container" id="camBorder">
-                                <video id="video" autoplay muted playsinline></video>
-                                <div id="loaderSpinner" class="spinner-overlay">
-                                    <i class="fa-solid fa-user-shield large-loader-icon"></i>
-                                    <div class="spinner"></div>
-                                    <p
-                                        style="color:var(--text-main); font-size:14px; margin-top:15px; font-weight:bold;">
-                                        جاري
-                                        تهيئة النظام...</p>
-                                </div>
-                                <div id="modernTimerContainer" class="timer-circular-wrapper">
-                                    <svg class="timer-svg-face" viewBox="0 0 100 100">
-                                        <circle class="timer-circle-bg-face" cx="50" cy="50" r="45"></circle>
-                                        <circle class="timer-circle-fg" id="timerProgressFace" cx="50" cy="50" r="45">
-                                        </circle>
-                                    </svg>
-                                    <div class="timer-text-box">
-                                        <span class="timer-number-face en-font" id="timerNumberFace">3</span>
-                                    </div>
-                                </div>
-                                <div id="alertBadge" class="alert-badge">⚠️</div>
-                            </div>
-                            <h3 id="statusTxt" style="color:#0ea5e9; font-weight:bold; margin-top:10px;">جاري التشغيل...
-                            </h3>
-                            <p style="font-size:12px; margin-top:5px;">يجب أن يكون وجهك ثابتاً وبدون ضحك</p>
-                        </div>
-
                         <div id="screenScanQR" class="section">
                             <h1 class="scan-title-modern">مسح رمز الحضور</h1>
 
@@ -2213,40 +2229,6 @@
             style="width: 80%; background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid #ef4444; padding: 12px; border-radius: 12px; font-weight: 700; cursor: pointer; transition: 0.3s;">
             <i class="fa-solid fa-right-from-bracket"></i> SIGN OUT
         </button>
-    </div>
-
-    <div id="screenFaceCheck" class="screen hidden">
-
-        <div class="screen-header">
-            <h2>التحقق من الهوية</h2>
-        </div>
-
-        <div class="camera-wrapper"
-            style="position: relative; width: 100%; height: 60vh; background: #000; display: flex; justify-content: center; align-items: center; overflow: hidden; border-radius: 20px; margin: 20px 0;">
-
-            <!-- عنصر الفيديو (مهم جداً) -->
-            <video id="video" autoplay muted playsinline
-                style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);"></video>
-
-            <!-- إطار توضيحي للوجه -->
-            <div class="face-overlay"
-                style="position: absolute; width: 250px; height: 250px; border: 3px solid rgba(255, 255, 255, 0.5); border-radius: 50%; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);">
-            </div>
-
-        </div>
-
-        <!-- نص الحالة -->
-        <p id="statusTxt"
-            style="text-align: center; font-weight: bold; font-size: 1.1rem; color: #555; margin-top: 15px;">
-            جاري تهيئة الكاميرا...
-        </p>
-
-        <!-- زر رجوع للطوارئ -->
-        <button onclick="window.goBackToWelcome()"
-            style="margin-top: 20px; background: #ef4444; color: white; border: none; padding: 10px 20px; border-radius: 10px; width: 100%;">
-            إلغاء وعودة
-        </button>
-
     </div>
 </div>
 <style>
