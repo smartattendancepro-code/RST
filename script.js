@@ -136,7 +136,7 @@ window.performLogout = performLogout;
 window.performLogout = performLogout; // تصديرها للخارج
 
 const firebaseConfig = {
-    apiKey: "AIzaSyAn4rmd8AfTf6oBvrDewqpeK9x1-mgksyI",
+    apiKey: "AIzaSyBQjD4FZKkhXQIL5FlyBs_VaEzW2GBBtGs",
     authDomain: "attendance-system-pro-dbdf1.firebaseapp.com",
     projectId: "attendance-system-pro-dbdf1",
     storageBucket: "attendance-system-pro-dbdf1.firebasestorage.app",
@@ -8097,4 +8097,5 @@ window.resetDoorLimit = function () {
     input.value = ""; // قيمة فارغة تعني 9999 في السيستم
 
     if (navigator.vibrate) navigator.vibrate(50);
+
 };
