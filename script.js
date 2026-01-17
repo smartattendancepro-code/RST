@@ -151,6 +151,7 @@ const db = initializeFirestore(app, {
         tabManager: persistentMultipleTabManager()
     })
 });
+window.db = db;
 
 const auth = getAuth(app);
 
@@ -380,7 +381,6 @@ const i18n = {
         customize_restrictions_title: "تخصيص القيود",
         customize_restrictions_desc: "حدد القيود التي تريد تعطيلها (إلغاءها) لتسهيل دخول الطلاب:",
         disable_gps_label: "إلغاء الموقع (GPS)",
-        disable_face_label: "إلغاء بصمة الوجه",
         disable_qr_label: "إلغاء كود QR",
         activate_selected_btn: "تفعيل المحدد ✅",
         stop_quick_mode_btn: "إيقاف الوضع السريع",
@@ -589,10 +589,8 @@ const i18n = {
         session_pass_label: "Session Password (If any)",
         confirm_join_btn: "CONFIRM & ENTER",
 
-        face_check_title: "Identity Verification",
         system_init: "Initializing system...",
         starting: "Starting...",
-        face_instruction: "Face must be stable, no smiling",
 
         scan_qr_title: "Scan Attendance QR",
         student_name_label: "Student Name",
@@ -704,7 +702,6 @@ const i18n = {
         customize_restrictions_title: "Customize Restrictions",
         customize_restrictions_desc: "Select restrictions to DISABLE (Bypass) for easier entry:",
         disable_gps_label: "Disable GPS",
-        disable_face_label: "Disable Face ID",
         disable_qr_label: "Disable QR Code",
         activate_selected_btn: "Activate Selected ✅",
         stop_quick_mode_btn: "Stop Quick Mode",
@@ -1906,7 +1903,6 @@ document.addEventListener('click', (e) => {
                 if (data.isQuickMode && data.quickModeFlags) {
                     sessionStorage.setItem('is_quick_mode_active', 'true');
                     sessionStorage.setItem('qm_disable_gps', data.quickModeFlags.disableGPS);
-                    sessionStorage.setItem('qm_disable_face', data.quickModeFlags.disableFace);
                     sessionStorage.setItem('qm_disable_qr', data.quickModeFlags.disableQR);
 
                     if (typeof applyQuickModeVisuals === 'function') applyQuickModeVisuals();
@@ -2277,6 +2273,7 @@ document.addEventListener('click', (e) => {
         btn.style.pointerEvents = 'none';
 
         try {
+            // 1. جلب بيانات الجلسة (من الكود القديم - ضروري للتحقق)
             const sessionRef = doc(db, "active_sessions", targetDrUID);
             const sessionSnap = await getDoc(sessionRef);
 
@@ -2293,6 +2290,44 @@ document.addEventListener('click', (e) => {
             if (sessionData.sessionPassword && sessionData.sessionPassword !== "" && passInput !== sessionData.sessionPassword) {
                 throw new Error("❌ كلمة المرور غير صحيحة");
             }
+
+            // ============================================================
+            // 🔥 [إضافة جديدة] فحص إعدادات البصمة وتحويل المسار
+            // ============================================================
+            let isFaceDisabled = false;
+            try {
+                // فحص إعدادات اللوحة المركزية (Control Panel)
+                const settingsRef = doc(db, "settings", "control_panel");
+                const settingsSnap = await getDoc(settingsRef);
+
+                if (settingsSnap.exists()) {
+                    const sData = settingsSnap.data();
+                    // الشرط: الوضع السريع مفعل + خيار إلغاء الوجه مفعل
+                    if (sData.isQuickMode && sData.quickModeFlags && sData.quickModeFlags.disableFace) {
+                        isFaceDisabled = true;
+                    }
+                }
+            } catch (err) {
+                console.log("Settings check skipped, using default.");
+            }
+
+            // لو البصمة مطلوبة + ملف النظام الجديد موجود -> حول عليه واخرج من الدالة دي
+            if (!isFaceDisabled && window.faceSystem && window.faceSystem.handleJoinRequest) {
+                console.log("📸 تحويل إلى نظام بصمة الوجه...");
+
+                // تسليم البيانات للنظام الجديد ليتصرف
+                await window.faceSystem.handleJoinRequest(user, targetDrUID, passInput);
+
+                // إعادة الزر لحالته الطبيعية في الخلفية لأننا خرجنا من الفلو القديم
+                btn.innerHTML = originalText;
+                btn.style.pointerEvents = 'auto';
+                return; // 🛑 توقف هنا ولا تكمل الكود القديم
+            }
+            // ============================================================
+            // 🔥 [نهاية الإضافة الجديدة] - ما يلي هو الكود القديم تماماً (Fallback)
+            // ============================================================
+
+            console.log("⚡ دخول مباشر (بصمة الوجه معطلة أو غير مطلوبة)");
 
             const gpsData = await getSilentLocationData();
             const deviceFingerprint = localStorage.getItem("unique_device_id_v3");
@@ -3703,37 +3738,53 @@ document.addEventListener('click', (e) => {
     };
 
     window.confirmQuickModeParams = async function () {
-        // 1. قراءة الحالة الحالية من المربعات (Checkboxes)
+        // 1. قراءة الحالة الحالية من المربعات (GPS, Face, QR)
         const gps = document.getElementById('chkDisableGPS').checked;
-        const face = document.getElementById('chkDisableFace').checked;
+        const face = document.getElementById('chkDisableFace').checked; // 🔥 إضافة خيار الوجه
         const qr = document.getElementById('chkDisableQR').checked;
 
         const btn = document.querySelector('#quickModeOptionsModal .btn-main');
         const originalText = btn.innerHTML;
 
         try {
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري المزامنة...';
+            const user = auth.currentUser;
+            if (!user) {
+                showToast("⚠️ يجب تسجيل الدخول كدكتور أولاً", 3000, "#f59e0b");
+                return;
+            }
 
-            // 2. تحديث السيرفر
-            const docRef = doc(db, "settings", "control_panel");
-            await setDoc(docRef, {
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري التخصيص...';
+            btn.style.pointerEvents = 'none';
+
+            // 2. تحديث السيرفر (في ملف الجلسة الخاص بالدكتور فقط)
+            // 🔥 التغيير الجذري: الحفظ في active_sessions بدلاً من Control Panel العامة
+            // ده بيضمن إن كل دكتور بيتحكم في طلابه هو بس
+            const sessionRef = doc(db, "active_sessions", user.uid);
+
+            await updateDoc(sessionRef, {
                 isQuickMode: (gps || face || qr), // يكون الوضع مفعل لو أي خيار فيهم صح
                 quickModeFlags: {
                     disableGPS: gps,
-                    disableFace: face,
+                    disableFace: face, // ✅ حفظنا خيار الوجه هنا
                     disableQR: qr
                 }
-            }, { merge: true });
+            });
 
             // 3. نجاح العملية
-            showToast("⚡ تم حفظ وتفعيل الإعدادات بنجاح", 3000, "#10b981");
+            showToast("⚡ تم تحديث إعدادات جلستك بنجاح", 3000, "#10b981");
             document.getElementById('quickModeOptionsModal').style.display = 'none';
 
         } catch (e) {
             console.error("Save Error:", e);
-            showToast("❌ خطأ في الأذونات أو الاتصال", 3000, "#ef4444");
+            // رسالة أوضح للدكتور لو حاول يعدل وهو مش فاتح جلسة
+            if (e.code === 'not-found' || e.message.includes('No document')) {
+                showToast("❌ لا توجد جلسة نشطة لتعديلها. ابدأ محاضرة أولاً.", 4000, "#ef4444");
+            } else {
+                showToast("❌ حدث خطأ أثناء الحفظ", 3000, "#ef4444");
+            }
         } finally {
             btn.innerHTML = originalText;
+            btn.style.pointerEvents = 'auto';
         }
     };
 
@@ -3742,7 +3793,7 @@ document.addEventListener('click', (e) => {
             const docRef = doc(db, "settings", "control_panel");
             await setDoc(docRef, {
                 isQuickMode: false,
-                quickModeFlags: { disableGPS: false, disableFace: false, disableQR: false }
+                quickModeFlags: { disableGPS: false, disableQR: false }
             }, { merge: true });
 
             // تصفير المربعات في الواجهة
@@ -3754,10 +3805,6 @@ document.addEventListener('click', (e) => {
             showToast("🛡️ تم استعادة وضع الحماية الكامل", 3000, "#0ea5e9");
         } catch (e) { console.error(e); }
     };
-
-    // ==========================================
-    // 🎨 دوال التأثير البصري (البهتان) - Visual Effects
-    // ==========================================
 
     function applyQuickModeVisuals() {
         // 1. جلب إعدادات QR فقط
@@ -3986,18 +4033,40 @@ document.addEventListener('click', (e) => {
             btn.disabled = false;
         }
     };
-    // 4. دوال التحكم في نافذة الباسورد (للطالب)
+    // ============================================================
+    // 4. دالة تأكيد الباسورد (النسخة المربوطة بنظام البصمة الجديد)
+    // ============================================================
     window.verifyAndSubmit = function () {
+        // 1. جلب البيانات من الواجهة
         const passInput = document.getElementById('studentEnteredPass');
         const pass = passInput.value.trim();
+        const targetDrUID = sessionStorage.getItem('TEMP_DR_UID'); // المعرف المحفوظ من البحث
 
+        // 2. التحقق من المدخلات الأساسية
         if (!pass) {
             showToast("⚠️ الرجاء كتابة الرمز", 2000, "#f59e0b");
             return;
         }
 
-        // إعادة استدعاء دالة التسجيل مع تمرير الباسورد
-        submitToGoogle(pass);
+        if (!auth.currentUser) {
+            showToast("⚠️ يجب تسجيل الدخول أولاً", 3000, "#f59e0b");
+            return;
+        }
+
+        if (!targetDrUID) {
+            showToast("⚠️ خطأ في بيانات الجلسة، يرجى إعادة البحث", 3000, "#ef4444");
+            return;
+        }
+
+        if (window.faceSystem && window.faceSystem.handleJoinRequest) {
+
+            window.faceSystem.handleJoinRequest(auth.currentUser, targetDrUID, pass);
+
+        } else {
+            // في حالة حدوث كارثة ولم يتم تحميل الملف الجديد
+            console.error("❌ Fatal Error: face-system.js is missing or not loaded.");
+            showToast("❌ خطأ تقني: نظام التحقق غير جاهز. تأكد من الإنترنت وأعد التحميل.", 5000, "#ef4444");
+        }
     };
 
     window.closeStudentPassModal = function () {
@@ -8097,5 +8166,4 @@ window.resetDoorLimit = function () {
     input.value = ""; // قيمة فارغة تعني 9999 في السيستم
 
     if (navigator.vibrate) navigator.vibrate(50);
-
 };
