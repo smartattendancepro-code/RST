@@ -1,0 +1,245 @@
+
+
+/* 1. ضبط الحاوية الأساسية (لإلغاء أي ستايل قديم) */
+#toastNotification {
+    position: fixed;
+    top: 30px;
+    /* مسافة من الأعلى */
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 999999;
+    /* رقم عالي جداً ليظهر فوق كل النوافذ */
+    background: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    display: none;
+    /* مخفي افتراضياً */
+}
+
+/* 2. جسم الإشعار (الكارت الزجاجي) */
+.glass-toast-body {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    background: rgba(15, 23, 42, 0.80);
+    /* لون كحلي غامق مع شفافية */
+    backdrop-filter: blur(12px);
+    /* تأثير الزجاج (غباشة) */
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    /* حدود خفيفة */
+    box-shadow: 0 15px 40px -10px rgba(0, 0, 0, 0.6);
+    /* ظل عميق */
+    padding: 12px 20px;
+    border-radius: 16px;
+    min-width: 320px;
+    max-width: 90vw;
+
+    /* أنيميشن الدخول */
+    animation: slideInDown 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/* 3. حاوية اللوجو */
+.glass-logo-box {
+    width: 45px;
+    height: 45px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 0 15px rgba(14, 165, 233, 0.1);
+    /* توهج خفيف */
+}
+
+.glass-logo-box img {
+    width: 30px;
+    height: 30px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.2));
+}
+
+/* 4. النصوص */
+.glass-text-area {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.glass-title {
+    font-family: inherit;
+    /* نفس خط الموقع */
+    font-size: 14px;
+    font-weight: 800;
+    margin-bottom: 3px;
+    letter-spacing: 0.3px;
+}
+
+.glass-msg {
+    font-family: inherit;
+    font-size: 12px;
+    color: #cbd5e1;
+    /* لون رمادي فاتح */
+    line-height: 1.4;
+}
+
+/* 5. الأنيميشن (حركة مطاطية) */
+@keyframes slideInDown {
+    0% {
+        opacity: 0;
+        transform: translateY(-50px) scale(0.8);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes slideOutUp {
+    0% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translateY(-30px) scale(0.9);
+    }
+}
+
+/* زر العودة العائم (تم النقل لليمين) */
+.floating-back-btn {
+    position: absolute;
+    top: 65px;
+
+    right: 30px;
+    /* ✅ هنا التغيير: أصبح يمين */
+    left: auto;
+    /* إلغاء أي قيمة سابقة لليسار */
+
+    width: 45px;
+    height: 45px;
+    background: #cde7e3;
+    color: #020e0d;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    cursor: pointer;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    transition: all 0.2s ease;
+}
+
+.floating-back-btn:active {
+    transform: scale(0.95);
+    background: #09a9c5;
+}
+
+/* حاوية السحب للتحديث */
+.ptr-container {
+    position: fixed;
+    top: -80px; /* مخفي في البداية */
+    left: 0;
+    width: 100%;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999999; /* فوق كل شيء */
+    pointer-events: none; /* عشان ميعطلش اللمس */
+    transition: top 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* الدائرة البيضاء */
+.ptr-box {
+    width: 45px;
+    height: 45px;
+    background: #ffffff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    border: 1px solid #e2e8f0;
+    transform: scale(0.8);
+    transition: transform 0.2s;
+}
+
+/* الأيقونة داخل الدائرة */
+#ptrIcon {
+    color: #0ea5e9; /* لون أزرق */
+    font-size: 18px;
+    transition: transform 0.2s;
+}
+
+/* حركة الدوران أثناء التحميل */
+.ptr-loading #ptrIcon {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    100% { transform: rotate(360deg); }
+}
+
+/* الأيقونة داخل الدائرة */
+.ptr-box i {
+    color: #0ea5e9;
+    /* لون السيستم الأزرق */
+    font-size: 18px;
+    transition: transform 0.2s;
+}
+
+/* كلاس الدوران عند التحميل */
+.ptr-loading .ptr-box i {
+    animation: spin 1s linear infinite;
+    content: "\f2f1";
+    /* كود أيقونة التحديث (Rotate) في FontAwesome */
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+    transform: rotate(0deg) !important;
+    /* ريست للدوران اليدوي */
+}
+
+/* حركة الدوران */
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+/* ستارة التحميل */
+.loader-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #f8fafc; /* لون خلفية مريح للعين */
+    z-index: 999999999; /* فوق كل شيء */
+    display: flex; /* ظاهرة افتراضياً */
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.5s ease;
+}
+
+.loader-content {
+    text-align: center;
+    animation: pulse 1s infinite alternate;
+}
+
+/* كلاس للإخفاء الناعم */
+.loader-hidden {
+    opacity: 0;
+    pointer-events: none;
+}
