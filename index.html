@@ -2214,6 +2214,40 @@
             <i class="fa-solid fa-right-from-bracket"></i> SIGN OUT
         </button>
     </div>
+
+    <div id="screenFaceCheck" class="screen hidden">
+
+        <div class="screen-header">
+            <h2>التحقق من الهوية</h2>
+        </div>
+
+        <div class="camera-wrapper"
+            style="position: relative; width: 100%; height: 60vh; background: #000; display: flex; justify-content: center; align-items: center; overflow: hidden; border-radius: 20px; margin: 20px 0;">
+
+            <!-- عنصر الفيديو (مهم جداً) -->
+            <video id="video" autoplay muted playsinline
+                style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);"></video>
+
+            <!-- إطار توضيحي للوجه -->
+            <div class="face-overlay"
+                style="position: absolute; width: 250px; height: 250px; border: 3px solid rgba(255, 255, 255, 0.5); border-radius: 50%; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);">
+            </div>
+
+        </div>
+
+        <!-- نص الحالة -->
+        <p id="statusTxt"
+            style="text-align: center; font-weight: bold; font-size: 1.1rem; color: #555; margin-top: 15px;">
+            جاري تهيئة الكاميرا...
+        </p>
+
+        <!-- زر رجوع للطوارئ -->
+        <button onclick="window.goBackToWelcome()"
+            style="margin-top: 20px; background: #ef4444; color: white; border: none; padding: 10px 20px; border-radius: 10px; width: 100%;">
+            إلغاء وعودة
+        </button>
+
+    </div>
 </div>
 <style>
     /* 1. Main Container Setup - تم تعديل المحاذاة والبادينج */
