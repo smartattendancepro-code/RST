@@ -1,30 +1,32 @@
 // ============================================================
-// 👤 FACE ID SYSTEM - FULL LOGIC
+// 👤 FACE ID SYSTEM - SMART REGISTRATION & VERIFICATION
 // ============================================================
 
-import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+// ✅ استيراد setDoc لحفظ البصمة الجديدة
+import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// ✅ 1. تعريف الحاوية الأساسية (هذا هو السطر الذي كان ناقصاً)
+// تعريف الحاوية
 window.faceSystem = window.faceSystem || {};
 
-// متغيرات داخلية
+// متغيرات النظام
 let storedSessionData = null;
 let storedUser = null;
 let isModelsLoaded = false;
+let tempRegistrationDescriptor = null; // لتخزين البصمة المؤقتة أثناء التسجيل
 
 // ============================================================
-// 2. دالة جلب البصمة (نحتاجها للمقارنة)
+// 1. دالة جلب البصمة من قاعدة البيانات
 // ============================================================
 window.faceSystem.getFace = async function (uid) {
     try {
-        const db = window.db; // استخدام قاعدة البيانات الرئيسية
+        const db = window.db;
         const faceRef = doc(db, "face_biometrics", uid);
         const docSnap = await getDoc(faceRef);
 
         if (docSnap.exists()) {
             return new Float32Array(docSnap.data().descriptor);
         } else {
-            return null;
+            return null; // المستخدم جديد ليس له بصمة
         }
     } catch (e) {
         console.error("❌ Get Face Error:", e);
@@ -33,7 +35,7 @@ window.faceSystem.getFace = async function (uid) {
 };
 
 // ============================================================
-// 3. الدالة الرئيسية: استقبال طلب الدخول (Multi-Room Logic)
+// 2. معالجة طلب الانضمام (المنطق الرئيسي)
 // ============================================================
 window.faceSystem.handleJoinRequest = async function (user, targetDoctorUID, passwordInput) {
     storedUser = user;
@@ -41,7 +43,7 @@ window.faceSystem.handleJoinRequest = async function (user, targetDoctorUID, pas
     const originalText = btn ? btn.innerHTML : "";
 
     if (btn) {
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> فحص إعدادات القاعة...';
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> فحص القاعة...';
         btn.style.pointerEvents = 'none';
     }
 
@@ -54,7 +56,7 @@ window.faceSystem.handleJoinRequest = async function (user, targetDoctorUID, pas
 
         const sessionData = sessionSnap.data();
 
-        // 1. التحقق من حالة الجلسة والباسورد
+        // التحقق من الجلسة
         if (!sessionData.isActive || !sessionData.isDoorOpen) throw new Error("🔒 الجلسة مغلقة.");
         if (sessionData.sessionPassword && sessionData.sessionPassword !== "" && passwordInput !== sessionData.sessionPassword) {
             throw new Error("❌ كلمة المرور غير صحيحة");
@@ -62,45 +64,25 @@ window.faceSystem.handleJoinRequest = async function (user, targetDoctorUID, pas
 
         storedSessionData = { uid: targetDoctorUID, info: sessionData };
 
-        // ============================================================
-        // 🚦 نقطة الفصل الذكية (Smart Multi-Room Logic)
-        // ============================================================
-
-        // الافتراضي: البصمة مطلوبة دائماً للأمان
+        // التحقق من الوضع السريع (Quick Mode)
         let isFaceIDRequired = true;
-
-        // 🔥 التعديل هنا: فحص إعدادات "هذه الجلسة تحديداً"
-        // نقرأ من المتغير sessionData الذي جلبناه بالأعلى (لا حاجة لطلب جديد للسيرفر)
-
-        if (sessionData.isQuickMode === true) {
-            // التحقق: هل الدكتور صاحب هذه الجلسة قام بتعطيل البصمة؟
-            if (sessionData.quickModeFlags && sessionData.quickModeFlags.disableFace === true) {
-                isFaceIDRequired = false; // نعم، تم الإعفاء لهذه الجلسة فقط
-                console.log("🔓 تم تعطيل البصمة بواسطة المحاضر لهذه الجلسة.");
-            }
+        if (sessionData.isQuickMode === true && sessionData.quickModeFlags && sessionData.quickModeFlags.disableFace === true) {
+            isFaceIDRequired = false;
+            console.log("🔓 تم تعطيل البصمة لهذه الجلسة.");
         }
 
-        // ============================================================
-        // 🛤️ توجيه الطالب بناءً على القرار
-        // ============================================================
-
+        // التوجيه
         if (isFaceIDRequired) {
-            // ✅ المسار 1: البصمة مطلوبة (فتح الكاميرا)
-            console.log("📸 مطلوب بصمة وجه...");
-
-            // إغلاق نافذة الباسورد
+            // إخفاء نافذة الباسورد
             const passModal = document.getElementById('studentPassModal');
             if (passModal) passModal.style.display = 'none';
 
-            // الانتقال لشاشة الكاميرا
+            // الانتقال للكاميرا
             window.switchScreen('screenFaceCheck');
-
-            // تشغيل الكاميرا والذكاء الاصطناعي
             await initFaceCamera();
 
         } else {
-            // ✅ المسار 2: دخول مباشر (تم الإعفاء)
-            console.log("⚡ دخول سريع (تم تخطي البصمة).");
+            // دخول مباشر
             await finalizeJoiningProcess();
         }
 
@@ -115,86 +97,179 @@ window.faceSystem.handleJoinRequest = async function (user, targetDoctorUID, pas
 };
 
 // ============================================================
-// 4. تشغيل الكاميرا والذكاء الاصطناعي
+// 3. تشغيل الكاميرا وتحميل الموديلات (تم الإصلاح)
 // ============================================================
 async function initFaceCamera() {
     const video = document.getElementById('video');
     const statusTxt = document.getElementById('statusTxt');
 
-    // تحميل الموديلات
+    // 1. تحميل الموديلات من الرابط الصحيح
     if (!isModelsLoaded) {
         if (statusTxt) statusTxt.innerText = "جاري تحميل ملفات الذكاء الاصطناعي...";
 
-        // تأكد من وجود فولدر models بجانب ملف index.html
-        await Promise.all([
-            faceapi.nets.tinyFaceDetector.loadFromUri('./models'),
-            faceapi.nets.faceLandmark68Net.loadFromUri('./models'),
-            faceapi.nets.faceRecognitionNet.loadFromUri('./models')
-        ]);
-        isModelsLoaded = true;
+        // 🔥 الرابط المباشر لتجنب خطأ 404
+        const MODEL_URL = 'https://smartattendancepro-code.github.io/RST/models'; 
+
+        try {
+            await Promise.all([
+                faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+                faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+                faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+            ]);
+            isModelsLoaded = true;
+            console.log("✅ AI Models Loaded");
+        } catch (error) {
+            console.error("Models Error:", error);
+            alert("فشل تحميل ملفات النظام (404). تأكد من رفع مجلد models على GitHub.");
+            return;
+        }
     }
 
+    // 2. تشغيل الكاميرا بإعدادات آمنة
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: {} });
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+                facingMode: 'user', // الكاميرا الأمامية
+                width: { ideal: 640 }, 
+                height: { ideal: 480 } 
+            } 
+        });
         video.srcObject = stream;
-        if (statusTxt) statusTxt.innerText = "جاري البحث عن وجهك...";
-
+        
+        // بدء اللوب الذكي
         startScanningLoop(video);
 
     } catch (err) {
-        alert("❌ تعذر فتح الكاميرا: " + err);
+        console.error("Camera Error:", err);
+        alert("❌ تعذر فتح الكاميرا. تأكد من إغلاق أي برنامج آخر يستخدمها (مثل Zoom) ومنح الصلاحية للمتصفح.");
         window.goBackToWelcome();
     }
 }
 
+// ============================================================
+// 4. اللوب الذكي (التسجيل لأول مرة + التحقق)
+// ============================================================
 async function startScanningLoop(video) {
     const statusTxt = document.getElementById('statusTxt');
-
-    // هل الطالب مسجل بصمة أصلاً؟
+    
+    if (statusTxt) statusTxt.innerText = "جاري فحص حالة الحساب...";
+    
+    // فحص هل المستخدم مسجل أم لا
     const registeredDescriptor = await window.faceSystem.getFace(storedUser.uid);
+    
+    let mode = 'VERIFY'; // الوضع الافتراضي
+    let registrationStep = 1;
 
     if (!registeredDescriptor) {
-        alert("⚠️ أنت لم تسجل بصمة وجهك بعد! يرجى التواصل مع الشؤون.");
-        video.srcObject.getTracks().forEach(track => track.stop());
-        window.goBackToWelcome();
-        return;
+        mode = 'REGISTER'; // تحويل لوضع التسجيل
+        if (statusTxt) {
+            statusTxt.innerText = "👋 مرحباً بك! يرجى الثبات لتسجيل بصمة وجهك.";
+            statusTxt.style.color = "#3b82f6";
+        }
+    } else {
+        if (statusTxt) statusTxt.innerText = "جاري مطابقة الوجه...";
     }
 
     const checkInterval = setInterval(async () => {
+        // إيقاف الكاميرا لو خرج المستخدم من الشاشة
         if (window.getComputedStyle(document.getElementById('screenFaceCheck')).display === 'none') {
-            clearInterval(checkInterval); // وقف اللوب لو خرج من الشاشة
+            clearInterval(checkInterval);
             return;
         }
 
+        // الكشف عن الوجه
         const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
             .withFaceLandmarks()
             .withFaceDescriptor();
 
         if (detection) {
-            const distance = faceapi.euclideanDistance(registeredDescriptor, detection.descriptor);
-            console.log("Distance:", distance);
-
-            if (distance < 0.45) { // معيار التطابق
-                clearInterval(checkInterval);
-                if (statusTxt) {
-                    statusTxt.innerText = "✅ تم التحقق بنجاح!";
-                    statusTxt.style.color = "#10b981";
+            
+            // 🅰️ الوضع 1: التحقق (للمستخدمين المسجلين)
+            if (mode === 'VERIFY') {
+                const distance = faceapi.euclideanDistance(registeredDescriptor, detection.descriptor);
+                
+                if (distance < 0.45) { // نجاح
+                    clearInterval(checkInterval);
+                    if (statusTxt) {
+                        statusTxt.innerText = "✅ تم التحقق بنجاح!";
+                        statusTxt.style.color = "#10b981";
+                    }
+                    video.srcObject.getTracks().forEach(track => track.stop());
+                    await finalizeJoiningProcess();
+                } else { // فشل
+                    if (statusTxt) {
+                        statusTxt.innerText = "❌ الوجه غير مطابق!";
+                        statusTxt.style.color = "#ef4444";
+                    }
                 }
+            }
 
-                video.srcObject.getTracks().forEach(track => track.stop()); // قفل الكاميرا
-                await finalizeJoiningProcess();
-            } else {
-                if (statusTxt) {
-                    statusTxt.innerText = "❌ الوجه غير مطابق!";
-                    statusTxt.style.color = "#ef4444";
+            // 🅱️ الوضع 2: التسجيل (للمستخدمين الجدد)
+            else if (mode === 'REGISTER') {
+                
+                // الخطوة 1: التقاط أول
+                if (registrationStep === 1) {
+                    tempRegistrationDescriptor = detection.descriptor;
+                    registrationStep = 2;
+                    
+                    if (statusTxt) {
+                        statusTxt.innerText = "📸 تم الالتقاط! يرجى الثبات للتأكيد...";
+                        statusTxt.style.color = "#f59e0b"; // برتقالي
+                    }
+                    // انتظار 2 ثانية
+                    await new Promise(r => setTimeout(r, 2000));
+                }
+                
+                // الخطوة 2: التأكيد
+                else if (registrationStep === 2) {
+                    const distance = faceapi.euclideanDistance(tempRegistrationDescriptor, detection.descriptor);
+                    
+                    if (distance < 0.45) {
+                        // تطابق -> حفظ ودخول
+                        clearInterval(checkInterval);
+                        if (statusTxt) {
+                            statusTxt.innerText = "🎉 تم تسجيل البصمة! جاري الدخول...";
+                            statusTxt.style.color = "#10b981";
+                        }
+                        
+                        await saveNewFaceToDB(storedUser, tempRegistrationDescriptor);
+                        
+                        video.srcObject.getTracks().forEach(track => track.stop());
+                        await finalizeJoiningProcess();
+                        
+                    } else {
+                        // عدم تطابق -> إعادة
+                        registrationStep = 1;
+                        tempRegistrationDescriptor = null;
+                        if (statusTxt) statusTxt.innerText = "⚠️ تحركت كثيراً! حاول الثبات مرة أخرى.";
+                    }
                 }
             }
         }
-    }, 1000);
+    }, 1000); // الفحص كل ثانية
+}
+
+// دالة حفظ البصمة الجديدة
+async function saveNewFaceToDB(user, descriptor) {
+    try {
+        const db = window.db;
+        const descriptorArray = Array.from(descriptor);
+        
+        await setDoc(doc(db, "face_biometrics", user.uid), {
+            descriptor: descriptorArray,
+            studentName: user.displayName || "Unknown",
+            studentEmail: user.email,
+            registeredAt: new Date().toISOString()
+        });
+        console.log("✅ Face Saved to DB");
+    } catch (e) {
+        console.error("❌ Save Face Error:", e);
+        window.showToast("فشل حفظ البصمة في السيرفر", 3000, "red");
+    }
 }
 
 // ============================================================
-// 5. إتمام الدخول (Backend)
+// 5. إتمام عملية الدخول
 // ============================================================
 async function finalizeJoiningProcess() {
     window.showToast("جاري تسجيل الحضور...", 2000, "#3b82f6");
