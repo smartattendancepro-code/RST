@@ -20,7 +20,6 @@ const auth = getAuth();
 
     if (ptrElement && ptrIcon) {
 
-        // 1. بداية اللمس
         window.addEventListener('touchstart', (e) => {
             if (window.scrollY === 0 && !ptrIsRefreshing) {
                 ptrStartY = e.touches[0].clientY;
@@ -28,7 +27,6 @@ const auth = getAuth();
             }
         }, { passive: true });
 
-        // 2. حركة السحب
         window.addEventListener('touchmove', (e) => {
             if (!ptrIsPulling) return;
 
@@ -53,14 +51,12 @@ const auth = getAuth();
             }
         }, { passive: true });
 
-        // 3. نهاية اللمس
         window.addEventListener('touchend', (e) => {
             if (!ptrIsPulling) return;
             ptrIsPulling = false;
 
             const currentTop = parseFloat(getComputedStyle(ptrElement).top);
 
-            // الحساسية: لو نزل أي مسافة بسيطة يحدث فوراً
             if (currentTop > -30) {
                 startPtrRefresh();
             } else {
@@ -72,13 +68,11 @@ const auth = getAuth();
     function startPtrRefresh() {
         ptrIsRefreshing = true;
 
-        // تثبيت الشكل للحظة
         ptrElement.style.top = '25px';
         ptrElement.classList.add('ptr-loading');
 
         if (navigator.vibrate) navigator.vibrate(50);
 
-        // 🔥 التعديل هنا: التحديث فوري (بعد 0.1 ثانية فقط)
         setTimeout(() => {
             location.reload();
         }, 100);

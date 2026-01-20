@@ -1,5 +1,3 @@
-
-
 /* 1. ضبط الحاوية الأساسية (لإلغاء أي ستايل قديم) */
 #toastNotification {
     position: fixed;
@@ -146,15 +144,18 @@
 /* حاوية السحب للتحديث */
 .ptr-container {
     position: fixed;
-    top: -80px; /* مخفي في البداية */
+    top: -80px;
+    /* مخفي في البداية */
     left: 0;
     width: 100%;
     height: 80px;
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 9999999; /* فوق كل شيء */
-    pointer-events: none; /* عشان ميعطلش اللمس */
+    z-index: 9999999;
+    /* فوق كل شيء */
+    pointer-events: none;
+    /* عشان ميعطلش اللمس */
     transition: top 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
@@ -167,7 +168,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
     border: 1px solid #e2e8f0;
     transform: scale(0.8);
     transition: transform 0.2s;
@@ -175,7 +176,8 @@
 
 /* الأيقونة داخل الدائرة */
 #ptrIcon {
-    color: #0ea5e9; /* لون أزرق */
+    color: #0ea5e9;
+    /* لون أزرق */
     font-size: 18px;
     transition: transform 0.2s;
 }
@@ -186,7 +188,9 @@
 }
 
 @keyframes spin {
-    100% { transform: rotate(360deg); }
+    100% {
+        transform: rotate(360deg);
+    }
 }
 
 /* الأيقونة داخل الدائرة */
@@ -218,6 +222,7 @@
         transform: rotate(360deg);
     }
 }
+
 /* ستارة التحميل */
 .loader-overlay {
     position: fixed;
@@ -225,9 +230,12 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: #f8fafc; /* لون خلفية مريح للعين */
-    z-index: 999999999; /* فوق كل شيء */
-    display: flex; /* ظاهرة افتراضياً */
+    background: #f8fafc;
+    /* لون خلفية مريح للعين */
+    z-index: 999999999;
+    /* فوق كل شيء */
+    display: flex;
+    /* ظاهرة افتراضياً */
     align-items: center;
     justify-content: center;
     transition: opacity 0.5s ease;
@@ -242,4 +250,349 @@
 .loader-hidden {
     opacity: 0;
     pointer-events: none;
+}
+
+/* حاوية الكاميرا المودرن */
+.scanner-container {
+    position: relative;
+    width: 100%;
+    max-width: 350px;
+    height: 350px;
+    margin: 0 auto;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.85);
+    /* تعتيم الخلفية */
+    border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+/* الفيديو */
+#video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+    /* مرآة */
+}
+
+/* إطار التركيز (المربع الشفاف) */
+.scan-region {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 280px;
+    height: 280px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 30px;
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.5) inset;
+    z-index: 10;
+}
+
+/* زوايا التركيز الملونة */
+.scan-region::before,
+.scan-region::after {
+    content: '';
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    border: 4px solid #0ea5e9;
+    /* لون أزرق افتراضي */
+    transition: 0.3s;
+}
+
+.scan-region::before {
+    top: -2px;
+    left: -2px;
+    border-right: none;
+    border-bottom: none;
+    border-top-left-radius: 20px;
+}
+
+.scan-region::after {
+    bottom: -2px;
+    right: -2px;
+    border-left: none;
+    border-top: none;
+    border-bottom-right-radius: 20px;
+}
+
+/* خط الليزر المتحرك */
+.scan-line {
+    position: absolute;
+    width: 100%;
+    height: 3px;
+    background: #10b981;
+    box-shadow: 0 0 15px #10b981;
+    top: 0;
+    z-index: 15;
+    animation: scanning 2s infinite linear;
+    display: none;
+    /* مخفي حتى يتم اكتشاف الوجه */
+}
+
+@keyframes scanning {
+    0% {
+        top: 10%;
+        opacity: 0;
+    }
+
+    50% {
+        opacity: 1;
+    }
+
+    100% {
+        top: 90%;
+        opacity: 0;
+    }
+}
+
+/* حالات الإطار (ناجح/خطأ) */
+.scan-region.success {
+    border-color: #10b981;
+}
+
+.scan-region.success::before,
+.scan-region.success::after {
+    border-color: #10b981;
+}
+
+.scan-region.error {
+    border-color: #ef4444;
+}
+
+.scan-region.error::before,
+.scan-region.error::after {
+    border-color: #ef4444;
+}
+
+/* النصوص */
+.hint-text {
+    text-align: center;
+    color: white;
+    margin-top: 20px;
+    font-size: 16px;
+    font-weight: bold;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* تصميم العناوين (بدون أرقام) */
+.setup-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    color: #334155;
+    margin-bottom: 6px;
+    text-align: start;
+    /* محاذاة تلقائية حسب اللغة */
+}
+
+/* حاوية القائمة الذكية */
+.smart-picker-container {
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #fff;
+    transition: 0.2s;
+}
+
+.smart-picker-container:focus-within {
+    border-color: #0ea5e9;
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+}
+
+/* حقل البحث داخل القائمة */
+.search-row {
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    border-bottom: 1px solid #f1f5f9;
+    background: #f8fafc;
+}
+
+.picker-search {
+    width: 100%;
+    border: none;
+    padding: 10px;
+    background: transparent;
+    outline: none;
+    font-size: 13px;
+    font-weight: 600;
+    color: #0f172a;
+    font-family: inherit;
+}
+
+.search-icon {
+    color: #94a3b8;
+    font-size: 12px;
+}
+
+/* صندوق القائمة (Scrollable) */
+.custom-list-box {
+    max-height: 110px;
+    /* ارتفاع ثابت للقائمة */
+    overflow-y: auto;
+    background: #fff;
+}
+
+/* العنصر الفردي داخل القائمة */
+.list-item-option {
+    padding: 10px 12px;
+    font-size: 13px;
+    color: #475569;
+    cursor: pointer;
+    border-bottom: 1px solid #f8fafc;
+    transition: 0.1s;
+    text-align: start;
+    font-weight: 600;
+}
+
+.list-item-option:hover {
+    background: #f1f5f9;
+}
+
+/* 🔥 التمييز الثابت (اللون الأزرق) 🔥 */
+.list-item-option.selected {
+    background-color: #e0f2fe !important;
+    /* خلفية سماوي */
+    color: #0284c7 !important;
+    /* نص أزرق غامق */
+    font-weight: 800;
+    border-left: 3px solid #0284c7;
+    /* خط جانبي مميز */
+}
+
+/* حقول الإدخال العادية */
+.simple-input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    text-align: center;
+    font-weight: bold;
+    outline: none;
+    font-family: inherit;
+    color: #0f172a;
+}
+
+.simple-input:focus {
+    border-color: #0ea5e9;
+}
+
+/* الأزرار */
+.btn-start-action {
+    width: 100%;
+    background: #0f172a;
+    color: white;
+    border: none;
+    padding: 14px;
+    border-radius: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.btn-cancel-simple {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: #64748b;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+/* تنسيق صف الأزرار الجانبية */
+.dual-buttons-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 12px;
+    width: 100%;
+}
+
+.btn-secondary-outline {
+    background: transparent;
+    border: 1.5px solid #cbd5e1;
+    color: #64748b;
+    padding: 12px;
+    border-radius: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: 0.2s;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.btn-secondary-outline:hover {
+    background: #f1f5f9;
+    color: #334155;
+    border-color: #94a3b8;
+}
+
+/* إخفاء زر العودة العائم القديم في هذه الشاشة تحديداً */
+#screenDataEntry .floating-back-btn {
+    display: none !important;
+}
+/* إصلاح عنوان البحث ليكون سطراً واحداً */
+#step1_search .header-content-center {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+#step1_search .auth-main-title {
+    font-size: 22px !important;       /* تصغير الخط قليلاً ليناسب العرض */
+    white-space: nowrap !important;   /* منع نزول النص للسطر الثاني نهائياً */
+    width: 100%;
+    text-align: center;
+    margin-bottom: 15px;              /* مسافة سفلية لراحة العين */
+}
+/* تنسيق زر النجمة الثابت */
+.btn-feedback-static {
+    background: #fffbeb;     /* خلفية صفراء فاتحة */
+    color: #d97706;          /* أيقونة ذهبية غامقة */
+    border: 1px solid #fcd34d;
+    position: relative;      /* ضروري عشان العداد يظهر في الركن */
+    overflow: visible !important; /* عشان العداد يخرج برا الحدود لو عايز */
+}
+
+/* تأثير اللمعان عند وجود تقييمات جديدة */
+.star-glowing {
+    animation: goldPulseBorder 1.5s infinite;
+    background: #f59e0b !important; /* يتحول لذهبي غامق */
+    color: #fff !important;         /* النص يبقى أبيض */
+    border-color: #fff !important;
+}
+
+@keyframes goldPulseBorder {
+    0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); transform: scale(1); }
+    70% { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); transform: scale(1.02); }
+    100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); transform: scale(1); }
+}
+
+/* تنسيق العداد الأحمر (Badge) فوق الزر */
+.feedback-badge-static {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: #ef4444;
+    color: white;
+    font-size: 10px;
+    font-weight: 800;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+    z-index: 10;
+    animation: popIn 0.3s;
 }

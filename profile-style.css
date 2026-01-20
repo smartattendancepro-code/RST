@@ -1,0 +1,589 @@
+/* ========================================= */
+/*  PROFILE SYSTEM STYLES (Full Version)     */
+/* ========================================= */
+
+/* 1. تعديل كارت البروفايل (زيادة الطول) */
+.extended-card {
+    padding-bottom: 35px !important;
+    min-height: 540px;
+    /* طول مناسب لاستيعاب الإحصائيات */
+    transition: all 0.3s ease;
+}
+
+/* 2. شريط المستوى (Level Bar) */
+.level-system-container {
+    width: 100%;
+    margin-bottom: 20px;
+    margin-top: 20px;
+    /* مسافة من الاسم */
+    position: relative;
+    padding: 0 5px;
+}
+
+.level-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    /* محاذاة عمودية أفضل */
+    font-size: 13px;
+    font-weight: 800;
+    color: #64748b;
+    margin-bottom: 8px;
+
+    /* 🔥 الإصلاح هنا: إبعاد النص عن الصندوق 🔥 */
+    padding-right: 55px;
+    padding-left: 5px;
+}
+
+.lvl-txt {
+    color: #0f172a;
+    font-size: 14px;
+}
+
+.lvl-xp {
+    color: #0ea5e9;
+    font-family: 'Outfit', sans-serif;
+    letter-spacing: 1px;
+}
+
+.level-track {
+    width: 100%;
+    height: 12px;
+    background: #f1f5f9;
+    border-radius: 20px;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.level-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #06b6d4);
+    width: 0%;
+    border-radius: 20px;
+    transition: width 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+}
+
+/* 3. صندوق الهدايا العائم (الأساسي) */
+.gift-box-floating {
+    position: absolute;
+    right: 0px;
+    top: -18px;
+    /* ضبط المكان بدقة */
+    width: 45px;
+    height: 45px;
+    background: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #e2e8f0;
+    /* لون حدود افتراضي */
+    color: #94a3b8;
+    /* لون أيقونة افتراضي */
+    font-size: 20px;
+    z-index: 20;
+    transition: all 0.3s ease;
+}
+
+/* حالة القفل (Locked State) */
+.gift-locked {
+    filter: grayscale(100%);
+    opacity: 0.8;
+    /* زيادة الوضوح قليلاً */
+    cursor: pointer;
+    /* ✅ جعل المؤشر يدل على إمكانية الضغط */
+    /* pointer-events: none;  <-- ❌ احذف هذا السطر */
+    box-shadow: none;
+    transform: scale(0.9);
+    transition: 0.2s;
+}
+
+.gift-locked:hover {
+    transform: scale(0.95);
+    /* تأثير بسيط عند المرور */
+}
+
+/* حالة الفتح (Unlocked State) */
+.gift-unlocked {
+    border-color: #f59e0b !important;
+    color: #d97706 !important;
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    background: #fffbeb !important;
+    box-shadow: 0 8px 20px rgba(245, 158, 11, 0.4) !important;
+    animation: floatGift 3s ease-in-out infinite, pulseReady 1s infinite alternate;
+}
+
+/* إخفاء القفل عند الفتح */
+.gift-unlocked .lock-overlay {
+    display: none !important;
+}
+
+/* أيقونة القفل الصغيرة */
+.lock-overlay {
+    position: absolute;
+    bottom: -3px;
+    right: -3px;
+    font-size: 11px;
+    color: #fff;
+    background: #64748b;
+    border-radius: 50%;
+    padding: 4px;
+    border: 2px solid #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+}
+
+/* تأثير التوهج الخلفي */
+.gift-glow {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    box-shadow: 0 0 20px #f59e0b;
+    animation: pulseGold 1.5s infinite;
+    z-index: -1;
+    display: none;
+    /* مخفي افتراضياً */
+}
+
+/* تشغيل التوهج فقط عند الفتح */
+.gift-unlocked .gift-glow {
+    display: block;
+}
+
+/* 4. الإطار الذهبي (Gold Frame) */
+.gold-frame-ring {
+    position: absolute;
+    top: -6px;
+    left: -6px;
+    right: -6px;
+    bottom: -6px;
+    border-radius: 50%;
+    border: 4px solid #fbbf24;
+    box-shadow: 0 0 20px rgba(251, 191, 36, 0.8), inset 0 0 15px rgba(251, 191, 36, 0.5);
+    z-index: 5;
+    pointer-events: none;
+    /* animation: rotateGold 10s linear infinite; */
+}
+
+/* 5. شبكة الإحصائيات المودرن (Stats Grid) */
+.stats-tri-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    width: 100%;
+    margin: 25px 0 15px 0;
+    padding: 15px;
+    background: #ffffff;
+    border-radius: 20px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05);
+}
+
+.stat-mini-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 6px;
+}
+
+.stat-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    margin-bottom: 2px;
+    transition: transform 0.2s;
+}
+
+.stat-mini-card:hover .stat-icon {
+    transform: scale(1.1);
+}
+
+.s-green {
+    background: #dcfce7;
+    color: #16a34a;
+}
+
+.s-red {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.s-blue {
+    background: #e0f2fe;
+    color: #0284c7;
+}
+
+.stat-num {
+    font-size: 18px;
+    font-weight: 900;
+    color: #0f172a;
+    font-family: 'Outfit', sans-serif;
+    line-height: 1;
+}
+
+.stat-lbl {
+    font-size: 11px;
+    color: #64748b;
+    font-weight: 700;
+}
+
+/* 6. نافذة المكافأة (Z-Index Fix) */
+#rewardModal {
+    z-index: 2147483660 !important;
+    /* أعلى من البروفايل */
+}
+
+/* --- Animations --- */
+
+@keyframes floatGift {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-5px);
+    }
+}
+
+@keyframes pulseGold {
+    0% {
+        opacity: 0.6;
+        transform: scale(1);
+    }
+
+    100% {
+        opacity: 0;
+        transform: scale(1.6);
+    }
+}
+
+@keyframes pulseReady {
+    from {
+        transform: scale(1);
+    }
+
+    to {
+        transform: scale(1.1);
+    }
+}
+
+/* --- Golden Reward Card Styles --- */
+/* ========================================= */
+/* 🌟 REPLICA GOLD CARD (EXACT MATCH) 🌟    */
+/* ========================================= */
+
+.reward-card-container {
+    display: flex;
+    justify-content: center;
+    padding: 10px;
+    margin-bottom: 20px;
+}
+
+/* 1. جسم الكارت (نفس أبعاد live-st-card) */
+.gold-replica-card {
+    background: #ffffff;
+    width: 100%;
+    max-width: 170px;
+    /* نفس العرض */
+    min-height: 190px;
+    /* نفس الطول */
+    border-radius: 18px;
+    /* نفس الانحناء */
+    padding: 15px;
+    /* نفس الحشوة */
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+
+    /* اللمسة الذهبية */
+    border: 2px solid #fbbf24;
+    box-shadow: 0 10px 30px rgba(251, 191, 36, 0.25);
+    overflow: visible !important;
+    animation: popUpCard 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* 2. منطقة الأفاتار (نفس live-avatar-area) */
+.replica-avatar-area {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    margin-bottom: 8px;
+    margin-top: 5px;
+}
+
+/* 3. حلقة الأفاتار (نفس live-avatar-circle) */
+.replica-avatar-circle {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: #f8fafc;
+
+    /* الحلقة سميكة وذهبية */
+    border: 3.5px solid #d97706;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    /* نفس حجم الأيقونة */
+    color: #d97706;
+    /* لون ذهبي */
+    z-index: 2;
+}
+
+/* 4. بادج "البطل" (نفس مكان live-badge-top) */
+.replica-badge-top {
+    position: absolute;
+    top: -12px;
+    background: #0ea5e9;
+    /* نفس الأزرق */
+    color: white;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 10px;
+    border-radius: 12px;
+    border: 2px solid white;
+    z-index: 5;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+/* 5. النصوص (نفس st-name و st-id) */
+.gold-replica-card .st-name {
+    font-size: 13px;
+    font-weight: 900;
+    color: #1e293b;
+    margin-bottom: 2px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 130px;
+}
+
+.gold-replica-card .st-id {
+    font-size: 11px;
+    color: #94a3b8;
+    background: transparent;
+    font-family: 'Outfit', sans-serif;
+}
+
+/* 6. البادج السفلي (نفس live-badge-bottom) */
+.replica-badge-bottom {
+    margin-top: 10px;
+    padding: 4px 14px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 800;
+
+    /* ألوان النجاح */
+    background: #dcfce7;
+    color: #166534;
+    border: 1px solid #86efac;
+
+    animation: pulseBonus 1.5s infinite;
+}
+
+/* 7. أنيميشن */
+@keyframes popUpCard {
+    from {
+        transform: scale(0.5);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes pulseBonus {
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.05);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* 8. تأثير اللمعان */
+.shine-effect {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    border-radius: 18px;
+    pointer-events: none;
+}
+
+.shine-effect::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.6) 50%, transparent 70%);
+    transform: translateX(-100%);
+    animation: shineMove 3s infinite;
+}
+
+@keyframes shineMove {
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+/* أنيميشن نبض البونص */
+@keyframes pulseBonus {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+    }
+
+    70% {
+        transform: scale(1.05);
+        box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
+    }
+
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+    }
+}
+
+/* لمعة خفيفة */
+.gold-edition-card::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+    transform: translateX(-100%);
+    animation: shineMove 3s infinite;
+}
+
+@keyframes shineMove {
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+/* بادج البونص (+2 درجات) */
+.bonus-marks-badge {
+    margin-top: 15px;
+    background: #dcfce7;
+    color: #166534;
+    border: 1px solid #86efac;
+    padding: 5px 15px;
+    border-radius: 20px;
+    font-weight: 900;
+    font-size: 14px;
+    box-shadow: 0 4px 10px rgba(34, 197, 94, 0.2);
+    animation: pulseBonus 1.5s infinite;
+}
+
+/* أنيميشن ظهور الكارت */
+@keyframes popUpCard {
+    from {
+        transform: scale(0.5) translateY(50px);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+    }
+}
+
+/* أنيميشن نبض البونص */
+@keyframes pulseBonus {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+    }
+
+    70% {
+        transform: scale(1.05);
+        box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
+    }
+
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+    }
+}
+
+/* لمعة خفيفة تمر على الكارت */
+.gold-edition-card::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+    transform: translateX(-100%);
+    animation: shineMove 3s infinite;
+}
+
+@keyframes shineMove {
+    100% {
+        transform: translateX(100%);
+    }
+}
+/* --- تصميم عرض الدرجات فقط (Big Bonus Badge) --- */
+
+.bonus-only-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 10px;
+    margin: 10px 0;
+}
+
+.huge-bonus-badge {
+    background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+    color: #15803d;
+    border: 3px solid #86efac;
+    padding: 15px 40px;
+    border-radius: 20px;
+    font-size: 28px;
+    font-weight: 900;
+    font-family: 'Cairo', sans-serif;
+    box-shadow: 0 10px 30px rgba(34, 197, 94, 0.25);
+    animation: pulseBonus 1.5s infinite;
+    transform: scale(1);
+}
+
+@keyframes pulseBonus {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+    70% { transform: scale(1.05); box-shadow: 0 0 0 15px rgba(34, 197, 94, 0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
