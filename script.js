@@ -317,7 +317,9 @@ window.monitorMyParticipation = async function () {
         resetButtonToDefault();
     });
 };
+
 window.performStudentSignup = async function () {
+    // 1. تجميع البيانات
     const email = document.getElementById('regEmail').value.trim();
     const pass = document.getElementById('regPass').value;
     const fullName = document.getElementById('regFullName').value.trim();
@@ -327,7 +329,14 @@ window.performStudentSignup = async function () {
     const group = document.getElementById('regGroup') ? document.getElementById('regGroup').value : "عام";
 
     if (!email || !pass || !fullName || !studentID) {
-        alert("⚠️ يرجى ملء كافة البيانات المطلوبة");
+        if (typeof playBeep === 'function') playBeep();
+        showToast("⚠️ بيانات ناقصة! يرجى ملء كل الحقول", 3000, "#f59e0b"); 
+        return;
+    }
+
+    if (pass.length < 6) {
+        if (typeof playBeep === 'function') playBeep();
+        showToast("⚠️ كلمة المرور ضعيفة (يجب أن تكون 6 أحرف على الأقل)", 3000, "#f59e0b");
         return;
     }
 
@@ -336,13 +345,13 @@ window.performStudentSignup = async function () {
 
     if (btn) {
         btn.disabled = true;
-        btn.innerText = "جاري الاتصال بالسيرفر...";
+        btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up fa-fade"></i> جاري الاتصال بالسيرفر...';
     }
 
     try {
         const deviceID = getUniqueDeviceId();
 
-        console.log("📤 إرسال طلب التسجيل للباك إند...");
+        console.log("📤 Sending request to Backend...");
 
         const response = await fetch(`${BACKEND_URL}/api/registerStudent`, {
             method: 'POST',
@@ -364,9 +373,28 @@ window.performStudentSignup = async function () {
         const result = await response.json();
 
         if (response.ok && result.success) {
+
+            if (btn) btn.innerHTML = '<i class="fa-regular fa-envelope fa-bounce"></i> إرسال رابط التفعيل...';
+
+            try {
+                const userCredential = await signInWithEmailAndPassword(window.auth, email, pass);
+                const user = userCredential.user;
+
+                await sendEmailVerification(user);
+                console.log("📧 Verification Email Sent Successfully!");
+
+                await signOut(window.auth);
+
+            } catch (emailError) {
+                console.error("Email Warning:", emailError);
+                showToast("⚠️ تم الحساب، لكن تعذر إرسال الإيميل تلقائياً", 4000, "#f59e0b");
+            }
+
             if (typeof playSuccess === 'function') playSuccess();
 
-            alert(`✅ تم إنشاء الحساب وحجز الكود بنجاح!\n\nالكود: ${studentID}\n\nتم ربط الحساب بجهازك. يرجى تفعيل بريدك الإلكتروني (إن وصلك رابط) ثم تسجيل الدخول.`);
+            showToast("✅ تم إنشاء الحساب بنجاح!", 4000, "#10b981"); // أخضر
+
+            alert(`🎉 أهلاً بك يا ${fullName.split(' ')[0]}!\n\n✅ تم حجز الكود الجامعي: ${studentID}\n📨 تم إرسال رابط تفعيل إلى بريدك الإلكتروني.\n\n⚠️ يرجى تفعيل الحساب من الإيميل قبل تسجيل الدخول.`);
 
             if (window.closeAuthDrawer) {
                 closeAuthDrawer();
@@ -375,13 +403,19 @@ window.performStudentSignup = async function () {
             document.getElementById('regPass').value = "";
             document.getElementById('regEmail').value = "";
 
+            if (typeof toggleAuthMode === 'function') toggleAuthMode('login');
+
         } else {
             throw new Error(result.error || "فشل التسجيل لأسباب أمنية");
         }
 
     } catch (error) {
         console.error("Signup Error:", error);
-        alert("❌ " + error.message);
+
+        if (typeof playClick === 'function') playClick(); // صوت خطأ لو متاح
+
+        showToast(`❌ ${error.message}`, 5000, "#ef4444"); // أحمر
+
     } finally {
         if (btn) {
             btn.disabled = false;
@@ -5024,7 +5058,7 @@ document.addEventListener('click', (e) => {
     };
 
     window.forceOpenPinScreen = function () {
- 
+
         const user = (typeof auth !== 'undefined') ? auth.currentUser : (window.auth ? window.auth.currentUser : null);
 
         if (!user) {
