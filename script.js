@@ -32,6 +32,19 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { i18n, t, changeLanguage, toggleSystemLanguage } from './i18n.js';
 
+window.arabToEng = function (text) {
+    if (!text) return "";
+    const map = {
+        'أ': 'A', 'إ': 'E', 'آ': 'A', 'ا': 'A', 'ب': 'B', 'ت': 'T', 'ث': 'Th',
+        'ج': 'J', 'ح': 'H', 'خ': 'Kh', 'د': 'D', 'ذ': 'Dh', 'ر': 'R', 'ز': 'Z',
+        'س': 'S', 'ش': 'Sh', 'ص': 'S', 'ض': 'D', 'ط': 'T', 'ظ': 'Z', 'ع': 'A',
+        'غ': 'Gh', 'ف': 'F', 'ق': 'Q', 'ك': 'K', 'ل': 'L', 'م': 'M', 'ن': 'N',
+        'ه': 'H', 'و': 'W', 'ي': 'Y', 'ى': 'A', 'ة': 'h', 'ئ': 'E', 'ؤ': 'O'
+    };
+    let res = text.split('').map(char => map[char] || char).join('');
+    return res.length > 1 ? res.charAt(0).toUpperCase() + res.slice(1).toLowerCase() : res;
+};
+
 console.log = function () { };
 console.warn = function () { };
 
@@ -274,17 +287,28 @@ window.monitorMyParticipation = async function () {
         if (data.status === 'expelled') {
             console.log("🚨 Student EXPELLED.");
 
+            const _t = (typeof t === 'function') ? t : (key, def) => def;
+
             sessionStorage.removeItem('TARGET_DOCTOR_UID');
-            resetButtonToDefault();
 
-            const currentScreen = document.querySelector('.section.active')?.id;
-            if (currentScreen === 'screenLiveSession') {
-                alert("⛔ قام المحاضر باستبعادك من الجلسة.");
-                if (typeof goHome === 'function') goHome();
+            const liveScreen = document.getElementById('screenLiveSession');
+            if (liveScreen) liveScreen.style.display = 'none';
 
-                setTimeout(() => location.reload(), 500);
+            const exTitle = document.getElementById('expelTitle');
+            const exBody = document.getElementById('expelBody');
+
+            if (exTitle) exTitle.innerText = _t('modal_expel_title', "⛔ تم استبعادك!");
+            if (exBody) exBody.innerHTML = _t('modal_expel_body', "قام المحاضر بطردك من الجلسة.<br>لا يمكنك العودة مرة أخرى.");
+
+            const exModal = document.getElementById('expulsionModal');
+            if (exModal) {
+                exModal.style.display = 'flex';
+                if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
+            } else {
+                alert(_t('modal_expel_title', "⛔ تم استبعادك من الجلسة!"));
+                location.reload();
             }
-            return;
+            return; 
         }
 
         if (data.status === 'on_break') {
@@ -322,12 +346,11 @@ window.monitorMyParticipation = async function () {
 };
 
 window.performStudentSignup = async function () {
-    // 0. تجهيز أدوات الترجمة
+    // 0. تجهيز أدوات الترجمة (Fallback آمن)
     const lang = localStorage.getItem('sys_lang') || 'ar';
-    // دالة مساعدة للترجمة (لو t مش موجودة ترجع النص الافتراضي)
     const _t = (typeof t === 'function') ? t : (key, def) => def;
 
-    // 1. تجميع البيانات
+    // 1. تجميع البيانات من المدخلات
     const email = document.getElementById('regEmail').value.trim();
     const pass = document.getElementById('regPass').value;
     const fullName = document.getElementById('regFullName').value.trim();
@@ -336,7 +359,7 @@ window.performStudentSignup = async function () {
     const gender = document.getElementById('regGender').value;
     const group = document.getElementById('regGroup') ? document.getElementById('regGroup').value : "عام";
 
-    // 2. التحقق من صحة البيانات
+    // 2. التحقق من صحة البيانات (Validation)
     if (!email || !pass || !fullName || !studentID) {
         if (typeof playBeep === 'function') playBeep();
         showToast(_t('msg_missing_data', "⚠️ بيانات ناقصة! يرجى ملء كل الحقول"), 3000, "#f59e0b");
@@ -349,7 +372,7 @@ window.performStudentSignup = async function () {
         return;
     }
 
-    // 3. تجهيز الزر
+    // 3. تجهيز الزر (Loading State)
     const btn = document.getElementById('btnDoSignup');
     const originalText = btn ? btn.innerText : "REGISTER";
 
@@ -362,6 +385,7 @@ window.performStudentSignup = async function () {
         const deviceID = getUniqueDeviceId();
         console.log("📤 Sending request to Backend...");
 
+        // 4. إرسال طلب التسجيل للباك إند
         const response = await fetch(`${BACKEND_URL}/api/registerStudent`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -380,6 +404,8 @@ window.performStudentSignup = async function () {
         const result = await response.json();
 
         if (response.ok && result.success) {
+
+            // 5. مرحلة Firebase Auth (إنشاء الحساب وإرسال الإيميل)
             if (btn) btn.innerHTML = `<i class="fa-regular fa-envelope fa-bounce"></i> ${_t('status_sending_email', 'إرسال رابط التفعيل...')}`;
 
             try {
@@ -389,6 +415,7 @@ window.performStudentSignup = async function () {
                 await sendEmailVerification(user);
                 console.log("📧 Verification Email Sent Successfully!");
 
+                // تسجيل خروج فوري لإجبار المستخدم على التفعيل
                 await signOut(window.auth);
 
             } catch (emailError) {
@@ -399,26 +426,40 @@ window.performStudentSignup = async function () {
             if (typeof playSuccess === 'function') playSuccess();
             showToast(_t('msg_account_created', "✅ تم إنشاء الحساب بنجاح!"), 4000, "#10b981");
 
+            // =========================================================
+            // 🔥 المنطقة الجراحية (UI Transition Logic)
+            // =========================================================
+
+            // أ. إخفاء نافذة التسجيل (Drawer) فوراً لتظهر رسالة النجاح بوضوح
+            if (typeof closeAuthDrawer === 'function') closeAuthDrawer();
+
+            // ب. تحويل الواجهة الخلفية لوضع "تسجيل الدخول" استعداداً لعودة الطالب
             if (typeof toggleAuthMode === 'function') toggleAuthMode('login');
 
+            // ج. نقل الإيميل لخانة الدخول وتفريغ خانات التسجيل
             const loginEmailInput = document.getElementById('studentLoginEmail');
             if (loginEmailInput) loginEmailInput.value = email;
 
             document.getElementById('regPass').value = "";
             document.getElementById('regEmail').value = "";
 
+            // د. تجهيز بيانات نافذة النجاح (Modal Data)
             let rawFirstName = fullName.split(' ')[0];
 
-            const firstName = arabToEng(rawFirstName);
+            // التأكد من وجود دالة التحويل (لتجنب الأخطاء)
+            const firstName = (typeof arabToEng === 'function') ? arabToEng(rawFirstName) : rawFirstName;
+
             const modalTitle = document.getElementById('successModalTitle');
             const modalBody = document.getElementById('successModalBody');
             const successModal = document.getElementById('signupSuccessModal');
 
+            // ترجمة النصوص
             const txtWelcome = `${_t('modal_welcome_title', '🎉 Welcome')} ${firstName}!`;
             const txtReserved = _t('modal_id_reserved', 'تم حجز الكود الجامعي:');
             const txtSent = _t('modal_email_sent', 'تم إرسال رابط تفعيل إلى بريدك الإلكتروني.');
             const txtWarning = _t('modal_verify_warning', 'يرجى تفعيل الحساب من الإيميل قبل تسجيل الدخول.');
 
+            // تعبئة المودال
             if (modalTitle) modalTitle.innerText = txtWelcome;
 
             if (modalBody) {
@@ -435,6 +476,7 @@ window.performStudentSignup = async function () {
                 `;
             }
 
+            // هـ. إظهار المودال
             if (successModal) {
                 successModal.style.display = 'flex';
             }
@@ -453,6 +495,7 @@ window.performStudentSignup = async function () {
         showToast(`❌ ${errorMsg}`, 5000, "#ef4444");
 
     } finally {
+        // إعادة الزر لحالته الأصلية
         if (btn) {
             btn.disabled = false;
             btn.innerText = originalText;
@@ -1268,25 +1311,20 @@ document.addEventListener('click', (e) => {
     });
 
     window.performStudentLogin = async () => {
-        // 0. تجهيز أدوات الترجمة (Fallback للدالة t)
         const _t = (typeof t === 'function') ? t : (key, def) => def;
 
-        // 1. جلب البيانات من الواجهة
         const email = document.getElementById('studentLoginEmail').value.trim();
         const pass = document.getElementById('studentLoginPass').value;
 
-        // تحديد زر الدخول (سواء كان في التصميم القديم أو الجديد)
         const btn = document.querySelector('#loginSection .btn-modern-action') || document.querySelector('#loginSection .btn-main');
 
         let originalText = "Sign In";
         if (btn) {
             originalText = btn.innerHTML;
-            // تغيير النص مع الترجمة وأيقونة التحميل
             btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${_t('status_verifying', 'جاري التحقق...')}`;
             btn.disabled = true;
         }
 
-        // 2. التحقق المبدئي
         if (!email || !pass) {
             showToast(_t('msg_enter_creds', "⚠️ أدخل الإيميل والباسورد"), 3000, "#f59e0b");
             if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
@@ -1294,11 +1332,9 @@ document.addEventListener('click', (e) => {
         }
 
         try {
-            // 3. محاولة تسجيل الدخول
             const userCredential = await signInWithEmailAndPassword(auth, email, pass);
             const user = userCredential.user;
 
-            // 4. تحديث الواجهة فورياً (Visual Feedback)
             const pIcon = document.getElementById('profileIconImg');
             const pWrap = document.getElementById('profileIconWrapper');
             const pDot = document.getElementById('userStatusDot');
@@ -1307,19 +1343,22 @@ document.addEventListener('click', (e) => {
             if (pWrap) pWrap.style.background = "linear-gradient(135deg, #10b981, #059669)";
             if (pDot) { pDot.style.background = "#22c55e"; pDot.style.boxShadow = "0 0 10px #22c55e"; }
 
-            // 5. التحقق من تفعيل الإيميل
-            await user.reload();
             if (!user.emailVerified) {
                 await signOut(auth);
-                // استخدام alert عشان اليوزر ينتبه، مع دعم الترجمة
-                alert(_t('msg_email_not_verified', "⛔ عذراً، لم يتم تفعيل الحساب! راجع بريدك الإلكتروني."));
 
-                // إعادة تعيين الزرار والخروج
+
+                const vModal = document.getElementById('verificationModal');
+                if (vModal) {
+                    vModal.style.display = 'flex';
+                    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+                } else {
+                    showToast(_t('msg_email_not_verified', "⛔ حساب غير مفعل! راجع الإيميل."), 5000, "#ef4444");
+                }
+
                 if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
                 return;
             }
 
-            // 6. جلب بيانات الطالب من قاعدة البيانات (Logic القديم المهم)
             const userRef = doc(db, "user_registrations", user.uid);
             const userSnap = await getDoc(userRef);
 
@@ -1327,7 +1366,6 @@ document.addEventListener('click', (e) => {
                 const userData = userSnap.data();
                 const info = userData.registrationInfo || userData;
 
-                // تخزين البيانات في الكاش (عشان التطبيق يبقى سريع)
                 const profileCache = {
                     fullName: info.fullName,
                     email: info.email,
@@ -1341,7 +1379,6 @@ document.addEventListener('click', (e) => {
                 };
                 localStorage.setItem('cached_profile_data', JSON.stringify(profileCache));
 
-                // ربط الجهاز (Device Binding Logic)
                 const currentDeviceId = getUniqueDeviceId();
                 if (!userData.bound_device_id) {
                     await updateDoc(userRef, {
@@ -1351,19 +1388,16 @@ document.addEventListener('click', (e) => {
                 }
             }
 
-            // 7. إتمام الدخول بنجاح
             showToast(_t('msg_login_success', "🔓 تم تسجيل الدخول.. أهلاً بك"), 3000, "#10b981");
 
             if (typeof closeAuthDrawer === 'function') closeAuthDrawer();
 
         } catch (error) {
-            console.error("Login Error:", error.code); // للمطورين
+            console.error("Login Error:", error.code);
 
             let msg = "";
 
-            // 8. التعامل الذكي مع الأخطاء (الجديد)
             switch (error.code) {
-                // 🔥 الحالة المحددة للإيميل غير الموجود
                 case 'auth/user-not-found':
                     msg = _t('error_user_not_found', "❌ هذا البريد الإلكتروني غير مسجل لدينا!");
                     break;
@@ -1372,7 +1406,6 @@ document.addEventListener('click', (e) => {
                     msg = _t('error_wrong_pass', "❌ كلمة المرور غير صحيحة!");
                     break;
 
-                // الخطأ العام من جوجل (بيشمل الاتنين اللي فوق أحياناً)
                 case 'auth/invalid-credential':
                     msg = _t('error_invalid_cred', "❌ البريد الإلكتروني أو كلمة المرور غير صحيحة.");
                     break;
@@ -1397,12 +1430,10 @@ document.addEventListener('click', (e) => {
                     msg = _t('error_unknown', "❌ خطأ غير معروف") + ": " + error.code;
             }
 
-            // عرض رسالة الخطأ وتشغيل صوت
             showToast(msg, 5000, "#ef4444");
             if (typeof playBeep === 'function') playBeep();
 
         } finally {
-            // 9. إعادة زر الدخول لحالته الطبيعية
             if (btn) {
                 btn.innerHTML = originalText;
                 btn.disabled = false;

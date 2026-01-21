@@ -3015,9 +3015,57 @@
         <div id="successModalBody" style="font-size: 14px; color: #64748b; line-height: 1.6;">
         </div>
 
-        <button onclick="document.getElementById('signupSuccessModal').style.display='none'; toggleAuthMode('login');"
+        <button
+            onclick="document.getElementById('signupSuccessModal').style.display='none'; openAuthDrawer(); toggleAuthMode('login');"
             class="btn-main" style="width: 100%; margin-top: 25px; justify-content: center;">
             تسجيل الدخول الآن <i class="fa-solid fa-arrow-right-to-bracket"></i>
+        </button>
+    </div>
+</div>
+<!-- Verification Alert Modal -->
+<div id="verificationModal" class="modal-overlay">
+    <div class="modal-box" style="text-align: center; padding: 25px;">
+        <div
+            style="width: 60px; height: 60px; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
+            <i class="fa-solid fa-envelope-open-text fa-shake" style="font-size: 30px; color: #ef4444;"></i>
+        </div>
+
+        <h3 style="font-size: 18px; font-weight: 800; color: #b91c1c; margin-bottom: 8px;">
+            الحساب غير مفعل!
+        </h3>
+
+        <p style="font-size: 13px; color: #64748b; margin-bottom: 20px;">
+            لقد تم إنشاء حسابك ولكن لم تقم بتفعيله.<br>
+            يرجى مراجعة بريدك الإلكتروني والضغط على رابط التفعيل.
+        </p>
+
+        <button onclick="document.getElementById('verificationModal').style.display='none';" class="btn-main"
+            style="width: 100%; background: #ef4444; border: none;">
+            حسناً، سأتحقق الآن <i class="fa-solid fa-check"></i>
+        </button>
+    </div>
+</div>
+<!-- Expulsion Modal -->
+<div id="expulsionModal" class="modal-overlay" style="z-index: 999999;">
+    <div class="modal-box" style="text-align: center; padding: 30px; border-top: 5px solid #ef4444;">
+
+        <div
+            style="width: 70px; height: 70px; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
+            <i class="fa-solid fa-ban fa-beat" style="font-size: 35px; color: #b91c1c;"></i>
+        </div>
+
+        <h3 id="expelTitle" style="font-size: 22px; font-weight: 900; color: #b91c1c; margin-bottom: 10px;">
+            تم استبعادك!
+        </h3>
+
+        <p id="expelBody" style="font-size: 14px; color: #64748b; line-height: 1.6; margin-bottom: 25px;">
+            قام المحاضر باستبعادك من الجلسة الحالية.<br>
+            لا يمكنك العودة لهذه المحاضرة مرة أخرى.
+        </p>
+
+        <button onclick="location.reload()" class="btn-main"
+            style="width: 100%; background: #ef4444; border: none; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);">
+            مغادرة القاعة <i class="fa-solid fa-arrow-right-from-bracket"></i>
         </button>
     </div>
 </div>

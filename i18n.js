@@ -398,6 +398,9 @@ export const i18n = {
         error_network: "📡 فشل الاتصال! تأكد من الإنترنت.",
         error_unknown: "❌ خطأ غير معروف",
 
+        modal_expel_title: "⛔ تم استبعادك!",
+        modal_expel_body: "قام المحاضر بطردك من الجلسة.<br>لا يمكنك العودة مرة أخرى.",
+
     },
 
     en: {
@@ -419,6 +422,9 @@ export const i18n = {
         enter_lecture_btn: "Enter Lecture",
         session_active_btn: "Session Active (Tap to Resume)",
         start_new_session_btn: "Start New Lecture",
+
+        modal_expel_title: "⛔ You have been expelled!",
+        modal_expel_body: "The instructor has removed you from this session.<br>You cannot rejoin.",
 
         msg_missing_data: "⚠️ Missing data! Please fill all fields",
         msg_weak_pass: "⚠️ Weak password (min 6 characters)",
