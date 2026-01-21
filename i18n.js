@@ -362,6 +362,29 @@ export const i18n = {
         chip_students: "طلاب",
         chip_no_limit: "بلا حد (∞)",
         cancel_cmd: "إلغاء الأمر",
+        search_no_results_custom: "هذه المحاضرة لم تبدأ بعد أو لم يتم إنشاؤها",
+        student_found: "الطالب",
+        attending_now: "يحضر الآن في",
+        attendance_count: "حضور",
+        formal_direction: "توجه نحو القاعة",
+        doctor_prefix_en: "Dr.",
+        enter_lecture_btn: "دخول المحاضرة",
+        session_active_btn: "جلستك نشطة (اضغط للمتابعة)",
+        start_new_session_btn: "بدء محاضرة جديدة",
+
+        msg_missing_data: "⚠️ بيانات ناقصة! يرجى ملء كل الحقول",
+        msg_weak_pass: "⚠️ كلمة المرور ضعيفة (6 أحرف على الأقل)",
+        status_connecting: "جاري الاتصال بالسيرفر...",
+        status_sending_email: "إرسال رابط التفعيل...",
+        msg_email_fail: "⚠️ تم الحساب، لكن تعذر إرسال الإيميل تلقائياً",
+        msg_account_created: "✅ تم إنشاء الحساب بنجاح!",
+        modal_welcome_title: "🎉 أهلاً بك!",
+        modal_id_reserved: "تم حجز الكود الجامعي:",
+        modal_email_sent: "تم إرسال رابط تفعيل إلى بريدك الإلكتروني.",
+        modal_verify_warning: "يرجى تفعيل الحساب من الإيميل قبل تسجيل الدخول.",
+        error_security_fail: "فشل التسجيل لأسباب أمنية",
+        error_email_exists: "هذا البريد مسجل بالفعل!",
+
     },
 
     en: {
@@ -373,6 +396,30 @@ export const i18n = {
         sys_title: "Attendance System",
         welcome_subtitle: "Welcome! Please join the current session below.",
         admin_badge_text: "Admin Mode Active",
+
+        search_no_results_custom: "This lecture has not started or created yet",
+        student_found: "Student",
+        attending_now: "Attending",
+        attendance_count: "Attendees",
+        formal_direction: "Proceed to Hall",
+        doctor_prefix_en: "Dr.",
+        enter_lecture_btn: "Enter Lecture",
+        session_active_btn: "Session Active (Tap to Resume)",
+        start_new_session_btn: "Start New Lecture",
+
+        msg_missing_data: "⚠️ Missing data! Please fill all fields",
+        msg_weak_pass: "⚠️ Weak password (min 6 characters)",
+        status_connecting: "Connecting to server...",
+        status_sending_email: "Sending verification link...",
+        msg_email_fail: "⚠️ Account created, but failed to send email auto",
+        msg_account_created: "✅ Account created successfully!",
+        modal_welcome_title: "🎉 Welcome!",
+        modal_id_reserved: "University ID Reserved:",
+        modal_email_sent: "A verification link has been sent to your email.",
+        modal_verify_warning: "Please verify your account via email before login.",
+        error_security_fail: "Registration failed for security reasons",
+        error_email_exists: "This email is already registered!",
+
 
         refresh_btn: "Refresh",
         preparing_title: "Preparing",
@@ -751,13 +798,11 @@ export const i18n = {
     }
 };
 
-// وظيفة الترجمة
 export function t(key) {
     const lang = localStorage.getItem('sys_lang') || 'ar';
     return i18n[lang][key] || key;
 }
 
-// وظيفة تغيير اللغة
 export function changeLanguage(lang) {
     const dict = i18n[lang];
     if (!dict) return;
@@ -816,24 +861,20 @@ export function changeLanguage(lang) {
     const langBtnText = document.querySelector('.active-lang-text-pro');
     if (langBtnText) langBtnText.innerText = (lang === 'ar') ? 'EN' : 'عربي';
 
-    // إعادة تعيين واجهة الزر الرئيسي لو موجود
     if (typeof window.resetMainButtonUI === 'function') window.resetMainButtonUI();
 }
 
-// وظيفة التبديل السريع
 export function toggleSystemLanguage() {
     const current = localStorage.getItem('sys_lang') || 'ar';
     const next = current === 'ar' ? 'en' : 'ar';
     changeLanguage(next);
 }
 
-// التهيئة عند تحميل الصفحة
 document.addEventListener('DOMContentLoaded', () => {
     const saved = localStorage.getItem('sys_lang') || 'ar';
     changeLanguage(saved);
 });
 
-// إتاحة الدوال للنافذة لضمان عمل الأحداث في HTML
 window.changeLanguage = changeLanguage;
 window.toggleSystemLanguage = toggleSystemLanguage;
 window.t = t;

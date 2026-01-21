@@ -1,27 +1,18 @@
-// ============================================================
-// 👤 FACE ID SYSTEM - MODERN & SECURE REVOLUTION 🚀
-// ============================================================
 
 import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 window.faceSystem = window.faceSystem || {};
 
-// System Variables
 let storedSessionData = null;
 let storedUser = null;
 let isModelsLoaded = false;
 
-// 🔒 AI Control Variables
 let stabilityCounter = 0;
 const REQUIRED_STABILITY_FRAMES = 25;
 let tempDescriptor = null;
 
-// 💉 دالة التلقيح: استخدام نظام الترجمة الموجود في script.js
 const t = window.t || ((key, def) => def);
 
-// ============================================================
-// 1. Fetch Face Descriptor
-// ============================================================
 window.faceSystem.getFace = async function (uid) {
     try {
         const db = window.db;
@@ -39,16 +30,12 @@ window.faceSystem.getFace = async function (uid) {
     }
 };
 
-// ============================================================
-// 2. Handle Join Request
-// ============================================================
 window.faceSystem.handleJoinRequest = async function (user, targetDoctorUID, passwordInput) {
     storedUser = user;
     const btn = document.querySelector('#studentPassModal .btn-main');
     const originalText = btn ? btn.innerHTML : "";
 
     if (btn) {
-        // يستخدم مفتاح checking_status الموجود بالفعل في قاموسك
         btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${t('checking_status', 'Checking Hall...')}`;
         btn.style.pointerEvents = 'none';
     }
@@ -96,9 +83,6 @@ window.faceSystem.handleJoinRequest = async function (user, targetDoctorUID, pas
     }
 };
 
-// ============================================================
-// 3. Initialize Camera & AI Models
-// ============================================================
 async function initFaceCamera() {
     const video = document.getElementById('video');
     const statusTxt = document.getElementById('statusTxt');
@@ -137,9 +121,6 @@ async function initFaceCamera() {
     }
 }
 
-// ============================================================
-// 🔥 4. Smart Scanning Loop
-// ============================================================
 async function startSmartScanning(video) {
     const statusTxt = document.getElementById('statusTxt');
     const scanRegion = document.getElementById('scanRegion');
@@ -152,7 +133,6 @@ async function startSmartScanning(video) {
 
     if (mode === 'REGISTER') {
         if (statusTxt) {
-            // "Welcome! Please hold steady..."
             statusTxt.innerText = "👋 " + t('welcome_face_reg', "Welcome! Please hold steady to register.");
             statusTxt.style.color = "#3b82f6";
         }
@@ -235,9 +215,6 @@ async function startSmartScanning(video) {
     }, 100);
 }
 
-// ============================================================
-// 5. Execution
-// ============================================================
 
 async function performRegistration(descriptor) {
     const statusTxt = document.getElementById('statusTxt');
@@ -293,9 +270,7 @@ async function performLogin(currentDescriptor, savedDescriptor) {
     }
 }
 
-// ============================================================
-// 6. Finalize Joining Process
-// ============================================================
+
 async function finalizeJoiningProcess() {
     window.showToast(t('registering_att_toast', "Registering Attendance..."), 2000, "#3b82f6");
 

@@ -22,7 +22,8 @@ import {
     Timestamp,
     arrayUnion,
     arrayRemove,
-    increment
+    increment,
+    getCountFromServer
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 import {
@@ -31,13 +32,14 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { i18n, t, changeLanguage, toggleSystemLanguage } from './i18n.js';
 
+console.log = function () { };
+console.warn = function () { };
+
 window.isJoiningProcessActive = false;
 window.isProcessingClick = false;
 
 const db = window.db;
 const auth = window.auth;
-
-console.log("🚀 Offline Mode: ON (Modern Cache)");
 
 document.addEventListener('DOMContentLoaded', () => {
     const saved = localStorage.getItem('sys_lang') || 'ar';
@@ -82,7 +84,8 @@ onAuthStateChanged(auth, async (user) => {
                     finalUserData = facSnap.data();
 
                     window.currentDoctorName = finalUserData.fullName;
-                    window.currentDoctorSubject = finalUserData.subject;
+                    window.currentDoctorJobTitle = finalUserData.jobTitle || finalUserData.subject;
+                    window.currentDoctorSubject = "";
 
                     if (document.getElementById('profFacName'))
                         document.getElementById('profFacName').innerText = window.currentDoctorName;
@@ -319,6 +322,11 @@ window.monitorMyParticipation = async function () {
 };
 
 window.performStudentSignup = async function () {
+    // 0. تجهيز أدوات الترجمة
+    const lang = localStorage.getItem('sys_lang') || 'ar';
+    // دالة مساعدة للترجمة (لو t مش موجودة ترجع النص الافتراضي)
+    const _t = (typeof t === 'function') ? t : (key, def) => def;
+
     // 1. تجميع البيانات
     const email = document.getElementById('regEmail').value.trim();
     const pass = document.getElementById('regPass').value;
@@ -328,36 +336,35 @@ window.performStudentSignup = async function () {
     const gender = document.getElementById('regGender').value;
     const group = document.getElementById('regGroup') ? document.getElementById('regGroup').value : "عام";
 
+    // 2. التحقق من صحة البيانات
     if (!email || !pass || !fullName || !studentID) {
         if (typeof playBeep === 'function') playBeep();
-        showToast("⚠️ بيانات ناقصة! يرجى ملء كل الحقول", 3000, "#f59e0b"); 
+        showToast(_t('msg_missing_data', "⚠️ بيانات ناقصة! يرجى ملء كل الحقول"), 3000, "#f59e0b");
         return;
     }
 
     if (pass.length < 6) {
         if (typeof playBeep === 'function') playBeep();
-        showToast("⚠️ كلمة المرور ضعيفة (يجب أن تكون 6 أحرف على الأقل)", 3000, "#f59e0b");
+        showToast(_t('msg_weak_pass', "⚠️ كلمة المرور ضعيفة (6 أحرف على الأقل)"), 3000, "#f59e0b");
         return;
     }
 
+    // 3. تجهيز الزر
     const btn = document.getElementById('btnDoSignup');
     const originalText = btn ? btn.innerText : "REGISTER";
 
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up fa-fade"></i> جاري الاتصال بالسيرفر...';
+        btn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up fa-fade"></i> ${_t('status_connecting', 'جاري الاتصال بالسيرفر...')}`;
     }
 
     try {
         const deviceID = getUniqueDeviceId();
-
         console.log("📤 Sending request to Backend...");
 
         const response = await fetch(`${BACKEND_URL}/api/registerStudent`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 email: email,
                 password: pass,
@@ -373,8 +380,7 @@ window.performStudentSignup = async function () {
         const result = await response.json();
 
         if (response.ok && result.success) {
-
-            if (btn) btn.innerHTML = '<i class="fa-regular fa-envelope fa-bounce"></i> إرسال رابط التفعيل...';
+            if (btn) btn.innerHTML = `<i class="fa-regular fa-envelope fa-bounce"></i> ${_t('status_sending_email', 'إرسال رابط التفعيل...')}`;
 
             try {
                 const userCredential = await signInWithEmailAndPassword(window.auth, email, pass);
@@ -387,34 +393,64 @@ window.performStudentSignup = async function () {
 
             } catch (emailError) {
                 console.error("Email Warning:", emailError);
-                showToast("⚠️ تم الحساب، لكن تعذر إرسال الإيميل تلقائياً", 4000, "#f59e0b");
+                showToast(_t('msg_email_fail', "⚠️ تم الحساب، لكن تعذر إرسال الإيميل تلقائياً"), 4000, "#f59e0b");
             }
 
             if (typeof playSuccess === 'function') playSuccess();
+            showToast(_t('msg_account_created', "✅ تم إنشاء الحساب بنجاح!"), 4000, "#10b981");
 
-            showToast("✅ تم إنشاء الحساب بنجاح!", 4000, "#10b981"); // أخضر
+            if (typeof toggleAuthMode === 'function') toggleAuthMode('login');
 
-            alert(`🎉 أهلاً بك يا ${fullName.split(' ')[0]}!\n\n✅ تم حجز الكود الجامعي: ${studentID}\n📨 تم إرسال رابط تفعيل إلى بريدك الإلكتروني.\n\n⚠️ يرجى تفعيل الحساب من الإيميل قبل تسجيل الدخول.`);
-
-            if (window.closeAuthDrawer) {
-                closeAuthDrawer();
-            }
+            const loginEmailInput = document.getElementById('studentLoginEmail');
+            if (loginEmailInput) loginEmailInput.value = email;
 
             document.getElementById('regPass').value = "";
             document.getElementById('regEmail').value = "";
 
-            if (typeof toggleAuthMode === 'function') toggleAuthMode('login');
+            let rawFirstName = fullName.split(' ')[0];
+
+            const firstName = arabToEng(rawFirstName);
+            const modalTitle = document.getElementById('successModalTitle');
+            const modalBody = document.getElementById('successModalBody');
+            const successModal = document.getElementById('signupSuccessModal');
+
+            const txtWelcome = `${_t('modal_welcome_title', '🎉 Welcome')} ${firstName}!`;
+            const txtReserved = _t('modal_id_reserved', 'تم حجز الكود الجامعي:');
+            const txtSent = _t('modal_email_sent', 'تم إرسال رابط تفعيل إلى بريدك الإلكتروني.');
+            const txtWarning = _t('modal_verify_warning', 'يرجى تفعيل الحساب من الإيميل قبل تسجيل الدخول.');
+
+            if (modalTitle) modalTitle.innerText = txtWelcome;
+
+            if (modalBody) {
+                modalBody.innerHTML = `
+                    <div style="background: #f8fafc; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px dashed #cbd5e1; text-align:center;">
+                        <div style="font-size:12px; font-weight: bold; color: #64748b; margin-bottom:5px;">${txtReserved}</div>
+                        <div style="font-size: 24px; font-weight: 900; color: #0ea5e9; font-family: 'Outfit', sans-serif; letter-spacing: 1px;">${studentID}</div>
+                    </div>
+                    <p style="font-size:14px; color:#334155; margin-bottom:8px;">📨 ${txtSent}</p>
+                    <div style="background:#fee2e2; color: #b91c1c; padding:10px; border-radius:8px; font-weight: bold; font-size: 12px; display:flex; align-items:center; gap:8px;">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span>${txtWarning}</span>
+                    </div>
+                `;
+            }
+
+            if (successModal) {
+                successModal.style.display = 'flex';
+            }
 
         } else {
-            throw new Error(result.error || "فشل التسجيل لأسباب أمنية");
+            throw new Error(result.error || _t('error_security_fail', "فشل التسجيل لأسباب أمنية"));
         }
 
     } catch (error) {
         console.error("Signup Error:", error);
+        if (typeof playClick === 'function') playClick();
 
-        if (typeof playClick === 'function') playClick(); // صوت خطأ لو متاح
+        let errorMsg = error.message;
+        if (errorMsg.includes("email-already-in-use")) errorMsg = _t('error_email_exists', "هذا البريد مسجل بالفعل!");
 
-        showToast(`❌ ${error.message}`, 5000, "#ef4444"); // أحمر
+        showToast(`❌ ${errorMsg}`, 5000, "#ef4444");
 
     } finally {
         if (btn) {
@@ -954,46 +990,6 @@ document.addEventListener('click', (e) => {
         }
     };
 
-    window.toggleSessionState = function () {
-        if (!sessionStorage.getItem("secure_admin_session_token_v99")) return;
-
-        const btn = document.getElementById('btnToggleSession');
-
-        if (btn && btn.classList.contains('session-open')) {
-            switchScreen('screenLiveSession');
-            if (typeof startLiveSnapshotListener === 'function') startLiveSnapshotListener();
-            return;
-        }
-
-        const modal = document.getElementById('customTimeModal');
-        if (modal) {
-            modal.style.display = 'flex';
-
-            document.body.style.overflow = 'hidden';
-
-            const fullSubjectsConfig = {
-                "1": ["اساسيات تمريض 1 نظري", "اساسيات تمريض 1 عملي", "تمريض بالغين 1 نظرى", "تمريض بالغين 1 عملى", "اناتومى نظرى", "اناتومى عملى", "تقييم صحى نظرى", "تقييم صحى عملى", "مصطلحات طبية", "فسيولوجى", "تكنولوجيا المعلومات"],
-                "2": ["تمريض بالغين 1 نظرى", "تمريض بالغين 1 عملى", "تمريض حالات حرجة 1 نظرى", "تمريض حالات حرجة 1 عملى", "امراض باطنة", "باثولوجى", "علم الأدوية", "الكتابة التقنية"],
-                "3": []
-            };
-
-            let subjectsArray = [];
-            Object.values(fullSubjectsConfig).forEach(yearList => subjectsArray.push(...yearList));
-
-            let hallsArray = [
-                "037", "038", "039", "019", "025",
-                "123", "124", "127", "131", "132", "133", "134",
-                "231", "335", "121", "118",
-                "E334", "E335", "E336", "E337",
-                "E344", "E345", "E346", "E347",
-                "E240", "E241", "E242", "E245",
-                "E231", "E230", "E243", "E233", "E222", "E234"
-            ];
-
-            renderCustomList('subjectList', subjectsArray, 'finalSubjectValue');
-            renderCustomList('hallList', hallsArray, 'finalHallValue');
-        }
-    };
     window.renderCustomList = function (containerId, dataArray, hiddenInputId) {
         const container = document.getElementById(containerId);
         if (!container) return;
@@ -1057,266 +1053,7 @@ document.addEventListener('click', (e) => {
         }
     };
 
-    window.confirmSessionStart = async function () {
-        const subjectEl = document.getElementById('finalSubjectValue');
-        const hallEl = document.getElementById('finalHallValue');
-        const groupEl = document.getElementById('modalGroupInput');
-        const passEl = document.getElementById('modalSessionPassInput');
 
-        if (!subjectEl || !hallEl) {
-            console.error("Critical Error: Setup input elements missing!");
-            showToast("⚠️ خطأ في النظام: يرجى تحديث الصفحة", 3000, "#ef4444");
-            return;
-        }
-
-        const subject = subjectEl.value;
-        const hall = hallEl.value;
-        const groupInput = groupEl ? (groupEl.value.trim().toUpperCase() || "GENERAL") : "GENERAL";
-        const password = passEl ? passEl.value.trim() : "";
-
-        const user = auth.currentUser;
-
-        const lang = localStorage.getItem('sys_lang') || 'ar';
-        const dict = (typeof i18n !== 'undefined' && i18n[lang]) ? i18n[lang] : {};
-
-        if (!user) return;
-
-        if (!subject || subject === "") {
-            showToast(dict.validation_error_subject || "⚠️ Please select a subject", 3000, "#f59e0b");
-            return;
-        }
-        if (!hall || hall === "") {
-            showToast(dict.validation_error_hall || "⚠️ Please select a hall", 3000, "#f59e0b");
-            return;
-        }
-
-        const doctorName = window.currentDoctorName || document.getElementById('profFacName')?.innerText || "Doctor";
-        const facAvatarEl = document.getElementById('facCurrentAvatar');
-        const avatarIconClass = facAvatarEl && facAvatarEl.querySelector('i') ? facAvatarEl.querySelector('i').className : "fa-solid fa-user-doctor";
-
-        const btn = document.querySelector('#customTimeModal .btn-start-action') || document.querySelector('#customTimeModal .btn-main');
-        const originalText = btn ? btn.innerHTML : "Start";
-
-        if (btn) {
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ...';
-            btn.style.pointerEvents = 'none';
-        }
-
-        try {
-            const sessionRef = doc(db, "active_sessions", user.uid);
-
-            await setDoc(sessionRef, {
-                isActive: true,
-                isDoorOpen: false,
-                sessionCode: "------",
-                allowedSubject: subject,
-                hall: hall,
-                targetGroups: [groupInput],
-                sessionPassword: password,
-                maxStudents: 9999,
-                doctorName: doctorName,
-                doctorAvatar: avatarIconClass,
-                doctorUID: user.uid,
-                startTime: null,
-                duration: 0
-            }, { merge: true });
-
-            if (document.getElementById('liveDocName')) document.getElementById('liveDocName').innerText = doctorName;
-            if (document.getElementById('liveSubjectTag')) document.getElementById('liveSubjectTag').innerText = subject;
-            if (document.getElementById('liveHallTag')) document.getElementById('liveHallTag').innerHTML = `<i class="fa-solid fa-building-columns"></i> ${hall}`;
-            if (document.getElementById('liveGroupTag')) document.getElementById('liveGroupTag').innerText = `GROUP: ${groupInput}`;
-
-            if (typeof closeSetupModal === 'function') {
-                closeSetupModal();
-            } else {
-                document.getElementById('customTimeModal').style.display = 'none';
-                document.body.style.overflow = 'auto';
-            }
-
-            switchScreen('screenLiveSession');
-
-            if (typeof startLiveSnapshotListener === 'function') startLiveSnapshotListener();
-
-            showToast("✅ " + (lang === 'ar' ? "تم التجهيز بنجاح" : "Session Ready"), 3000, "#10b981");
-
-        } catch (e) {
-            console.error("Setup Error:", e);
-            showToast("❌ Error: " + e.message, 3000, "#ef4444");
-        } finally {
-            if (btn) {
-                btn.innerHTML = originalText;
-                btn.style.pointerEvents = 'auto';
-            }
-        }
-    };
-
-    window.closeSessionImmediately = function () {
-        const confirmBtn = document.getElementById('btnConfirmYes');
-        const confirmIcon = document.querySelector('.confirm-icon-animate i');
-        const lang = localStorage.getItem('sys_lang') || 'ar';
-
-        if (confirmBtn) confirmBtn.innerText = (lang === 'ar') ? "تأكيد وحفظ ✅" : "Confirm & Save ✅";
-
-        showModernConfirm(
-            (lang === 'ar') ? "إنهاء الجلسة وحفظ الغياب" : "End Session",
-            (lang === 'ar') ? "سيتم إغلاق البوابة وحفظ السجلات." : "Session will be closed and saved.",
-            async function () {
-                const user = auth.currentUser;
-                try {
-                    const sessionRef = doc(db, "active_sessions", user.uid);
-                    const sessionSnap = await getDoc(sessionRef);
-
-                    if (!sessionSnap.exists()) {
-                        showToast("No session found", 3000, "#ef4444");
-                        return;
-                    }
-
-                    const settings = sessionSnap.data();
-
-                    const now = new Date();
-                    const d = String(now.getDate()).padStart(2, '0');
-                    const m = String(now.getMonth() + 1).padStart(2, '0');
-                    const y = now.getFullYear();
-                    const fixedDateStr = `${d}/${m}/${y}`;
-
-                    const batch = writeBatch(db);
-                    const partsRef = collection(db, "active_sessions", user.uid, "participants");
-                    const partsSnap = await getDocs(partsRef);
-                    let count = 0;
-
-                    const currentDocName = settings.doctorName || "Doctor";
-
-                    partsSnap.forEach(docSnap => {
-                        const p = docSnap.data();
-                        if (p.status === "active") {
-                            const safeSubject = (settings.allowedSubject || "General").replace(/\//g, '-');
-                            const recID = `${p.id}_${fixedDateStr.replace(/\//g, '-')}_${safeSubject}`;
-                            const attRef = doc(db, "attendance", recID);
-
-                            batch.set(attRef, {
-                                id: p.id,
-                                name: p.name,
-                                subject: settings.allowedSubject,
-                                hall: settings.hall,
-                                group: p.group || "General",
-                                date: fixedDateStr,
-                                time_str: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-                                timestamp: serverTimestamp(),
-                                status: "ATTENDED",
-                                doctorUID: user.uid,
-                                doctorName: currentDocName,
-                                feedback_status: "pending",
-                                feedback_rating: 0
-                            });
-
-                            const cleanSubKey = settings.allowedSubject.trim().replace(/\s+/g, '_').replace(/[^\w\u0600-\u06FF]/g, '');
-                            const studentStatsRef = doc(db, "student_stats", p.uid);
-                            batch.set(studentStatsRef, {
-                                [`attended.${cleanSubKey}`]: increment(1),
-                                group: p.group || "General"
-                            }, { merge: true });
-
-                            count++;
-                        }
-                        batch.delete(docSnap.ref);
-                    });
-
-                    if (settings.targetGroups && settings.targetGroups.length > 0) {
-                        const cleanSubKey = settings.allowedSubject.trim().replace(/\s+/g, '_').replace(/[^\w\u0600-\u06FF]/g, '');
-                        settings.targetGroups.forEach(groupName => {
-                            if (!groupName) return;
-                            const groupRef = doc(db, "groups_stats", groupName);
-                            batch.set(groupRef, {
-                                [`subjects.${cleanSubKey}`]: increment(1),
-                                last_updated: serverTimestamp()
-                            }, { merge: true });
-                        });
-                    }
-
-                    batch.update(sessionRef, { isActive: false, isDoorOpen: false });
-                    await batch.commit();
-
-                    showToast(`✅ تم الحفظ (${count} طالب)`, 4000, "#10b981");
-                    setTimeout(() => location.reload(), 2000);
-
-                } catch (e) {
-                    console.error("Save Error:", e);
-                    showToast("خطأ في الحفظ: " + e.message, 4000, "#ef4444");
-                }
-            }
-        );
-    };
-    window.listenToSessionState = function () {
-        const user = auth.currentUser;
-        if (!user) return;
-
-        const globalSettingsRef = doc(db, "settings", "control_panel");
-        onSnapshot(globalSettingsRef, (docSnap) => {
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-
-                if (data.isQuickMode && data.quickModeFlags) {
-                    sessionStorage.setItem('is_quick_mode_active', 'true');
-                    sessionStorage.setItem('qm_disable_gps', data.quickModeFlags.disableGPS);
-                    sessionStorage.setItem('qm_disable_qr', data.quickModeFlags.disableQR);
-
-                    if (typeof applyQuickModeVisuals === 'function') applyQuickModeVisuals();
-                    handleQuickModeUI(true);
-                } else {
-                    sessionStorage.setItem('is_quick_mode_active', 'false');
-                    if (typeof removeQuickModeVisuals === 'function') removeQuickModeVisuals();
-                    handleQuickModeUI(false);
-                }
-            }
-        });
-
-        const doctorSessionRef = doc(db, "active_sessions", user.uid);
-
-        if (window.unsubscribeSessionListener) {
-            window.unsubscribeSessionListener();
-        }
-
-        window.unsubscribeSessionListener = onSnapshot(doctorSessionRef, (docSnap) => {
-            if (!docSnap.exists() || !docSnap.data().isActive) {
-                handleSessionTimer(false, null, 0);
-                updateSessionButtonUI(false);
-            } else {
-                const data = docSnap.data();
-                handleSessionTimer(true, data.startTime, data.duration);
-                updateSessionButtonUI(true);
-            }
-        }, (error) => {
-            console.log("Session status check...");
-        });
-    };
-    function updateSessionButtonUI(isOpen) {
-        const btn = document.getElementById('btnToggleSession');
-        const icon = document.getElementById('sessionIcon');
-        const txt = document.getElementById('sessionText');
-
-        if (!btn) return;
-
-        btn.style.display = 'flex';
-
-        if (isOpen) {
-            btn.classList.add('session-open');
-            btn.style.background = "#dcfce7"; // أخضر فاتح
-            btn.style.color = "#166534";
-            btn.style.border = "2px solid #22c55e";
-
-            if (icon) icon.className = "fa-solid fa-tower-broadcast fa-fade";
-            if (txt) txt.innerText = "جلستك نشطة (اضغط للمتابعة)";
-
-        } else {
-            btn.classList.remove('session-open');
-            btn.style.background = "#f1f5f9"; // رمادي
-            btn.style.color = "#334155";
-            btn.style.border = "2px solid #cbd5e1";
-
-            if (icon) icon.className = "fa-solid fa-play";
-            if (txt) txt.innerText = "بدء محاضرة جديدة";
-        }
-    }
     window.startProcess = async function (isRetry) {
         if (typeof playClick === 'function') playClick();
 
@@ -2027,93 +1764,6 @@ document.addEventListener('click', (e) => {
     let localSessionDeadline = null;
     let sessionInterval = null;
 
-    window.handleSessionTimer = function (isActive, startTime, duration) {
-        const btn = document.getElementById('btnToggleSession');
-        const icon = document.getElementById('sessionIcon');
-        const txt = document.getElementById('sessionText');
-        const floatTimer = document.getElementById('studentFloatingTimer');
-        const floatText = document.getElementById('floatingTimeText');
-        const doorStatus = document.getElementById('doorStatusText');
-
-        const isAdmin = !!sessionStorage.getItem("secure_admin_session_token_v99");
-
-        if (sessionInterval) clearInterval(sessionInterval);
-
-        if (!isActive) {
-            if (isAdmin && btn) {
-                btn.classList.remove('session-open');
-                btn.style.background = "#fee2e2";
-                btn.style.color = "#991b1b";
-                if (txt) txt.innerText = "بدء محاضرة جديدة";
-                if (icon) icon.className = "fa-solid fa-play";
-            }
-            if (floatTimer) floatTimer.style.display = 'none';
-            return;
-        }
-
-        let startMs = 0;
-        if (startTime && typeof startTime.toMillis === 'function') {
-            startMs = startTime.toMillis();
-        } else {
-            startMs = startTime || Date.now();
-        }
-
-        const updateTick = () => {
-            const now = Date.now();
-            const elapsedSeconds = Math.floor((now - startMs) / 1000);
-            const remaining = duration - elapsedSeconds;
-
-            if (isAdmin) {
-                if (doorStatus) {
-                    if (duration == -1) {
-                        doorStatus.innerHTML = '<i class="fa-solid fa-door-open"></i> OPEN (∞)';
-                        doorStatus.style.color = "#10b981";
-                    } else if (remaining > 0) {
-                        doorStatus.innerHTML = `<i class="fa-solid fa-hourglass-half fa-spin"></i> ${remaining}s`;
-                        doorStatus.style.color = "#f59e0b";
-                    } else {
-                        clearInterval(sessionInterval);
-                        const user = auth.currentUser;
-                        updateDoc(doc(db, "active_sessions", user.uid), {
-                            isDoorOpen: false,
-                            sessionCode: "EXPIRED"
-                        }).then(() => {
-                            doorStatus.innerHTML = '<i class="fa-solid fa-door-closed"></i> CLOSED';
-                            doorStatus.style.color = "#ef4444";
-                            showToast("⏰ انتهى وقت الدخول وقُفل الباب", 4000, "#ef4444");
-                        });
-                    }
-                }
-            }
-            else {
-                if (floatTimer) {
-                    if (duration == -1) {
-                        floatTimer.style.display = 'flex';
-                        if (floatText) floatText.innerText = "OPEN";
-                    } else if (remaining > 0) {
-                        floatTimer.style.display = 'flex';
-                        if (floatText) floatText.innerText = remaining + "s";
-                        if (remaining <= 10) floatTimer.classList.add('urgent');
-                    } else {
-                        clearInterval(sessionInterval);
-                        floatTimer.style.display = 'none';
-
-                        const currentScreen = document.querySelector('.section.active')?.id;
-
-                        if (currentScreen === 'screenDataEntry' && !window.isJoiningProcessActive) {
-                            resetApplicationState();
-                            switchScreen('screenWelcome');
-                            const modal = document.getElementById('systemTimeoutModal');
-                            if (modal) modal.style.display = 'flex';
-                        }
-                    }
-                }
-            }
-        };
-
-        updateTick();
-        sessionInterval = setInterval(updateTick, 1000);
-    };
 
     function addKey(num) { playClick(); const i = document.getElementById('uniID'); if (i.value.length < 10) i.value += num; }
     function backspaceKey() { playClick(); const i = document.getElementById('uniID'); i.value = i.value.slice(0, -1); }
@@ -2967,6 +2617,10 @@ document.addEventListener('click', (e) => {
 
     window.startProcess = startProcess;
     window.handleIdSubmit = handleIdSubmit;
+    window.resetApplicationState = resetApplicationState;
+    window.handleQuickModeUI = handleQuickModeUI;
+    window.applyQuickModeVisuals = applyQuickModeVisuals;
+    window.removeQuickModeVisuals = removeQuickModeVisuals;
     window.checkAdminPassword = checkAdminPassword;
     window.goBackToWelcome = goBackToWelcome;
     window.handleReportClick = handleReportClick;
@@ -3504,9 +3158,6 @@ document.addEventListener('click', (e) => {
             setTimeout(() => modal.classList.add('active'), 10);
         }
 
-        const statusInput = document.getElementById('studentStatusInput');
-        if (statusInput) statusInput.value = "";
-
         const renderData = (data, isCached) => {
             const info = data.registrationInfo || data;
 
@@ -3516,10 +3167,6 @@ document.addEventListener('click', (e) => {
             document.getElementById('profGender').innerText = info.gender || "--";
             document.getElementById('profEmail').innerText = info.email || "--";
             document.getElementById('profUID').innerText = data.uid || user.uid;
-
-            if (statusInput && data.status_message) {
-                statusInput.value = data.status_message;
-            }
 
             const currentAvatarEl = document.getElementById('currentAvatar');
             if (currentAvatarEl) {
@@ -3659,7 +3306,7 @@ document.addEventListener('click', (e) => {
         const name = document.getElementById('facName').value.trim();
         const gender = document.getElementById('facGender').value;
         const role = document.getElementById('facRole').value;
-        const subject = document.getElementById('facSubject').value.trim();
+        const jobTitle = document.getElementById('facJobTitle').value.trim();
         const email = document.getElementById('facEmail').value.trim();
         const emailConfirm = document.getElementById('facEmailConfirm').value.trim();
         const pass = document.getElementById('facPass').value;
@@ -3704,7 +3351,7 @@ document.addEventListener('click', (e) => {
                 fullName: name,
                 gender: gender,
                 role: role,
-                subject: subject,
+                jobTitle: jobTitle,
                 email: email,
                 isVerified: false,
                 registeredAt: serverTimestamp()
@@ -3777,7 +3424,7 @@ document.addEventListener('click', (e) => {
                     fullName: userData.fullName,
                     email: userData.email,
                     role: userData.role,
-                    subject: userData.subject,
+                    jobTitle: userData.jobTitle || userData.subject || "Not Assigned",
                     avatarClass: userData.avatarClass || "fa-user-doctor",
                     uid: user.uid,
                     type: 'faculty'
@@ -3846,24 +3493,20 @@ document.addEventListener('click', (e) => {
         const cachedData = localStorage.getItem('cached_profile_data');
         let dataLoaded = false;
 
-        const statusInput = modal.querySelector('#facultyStatusInput');
-        if (statusInput) statusInput.value = "";
-
         if (cachedData) {
             try {
                 const data = JSON.parse(cachedData);
                 if (data.uid === user.uid && data.type === 'faculty') {
                     document.getElementById('profFacName').innerText = data.fullName;
                     document.getElementById('profFacRole').innerText = (data.role === "dean") ? "👑 Vice Dean / Dean" : "👨‍🏫 Doctor / Professor";
-                    document.getElementById('profFacSubject').innerText = data.subject;
+                    const jobEl = document.getElementById('profFacJobTitle') || document.getElementById('profFacSubject');
+                    jobEl.innerText = data.jobTitle || data.subject || "غير محدد";
                     document.getElementById('profFacEmail').innerText = data.email;
                     document.getElementById('profFacUID').innerText = data.uid;
 
                     const avatarEl = document.getElementById('facCurrentAvatar');
                     avatarEl.innerHTML = `<i class="fa-solid ${data.avatarClass}"></i>`;
                     avatarEl.style.color = "#0ea5e9";
-
-                    if (statusInput) statusInput.value = data.status_message || "";
 
                     dataLoaded = true;
                 }
@@ -3884,8 +3527,6 @@ document.addEventListener('click', (e) => {
                 document.getElementById('profFacName').innerText = data.fullName || "Faculty Member";
                 document.getElementById('profFacRole').innerText = (data.role === "dean") ? "👑 Vice Dean / Dean" : "👨‍🏫 Doctor / Professor";
                 document.getElementById('profFacSubject').innerText = data.subject || "Not Assigned";
-
-                if (statusInput) statusInput.value = data.status_message || "";
 
                 const avatarEl = document.getElementById('facCurrentAvatar');
                 if (data.avatarClass) {
@@ -3942,291 +3583,6 @@ document.addEventListener('click', (e) => {
     };
     let unsubscribeLiveSnapshot = null;
 
-    window.startLiveSnapshotListener = function () {
-        const user = auth.currentUser;
-        if (!user) {
-            console.log("⏳ Waiting for Auth to initialize...");
-            setTimeout(window.startLiveSnapshotListener, 500);
-            return;
-        }
-
-        const grid = document.getElementById('liveStudentsGrid');
-
-        const countEl = document.getElementById('livePresentCount');
-        const extraEl = document.getElementById('liveExtraCount');
-
-        const capacityLabel = extraEl?.parentElement?.querySelector('.stat-label') || document.querySelector("label[for='liveExtraCount']");
-        if (capacityLabel) capacityLabel.innerText = "CAPACITY STATUS";
-
-        const adminToken = sessionStorage.getItem("secure_admin_session_token_v99");
-        const isDean = (adminToken === "SUPER_ADMIN_ACTIVE");
-        const isDoctor = (adminToken === "ADMIN_ACTIVE");
-        if (grid) {
-            if (isDoctor || isDean) {
-                grid.style.setProperty('display', 'grid', 'important');
-                grid.style.setProperty('grid-template-columns', '1fr 1fr', 'important');
-                grid.style.setProperty('gap', '10px', 'important');
-            } else {
-                grid.style.removeProperty('grid-template-columns');
-            }
-        }
-
-        let targetRoomUID;
-
-        if (isDean) {
-            targetRoomUID = sessionStorage.getItem('TARGET_DOCTOR_UID');
-        } else if (isDoctor) {
-            const storedTarget = sessionStorage.getItem('TARGET_DOCTOR_UID');
-            targetRoomUID = (storedTarget && storedTarget !== user.uid) ? storedTarget : user.uid;
-        } else {
-            targetRoomUID = sessionStorage.getItem('TARGET_DOCTOR_UID');
-        }
-
-        if (!targetRoomUID) {
-            return;
-        }
-
-        if (isDoctor && user.uid === targetRoomUID) document.body.classList.add('admin-mode');
-        else document.body.classList.remove('admin-mode');
-
-        let maxLimit = 9999;
-        let currentCount = 0;
-
-        const updateCapacityUI = () => {
-            if (!extraEl) return;
-
-            const limit = parseInt(maxLimit);
-            const count = parseInt(currentCount);
-
-            if (limit >= 9999 || isNaN(limit)) {
-                extraEl.innerHTML = `<span style="font-size:24px;">∞</span> <span style="font-size:11px; opacity:0.8; font-weight:normal;">OPEN</span>`;
-                extraEl.style.color = "#3b82f6";
-            } else {
-                const remaining = limit - count;
-                let remainingHtml = remaining;
-
-                if (remaining < 0) {
-                    extraEl.style.color = "#ef4444";
-                    extraEl.style.textShadow = "0 0 15px rgba(239, 68, 68, 0.2)";
-                    remainingHtml = `<i class="fa-solid fa-triangle-exclamation" style="font-size:12px;"></i> ${remaining}`;
-                } else {
-                    extraEl.style.color = "#10b981";
-                    extraEl.style.textShadow = "none";
-                }
-
-                extraEl.innerHTML = `
-                <span style="font-weight:800; font-size:20px;">${remainingHtml}</span>
-                <span style="font-size:12px; color:#94a3b8; font-weight:600;"> / ${limit}</span>
-            `;
-            }
-        };
-
-        const sessionRef = doc(db, "active_sessions", targetRoomUID);
-        onSnapshot(sessionRef, (docSnap) => {
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-
-                if (document.getElementById('liveDocName')) document.getElementById('liveDocName').innerText = data.doctorName || "Professor";
-                if (document.getElementById('liveSubjectTag')) document.getElementById('liveSubjectTag').innerText = data.allowedSubject || "Subject";
-                if (document.getElementById('liveHallTag')) document.getElementById('liveHallTag').innerHTML = `<i class="fa-solid fa-building-columns"></i> ${data.hall || "Hall"}`;
-                if (document.getElementById('liveGroupTag')) document.getElementById('liveGroupTag').innerText = `GROUPS: ${(data.targetGroups || []).join(', ')}`;
-
-                const avatarLink = document.getElementById('liveDocAvatar');
-                if (avatarLink) {
-                    avatarLink.innerHTML = `<i class="fa-solid ${data.doctorAvatar || 'fa-user-doctor'}"></i>`;
-                    avatarLink.onclick = () => openPublicProfile(targetRoomUID, true);
-                    avatarLink.style.cursor = "pointer";
-                }
-                const nameLink = document.getElementById('liveDocName');
-                if (nameLink) {
-                    nameLink.onclick = () => openPublicProfile(targetRoomUID, true);
-                    nameLink.style.cursor = "pointer";
-                }
-
-                if (document.getElementById('liveSessionCodeDisplay')) {
-                    document.getElementById('liveSessionCodeDisplay').innerText = (isDoctor || isDean) ? (data.sessionCode || "------") : "••••••";
-                }
-
-                const doorStatus = document.getElementById('doorStatusText');
-                if (doorStatus) {
-                    if (data.sessionCode === "PAUSED") {
-                        doorStatus.innerHTML = '<i class="fa-solid fa-mug-hot fa-bounce"></i> PAUSED';
-                        doorStatus.style.color = "#f59e0b";
-                    } else {
-                        doorStatus.innerHTML = data.isDoorOpen ? '<i class="fa-solid fa-door-open fa-fade"></i> OPEN' : '<i class="fa-solid fa-door-closed"></i> CLOSED';
-                        doorStatus.style.color = data.isDoorOpen ? "#10b981" : "#ef4444";
-                    }
-                }
-
-                if (data.maxStudents !== undefined && data.maxStudents !== null && data.maxStudents !== "") {
-                    maxLimit = parseInt(data.maxStudents);
-                } else {
-                    maxLimit = 9999;
-                }
-                updateCapacityUI();
-
-                if (!data.isActive && !isDoctor && !isDean) {
-                    showToast("🏁 انتهت المحاضرة", 4000, "#10b981");
-                    setTimeout(() => { goHome(); location.reload(); }, 1500);
-                }
-            }
-        });
-
-        const participantsRef = collection(db, "active_sessions", targetRoomUID, "participants");
-        const q = query(participantsRef, orderBy("timestamp", "desc"));
-
-        if (window.unsubscribeLiveSnapshot) window.unsubscribeLiveSnapshot();
-
-        window.unsubscribeLiveSnapshot = onSnapshot(q, (snapshot) => {
-            const activeDocs = snapshot.docs.filter(d => d.data().status === 'active');
-
-            currentCount = activeDocs.length;
-            if (countEl) countEl.innerText = currentCount;
-
-            updateCapacityUI();
-
-            if (grid) {
-                grid.innerHTML = '';
-                snapshot.forEach(docSnap => {
-                    const s = docSnap.data();
-                    if (s.status === 'expelled') return;
-
-                    const card = document.createElement('div');
-
-                    const isOnBreak = s.status === 'on_break';
-                    const isLeft = s.status === 'left';
-
-                    const opacityVal = (isLeft || isOnBreak) ? '0.5' : '1';
-
-                    const borderStyle = isOnBreak ? '2px dashed #f59e0b' : '1px solid #e2e8f0';
-
-                    const rawCount = s.segment_count;
-                    const segCount = (rawCount && !isNaN(rawCount)) ? parseInt(rawCount) : 1;
-
-                    let countBadge = '';
-
-                    if (segCount > 1) {
-                        let badgeColor = isOnBreak ? '#64748b' : '#0ea5e9';
-
-                        countBadge = `
-                        <div style="
-                            position: absolute; 
-                            top: -10px; 
-                            left: -10px; 
-                            background: ${badgeColor}; 
-                            color: white; 
-                            font-family: 'Outfit', sans-serif;
-                            font-size: 11px; 
-                            font-weight: 800; 
-                            width: 26px; 
-                            height: 26px; 
-                            border-radius: 50%; 
-                            display: flex; 
-                            align-items: center; 
-                            justify-content: center; 
-                            border: 3px solid #f8fafc; 
-                            z-index: 100; 
-                            box-shadow: 0 4px 6px rgba(0,0,0,0.15);
-                            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-                        ">
-                            ${segCount}
-                        </div>`;
-                    }
-
-                    const clickAction = `onclick="event.stopPropagation(); openPublicProfile('${s.uid || s.id}', false)"`;
-
-                    if (isDoctor || isDean) {
-                        const trap = s.trap_report || { device_match: true, in_range: true, gps_success: true };
-
-                        const deviceIcon = trap.device_match ? `<div title="جهاز أصلي" style="background:#dcfce7; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-mobile-screen" style="color:#16a34a; font-size:14px;"></i></div>` : `<div title="جهاز مختلف" style="background:#fee2e2; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; animation: shake 0.5s infinite;"><i class="fa-solid fa-mobile-screen-button" style="color:#dc2626; font-size:14px;"></i></div>`;
-                        const rangeIcon = trap.in_range ? `<div title="داخل النطاق" style="background:#dcfce7; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-location-dot" style="color:#16a34a; font-size:14px;"></i></div>` : `<div title="خارج النطاق" style="background:#fee2e2; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-location-crosshairs" style="color:#dc2626; font-size:14px;"></i></div>`;
-                        const gpsIcon = trap.gps_success ? `<div title="GPS نشط" style="background:#dcfce7; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-satellite-dish" style="color:#16a34a; font-size:14px;"></i></div>` : `<div title="فشل GPS" style="background:#f1f5f9; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-satellite-dish" style="color:#94a3b8; font-size:14px;"></i></div>`;
-
-                        const badgesHTML = `<div style="display:flex; justify-content:center; gap:8px; margin-top:6px; border-top:1px dashed #e2e8f0; padding-top:6px; width:100%;">${deviceIcon} ${rangeIcon} ${gpsIcon}</div>`;
-                        const leaveIcon = isLeft ? 'fa-arrow-rotate-left' : 'fa-person-walking-arrow-right';
-
-                        card.className = `live-st-card admin-view-card`;
-
-                        card.style.cssText = `
-                            background: #ffffff; 
-                            border-radius: 18px; 
-                            border: ${borderStyle}; 
-                            padding: 16px; 
-                            display: flex; 
-                            flex-direction: column; 
-                            justify-content: space-between; 
-                            gap: 5px; 
-                            box-shadow: 0 4px 10px rgba(206, 99, 38, 0.03); 
-                            height: auto; 
-                            min-height: 220px; 
-                            
-                            width: 100%;  /* ✅✅✅ لازم تكون 100% مش 150% */
-                            
-                            position: relative;
-                            overflow: visible !important; 
-                            opacity: ${opacityVal}; 
-                            transition: all 0.3s ease;
-                        `;
-
-                        card.innerHTML = `
-                            ${countBadge}
-                            <div style="display:flex; flex-direction:column; align-items:center;">
-                                <div ${clickAction} style="cursor:pointer; width:55px; height:55px; border-radius:50%; background:#f8fafc; display:flex; align-items:center; justify-content:center; font-size:24px; color:#0ea5e9; border:2.5px solid ${s.isUnruly ? '#ef4444' : (s.isUniformViolation ? '#f97316' : '#e2e8f0')};">
-                                    <i class="fa-solid ${s.avatarClass || 'fa-user'}"></i>
-                                </div>
-                                <div ${clickAction} class="st-name" style="cursor:pointer; font-size:12px; font-weight:800; color:#0f172a; margin-top:5px; text-decoration:none;">${s.name}</div>
-                                <div class="st-id en-font" style="font-size:10px; color:#64748b; background:#f1f5f9; padding:1px 8px; border-radius:10px;">#${s.id}</div>
-                                ${badgesHTML}
-                            </div>
-                            <div style="display:flex; justify-content:center; gap:5px; border-top:1px solid #f1f5f9; padding-top:8px;">
-                                <button onclick="toggleStudentFlag('${docSnap.id}', 'isUniformViolation', ${s.isUniformViolation})" class="mini-action-btn" style="background:${s.isUniformViolation ? '#f97316' : '#fff7ed'}; color:${s.isUniformViolation ? 'white' : '#ea580c'};"><i class="fa-solid fa-shirt"></i></button>
-                                <button onclick="toggleStudentFlag('${docSnap.id}', 'isUnruly', ${s.isUnruly})" class="mini-action-btn" style="background:${s.isUnruly ? '#ef4444' : '#fef2f2'}; color:${s.isUnruly ? 'white' : '#ef4444'};"><i class="fa-solid fa-fire"></i></button>
-                                <button onclick="toggleStudentStatus('${docSnap.id}', '${s.status}')" class="mini-action-btn" style="background:#f8fafc; color:#64748b;"><i class="fa-solid ${leaveIcon}"></i></button>
-                                <button onclick="updateStudentStatus('${docSnap.id}', 'expelled')" class="mini-action-btn" style="background:#fee2e2; color:#b91c1c;"><i class="fa-solid fa-ban"></i></button>
-                            </div>`;
-                    } else {
-                        const isMe = (user.uid === s.uid);
-                        if (isMe) card.classList.add('is-me-card');
-                        card.className = 'live-st-card student-view-card';
-                        let statusColor = isLeft ? "#94a3b8" : (s.isUnruly ? "#ef4444" : (s.isUniformViolation ? "#f97316" : "#10b981"));
-                        let statusText = isLeft ? "مغادر" : (s.isUnruly ? "مشاغب" : (s.isUniformViolation ? "مخالف" : "حاضر"));
-
-                        card.style.cssText = `
-                            background:white; 
-                            border-radius:15px; 
-                            padding:10px; 
-                            display:flex; 
-                            flex-direction:column; 
-                            align-items:center; 
-                            opacity:${opacityVal}; 
-                            transition:0.3s; 
-                            width:100%; 
-                            border: ${borderStyle}; 
-                            position: relative;
-                            overflow: visible !important; 
-                        `;
-
-                        card.innerHTML = `
-                        ${isMe ? '<div class="me-badge">أنت</div>' : ''}
-                            ${countBadge}
-                            <div ${clickAction} style="cursor:pointer; width:55px; height:55px; border-radius:50%; background:#f8fafc; border:3.5px solid ${statusColor}; display:flex; align-items:center; justify-content:center; font-size:24px; color:#0284c7; margin-bottom:5px; z-index:2;">
-                                <i class="fa-solid ${s.avatarClass || 'fa-user-graduate'}"></i>
-                            </div>
-                            <div style="text-align:center;">
-                                <div ${clickAction} class="st-name" style="cursor:pointer; font-size:13px; font-weight:900; color:#1e293b; text-decoration:none;">${s.name.split(' ')[0]} ${s.name.split(' ')[1] || ''}</div>
-                                <div class="st-id en-font" style="font-size:10px; color:#64748b;">#${s.id}</div>
-                                
-                            </div>
-                            </div>
-                            <div style="margin-top:8px; padding:2px 8px; border-radius:6px; font-size:10px; font-weight:800; border:1px solid ${statusColor}30; background:${statusColor}15; color:${statusColor};">
-                                ${statusText}
-                            </div>`;
-                    }
-                    grid.appendChild(card);
-                });
-            }
-        });
-    };
     window.toggleStudentStatus = async function (docId, currentStatus) {
         const user = auth.currentUser;
         if (!user) return;
@@ -4247,186 +3603,8 @@ document.addEventListener('click', (e) => {
             showToast(`🚫 ${studentName} has been expelled.`, 3000, "#ef4444");
         }
     };
-    window.openDoorActionModal = function () {
-        const isAdmin = sessionStorage.getItem("secure_admin_session_token_v99");
-        if (!isAdmin) return;
 
-        const modal = document.getElementById('doorDurationModal');
-        if (!modal) return;
 
-        const lang = localStorage.getItem('sys_lang') || 'ar';
-        const dict = (typeof i18n !== 'undefined' && i18n[lang]) ? i18n[lang] : {};
-        const t = (key, defaultText) => dict[key] || defaultText;
-
-        const contentBox = modal.querySelector('.modal-box') || modal.firstElementChild;
-
-        const modernStyles = `
-        <style>
-            .modern-door-container { font-family: inherit; text-align: center; }
-            
-            /* تنسيق شبكة الوقت الجديد (4 أعمدة) */
-            .time-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
-            
-            .btn-time-opt {
-                padding: 10px 2px; background: #fff; color: #334155; 
-                border: 1px solid #cbd5e1; border-radius: 10px; font-weight: 700; cursor: pointer;
-                transition: all 0.2s ease; font-size: 13px;
-                box-shadow: 0 2px 0 rgba(0,0,0,0.05);
-            }
-            .btn-time-opt:hover { transform: translateY(-2px); border-color: #0ea5e9; color: #0ea5e9; background: #f0f9ff; }
-            .btn-time-opt:active { transform: translateY(0); box-shadow: none; }
-
-            /* زر الوقت المفتوح المميز */
-            .btn-infinity {
-                width: 100%; margin-top: 5px; margin-bottom: 20px;
-                background: #ecfdf5; color: #059669; border: 1px dashed #6ee7b7;
-                padding: 8px; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 12px;
-            }
-            .btn-infinity:hover { background: #d1fae5; }
-
-            /* التحكم في العدد */
-            .counter-wrapper {
-                display: flex; align-items: center; justify-content: center; gap: 10px;
-                background: #f8fafc; padding: 10px; border-radius: 16px; margin-bottom: 15px;
-                border: 1px solid #e2e8f0;
-            }
-            .btn-control {
-                width: 40px; height: 40px; border-radius: 10px; border: none; cursor: pointer;
-                font-size: 18px; display: flex; align-items: center; justify-content: center;
-                transition: 0.2s; box-shadow: 0 3px 0 rgba(0,0,0,0.05);
-            }
-            .btn-minus { background: #fff; color: #ef4444; border: 1px solid #fee2e2; }
-            .btn-plus { background: #fff; color: #10b981; border: 1px solid #d1fae5; }
-            .btn-control:active { transform: translateY(2px); box-shadow: none; }
-            
-            #doorMaxLimitInput {
-                width: 80px; font-size: 26px; font-weight: 800; text-align: center;
-                background: transparent; border: none; color: #0f172a; outline: none;
-            }
-            input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-            
-            .quick-chips { display: flex; gap: 6px; justify-content: center; margin-bottom: 25px; flex-wrap: wrap; }
-            .chip {
-                padding: 5px 10px; border-radius: 15px; font-size: 11px; font-weight: bold; cursor: pointer;
-                transition: 0.2s; border: 1px solid transparent;
-            }
-            .chip-blue { background: #e0f2fe; color: #0284c7; }
-            .chip-purple { background: #f3e8ff; color: #7e22ce; }
-            .chip-gray { background: #f1f5f9; color: #64748b; border-color: #cbd5e1; }
-            .chip:hover { filter: brightness(0.95); transform: translateY(-1px); }
-
-            .btn-cancel-modern {
-                width: 100%; padding: 12px; background: #fff; border: 1px solid #cbd5e1;
-                border-radius: 12px; color: #64748b; font-weight: bold; cursor: pointer;
-                transition: 0.2s;
-            }
-            .btn-cancel-modern:hover { background: #f1f5f9; color: #334155; }
-            
-            .section-label {
-                display:block; text-align:${lang === 'ar' ? 'right' : 'left'}; 
-                font-size:13px; font-weight:700; color:#334155; margin-bottom:8px;
-            }
-        </style>
-    `;
-
-        const lblSec = t('time_sec', 'ث');
-        const lblMin = t('time_min', 'د');
-        const lblStd = t('chip_students', 'طلاب');
-
-        contentBox.innerHTML = `
-        ${modernStyles}
-        <div class="modern-door-container">
-            <div style="margin-bottom: 20px;">
-                <div style="width: 45px; height: 45px; background: #e0f2fe; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px;">
-                    <i class="fa-solid fa-door-open" style="font-size: 22px; color: #0284c7;"></i>
-                </div>
-                <h3 style="margin: 0; color: #0f172a; font-size: 18px;">${t('door_settings_title', 'إعدادات فتح البوابة')}</h3>
-            </div>
-
-            <!-- 1. القسم الأول: العدد (تم النقل للأعلى) -->
-            <label class="section-label">
-                1. ${t('door_limit_label', '👥 الحد الأقصى للطلاب (اختياري):')}
-            </label>
-            
-            <div class="counter-wrapper">
-                <button class="btn-control btn-minus" onclick="adjustDoorLimit(-1)"><i class="fa-solid fa-minus"></i></button>
-                <input type="number" id="doorMaxLimitInput" placeholder="∞" value="">
-                <button class="btn-control btn-plus" onclick="adjustDoorLimit(1)"><i class="fa-solid fa-plus"></i></button>
-            </div>
-
-            <div class="quick-chips">
-                <div class="chip chip-blue" onclick="adjustDoorLimit(5)">+5 ${lblStd}</div>
-                <div class="chip chip-blue" onclick="adjustDoorLimit(10)">+10 ${lblStd}</div>
-                <div class="chip chip-purple" onclick="adjustDoorLimit(50)">+50 ${lblStd}</div>
-                <div class="chip chip-gray" onclick="resetDoorLimit()">${t('chip_no_limit', 'بلا حد (∞)')}</div>
-            </div>
-
-            <!-- 2. القسم الثاني: المدة (تم النقل للأسفل) -->
-            <label class="section-label">
-                2. ${t('door_duration_label', '⏱️ حدد مدة فتح الكود:')}
-            </label>
-            
-            <div class="time-grid">
-                <button onclick="confirmOpenDoor(10)" class="btn-time-opt">10 ${lblSec}</button>
-                <button onclick="confirmOpenDoor(15)" class="btn-time-opt">15 ${lblSec}</button>
-                <button onclick="confirmOpenDoor(20)" class="btn-time-opt">20 ${lblSec}</button>
-                <button onclick="confirmOpenDoor(35)" class="btn-time-opt">35 ${lblSec}</button>
-                
-                <button onclick="confirmOpenDoor(44)" class="btn-time-opt">44 ${lblSec}</button>
-                <button onclick="confirmOpenDoor(60)" class="btn-time-opt">1 ${lblMin}</button>
-                <button onclick="confirmOpenDoor(120)" class="btn-time-opt">2 ${lblMin}</button>
-                <button onclick="confirmOpenDoor(180)" class="btn-time-opt">3 ${lblMin}</button>
-            </div>
-            
-            <!-- زر الوقت المفتوح -->
-            <button onclick="confirmOpenDoor(-1)" class="btn-infinity">
-                ${t('time_inf', '∞ وقت مفتوح (بدون عداد)')}
-            </button>
-
-            <!-- زر الإلغاء -->
-            <button onclick="document.getElementById('doorDurationModal').style.display='none'" class="btn-cancel-modern">
-                ${t('cancel_cmd', 'إلغاء الأمر')}
-            </button>
-        </div>
-    `;
-
-        modal.style.display = 'flex';
-    };
-
-    window.confirmOpenDoor = async function (seconds) {
-        const user = auth.currentUser;
-
-        const maxInput = document.getElementById('doorMaxLimitInput');
-        let maxStudentsVal = 9999;
-
-        if (maxInput && maxInput.value.trim() !== "") {
-            maxStudentsVal = parseInt(maxInput.value);
-        }
-        const newCode = Math.floor(100000 + Math.random() * 900000).toString();
-
-        try {
-            const sessionRef = doc(db, "active_sessions", user.uid);
-
-            await updateDoc(sessionRef, {
-                isDoorOpen: true,
-                sessionCode: newCode,
-                startTime: serverTimestamp(),
-                duration: seconds,
-                maxStudents: maxStudentsVal
-            });
-
-            document.getElementById('doorDurationModal').style.display = 'none';
-            document.getElementById('liveSessionCodeDisplay').innerText = newCode;
-            document.getElementById('doorStatusText').innerHTML = '<i class="fa-solid fa-door-open fa-fade"></i>';
-
-            let limitMsg = (maxStudentsVal === 9999) ? "عدد مفتوح" : `حد أقصى: ${maxStudentsVal}`;
-            showToast(`🔓 تم الفتح لمدة ${seconds}ث (${limitMsg})`, 4000, "#10b981");
-
-        } catch (e) {
-            console.error(e);
-            showToast("خطأ في فتح البوابة", 3000, "#ef4444");
-        }
-    };
     window.updateUIForMode = function () {
         // 1. تحديد الصلاحيات
         const adminToken = sessionStorage.getItem("secure_admin_session_token_v99");
@@ -4552,134 +3730,7 @@ document.addEventListener('click', (e) => {
         }
     };
 
-    window.openDeanOversight = function () {
-        if (typeof playClick === 'function') playClick();
 
-        const modal = document.getElementById('deanOversightModal');
-        const container = document.getElementById('oversightContainer');
-        const loader = document.getElementById('oversightLoader');
-        const lecturesCountEl = document.getElementById('totalActiveLectures');
-        const studentsCountEl = document.getElementById('totalStudentsNow');
-
-        if (!modal || !container) return;
-
-        modal.style.display = 'flex';
-        loader.style.display = 'block';
-        container.innerHTML = '';
-
-        if (window.deanRadarUnsubscribe) {
-            window.deanRadarUnsubscribe();
-            window.deanRadarUnsubscribe = null;
-        }
-
-        const q = query(collection(db, "active_sessions"), where("isActive", "==", true));
-
-        window.deanRadarUnsubscribe = onSnapshot(q, async (snapshot) => {
-            loader.style.display = 'none';
-            container.innerHTML = '';
-
-            let grandTotalStudents = 0;
-            lecturesCountEl.innerText = snapshot.size;
-
-            if (snapshot.empty) {
-                container.innerHTML = `
-                <div style="text-align:center; padding:50px 20px; color:#94a3b8;">
-                    <i class="fa-solid fa-wind" style="font-size:40px; margin-bottom:15px; opacity:0.3;"></i>
-                    <p style="font-weight:700; font-size:14px;">لا توجد محاضرات جارية حالياً</p>
-                </div>`;
-                studentsCountEl.innerText = "0";
-                return;
-            }
-
-            const enrichedSessions = await Promise.all(snapshot.docs.map(async (docSnap) => {
-                const session = docSnap.data();
-                const doctorUID = docSnap.id;
-
-                const partsRef = collection(db, "active_sessions", doctorUID, "participants");
-                const partsSnap = await getDocs(partsRef);
-
-                const activeCount = partsSnap.docs.filter(d => d.data().status === 'active').length;
-                const unrulyCount = partsSnap.docs.filter(d => d.data().isUnruly === true).length;
-
-                return { ...session, doctorUID, activeCount, unrulyCount };
-            }));
-
-            enrichedSessions.forEach(session => {
-                grandTotalStudents += session.activeCount;
-
-                const card = document.createElement('div');
-                card.className = `lecture-card-premium ${session.unrulyCount > 0 ? 'has-danger' : ''}`;
-
-                const docClick = `onclick="event.stopPropagation(); openPublicProfile('${session.doctorUID}', true)"`;
-
-                card.innerHTML = `
-                <!-- الصف العلوي: رقم القاعة والنبض الحي -->
-                <div class="card-top-info">
-                    <div class="hall-badge-premium">
-                        <i class="fa-solid fa-building-columns"></i>
-                        <span>HALL: ${session.hall}</span>
-                    </div>
-                    <div class="live-status-pill">
-                        <span class="blink-dot"></span>
-                        LIVE
-                    </div>
-                </div>
-
-                <!-- محتوى المحاضرة: المادة والدكتور -->
-                <div class="card-main-content">
-                    <h3 class="lec-subject-title">${session.allowedSubject}</h3>
-                    
-                    <!-- 🔥 [تم التعديل] جعل اسم الدكتور وصورته قابلة للضغط -->
-                    <div class="lec-doctor-name" ${docClick} style="cursor:pointer;" title="عرض بروفايل الدكتور">
-                        <div class="doc-avatar-mini">
-                            <!-- عرض أفاتار الدكتور الديناميكي -->
-                            <i class="fa-solid ${session.doctorAvatar || 'fa-user-doctor'}"></i>
-                        </div>
-                        <span style="text-decoration: underline; text-decoration-style: dotted;">د. ${session.doctorName}</span>
-                    </div>
-                </div>
-
-                <!-- الفوتر المعلوماتي: الحضور والنشاط -->
-                <div class="card-data-footer">
-                    <div class="data-chip">
-                        <i class="fa-solid fa-users"></i>
-                        <strong>${session.activeCount}</strong> حاضر
-                    </div>
-                    
-                    <div class="status-indicator-box ${session.unrulyCount > 0 ? 'alert' : 'stable'}">
-                        <i class="fa-solid ${session.unrulyCount > 0 ? 'fa-triangle-exclamation' : 'fa-circle-check'}"></i>
-                        <span>${session.unrulyCount > 0 ? session.unrulyCount + ' مخالفات' : 'الوضع مستقر'}</span>
-                    </div>
-                </div>
-
-                <!-- زر الدخول المباشر للمراقبة -->
-                <button class="btn-enter-oversight-pro" 
-                        onclick="enterRoomAsDean('${session.doctorUID}')">
-                    دخول القاعة للمراقبة <i class="fa-solid fa-arrow-left"></i>
-                </button>
-            `;
-                container.appendChild(card);
-            });
-
-            studentsCountEl.innerText = grandTotalStudents;
-
-        }, (error) => {
-            console.error("Dean Radar Error:", error);
-            loader.style.display = 'none';
-            showToast("⚠️ خطأ في الاتصال بالرادار اللحظي", 4000, "#ef4444");
-        });
-    };
-
-    window.enterRoomAsDean = function (doctorUID) {
-        if (typeof playClick === 'function') playClick();
-
-        sessionStorage.setItem('TARGET_DOCTOR_UID', doctorUID);
-
-        switchScreen('screenLiveSession');
-        if (typeof startLiveSnapshotListener === 'function') startLiveSnapshotListener();
-
-        document.getElementById('deanOversightModal').style.display = 'none';
-    };
 
     window.openDeanReports = function () {
         playClick();
@@ -4691,188 +3742,6 @@ document.addEventListener('click', (e) => {
 
     let chartsInstances = {};
 
-    window.generateDeanAnalytics = async function () {
-        const startVal = document.getElementById('reportStartDate').value;
-        const endVal = document.getElementById('reportEndDate').value;
-        const btn = document.querySelector('.btn-dash-run');
-
-        if (!startVal || !endVal) return showToast("⚠️ حدد الفترة الزمنية", 2000, "#f59e0b");
-
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري المعالجة...';
-        btn.disabled = true;
-
-        try {
-            const startDate = new Date(startVal);
-            const endDate = new Date(endVal);
-            endDate.setHours(23, 59, 59, 999);
-
-            const [attSnap, feedbackSnap, toolsSnap] = await Promise.all([
-                getDocs(query(collection(db, "attendance"))),
-                getDocs(query(collection(db, "feedback_reports"))),
-                getDocs(query(collection(db, "tool_requests")))
-            ]);
-
-            let totalAttendance = 0;
-            let subjectsCount = {}; // { "Anatomy": 50, "Micro": 30 }
-            let daysCount = { "Saturday": 0, "Sunday": 0, "Monday": 0, "Tuesday": 0, "Wednesday": 0, "Thursday": 0, "Friday": 0 };
-            const arDays = { "Saturday": "السبت", "Sunday": "الأحد", "Monday": "الاثنين", "Tuesday": "الثلاثاء", "Wednesday": "الأربعاء", "Thursday": "الخميس", "Friday": "الجمعة" };
-
-            attSnap.forEach(doc => {
-                const d = doc.data();
-                const parts = d.date.split('/');
-                const recDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
-
-                if (recDate >= startDate && recDate <= endDate) {
-                    totalAttendance++;
-
-                    const sub = d.subject || "غير محدد";
-                    subjectsCount[sub] = (subjectsCount[sub] || 0) + 1;
-
-                    const dayName = recDate.toLocaleDateString('en-US', { weekday: 'long' });
-                    if (daysCount[dayName] !== undefined) daysCount[dayName]++;
-                }
-            });
-
-            let doctorRatings = {}; // { "Dr. Ahmed": {sum: 15, count: 3} }
-
-            feedbackSnap.forEach(doc => {
-                const d = doc.data();
-                const recDate = d.timestamp ? d.timestamp.toDate() : new Date();
-
-                if (recDate >= startDate && recDate <= endDate) {
-                    const drName = d.doctorName || "Unknown";
-                    if (!doctorRatings[drName]) doctorRatings[drName] = { sum: 0, count: 0 };
-
-                    doctorRatings[drName].sum += (d.rating || 0);
-                    doctorRatings[drName].count++;
-                }
-            });
-
-            let finalRatings = {};
-            let totalAvg = 0;
-            let drCount = 0;
-            for (let dr in doctorRatings) {
-                finalRatings[dr] = (doctorRatings[dr].sum / doctorRatings[dr].count).toFixed(1);
-                totalAvg += parseFloat(finalRatings[dr]);
-                drCount++;
-            }
-            const globalAvg = drCount > 0 ? (totalAvg / drCount).toFixed(1) : "0.0";
-
-            let toolsCount = {};
-            let totalTools = 0;
-
-            toolsSnap.forEach(doc => {
-                const d = doc.data();
-                const recDate = d.timestamp ? d.timestamp.toDate() : new Date();
-
-                if (recDate >= startDate && recDate <= endDate) {
-                    const toolName = d.tool_name || "أداة";
-                    const qty = parseInt(d.quantity || 1);
-
-                    toolsCount[toolName] = (toolsCount[toolName] || 0) + qty;
-                    totalTools += qty;
-                }
-            });
-
-            document.getElementById('totalAttVal').innerText = totalAttendance;
-            document.getElementById('avgRatingVal').innerText = globalAvg + " / 5";
-            document.getElementById('totalToolsVal').innerText = totalTools;
-            document.getElementById('reportGenDate').innerText = new Date().toLocaleString('ar-EG');
-
-            renderChart('subjectsChart', 'bar', 'حضور الطلاب للمواد', subjectsCount, '#0ea5e9');
-
-            let arDaysData = {};
-            for (let enDay in daysCount) arDaysData[arDays[enDay]] = daysCount[enDay];
-            renderChart('daysChart', 'line', 'نشاط الحضور اليومي', arDaysData, '#8b5cf6');
-
-            renderChart('ratingsChart', 'bar', 'تقييم الدكاترة (متوسط)', finalRatings, '#f59e0b');
-            renderChart('toolsChart', 'doughnut', 'استهلاك الأدوات', toolsCount, ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#6366f1']);
-
-        } catch (e) {
-            console.error("Analytics Error:", e);
-            alert("حدث خطأ أثناء معالجة البيانات");
-        } finally {
-            btn.innerHTML = 'تحليل <i class="fa-solid fa-bolt"></i>';
-            btn.disabled = false;
-        }
-    };
-
-    function renderChart(canvasId, type, label, dataObj, color) {
-        const ctx = document.getElementById(canvasId).getContext('2d');
-        const labels = Object.keys(dataObj);
-        const dataValues = Object.values(dataObj);
-
-        if (chartsInstances[canvasId]) {
-            chartsInstances[canvasId].destroy();
-        }
-
-        let bgColors = color;
-        if (Array.isArray(color)) {
-            bgColors = color;
-        } else {
-            bgColors = labels.map(() => color);
-        }
-
-        chartsInstances[canvasId] = new Chart(ctx, {
-            type: type,
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: label,
-                    data: dataValues,
-                    backgroundColor: bgColors,
-                    borderColor: Array.isArray(color) ? '#fff' : color,
-                    borderWidth: 1,
-                    borderRadius: 5,
-                    tension: 0.4
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { display: type === 'doughnut' },
-                },
-                scales: type !== 'doughnut' ? {
-                    y: { beginAtZero: true }
-                } : {}
-            }
-        });
-    }
-
-    window.exportDashboard = async function (type) {
-        const element = document.getElementById('dashboardContent');
-        const btn = document.querySelector('.dash-actions');
-
-        btn.style.display = 'none';
-
-        try {
-            const canvas = await html2canvas(element, { scale: 2 });
-
-            if (type === 'image') {
-                const link = document.createElement('a');
-                link.download = 'تقرير_الكلية_الشامل.png';
-                link.href = canvas.toDataURL();
-                link.click();
-            }
-            else if (type === 'pdf') {
-                const imgData = canvas.toDataURL('image/png');
-                const { jsPDF } = window.jspdf;
-                const pdf = new jsPDF('p', 'mm', 'a4');
-                const imgProps = pdf.getImageProperties(imgData);
-                const pdfWidth = pdf.internal.pageSize.getWidth();
-                const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-
-                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-                pdf.save('تقرير_الكلية_الشامل.pdf');
-            }
-            showToast("✅ تم التصدير بنجاح", 3000, "#10b981");
-        } catch (e) {
-            console.error(e);
-            alert("خطأ في التصدير");
-        } finally {
-            btn.style.display = 'flex';
-        }
-    };
 
     function renderMiniList(containerId, dataArray, unit) {
         const cont = document.getElementById(containerId);
@@ -5109,30 +3978,62 @@ document.addEventListener('click', (e) => {
 
     window.resetMainButtonUI = function () {
         const btn = document.getElementById('mainActionBtn');
-
         const lang = localStorage.getItem('sys_lang') || 'ar';
+        const isAr = (lang === 'ar');
 
-        const dict = (typeof i18n !== 'undefined') ? i18n[lang] : null;
+        if (!btn) return;
 
-        if (btn) {
-            if (dict) {
-                btn.innerHTML = `${dict.main_reg_btn} <i class="fa-solid fa-fingerprint"></i>`;
-            }
+        // 🔥 1. فحص هل الطالب مرتبط بجلسة حالياً؟
+        const targetDoctorUID = sessionStorage.getItem('TARGET_DOCTOR_UID');
 
+        if (targetDoctorUID) {
+            // ✅ الحالة الأولى: الطالب داخل محاضرة (زر أخضر - دخول)
+
+            // ترجمة النص يدوياً أو من القاموس
+            const enterText = isAr ? "دخول المحاضرة" : "Enter Lecture";
+            btn.innerHTML = `${enterText} <i class="fa-solid fa-door-open fa-beat-fade"></i>`;
+
+            // استعادة تصميم الزر الأخضر
+            btn.style.background = "linear-gradient(135deg, #10b981, #059669)";
+            btn.style.boxShadow = "0 8px 25px -5px rgba(16, 185, 129, 0.5)";
+            btn.style.border = "1px solid #10b981";
+
+            // وظيفة الزر: الذهاب لشاشة اللايف
             btn.onclick = function () {
+                if (typeof playClick === 'function') playClick();
+                switchScreen('screenLiveSession');
+                if (typeof startLiveSnapshotListener === 'function') startLiveSnapshotListener();
+            };
 
+        } else {
+            // ✅ الحالة الثانية: الطالب خارج المحاضرة (زر أزرق - تسجيل)
+
+            // جلب النص من القاموس
+            const dict = (typeof i18n !== 'undefined') ? i18n[lang] : null;
+            const regText = dict ? dict.main_reg_btn : (isAr ? "تسجيل الحضور" : "Register Attendance");
+
+            btn.innerHTML = `${regText} <i class="fa-solid fa-fingerprint"></i>`;
+
+            // استعادة التصميم الافتراضي (إزالة الأخضر)
+            btn.style.background = "";
+            btn.style.boxShadow = "";
+            btn.style.border = "";
+
+            // وظيفة الزر: فتح شاشة الكود
+            btn.onclick = function () {
                 if (typeof window.forceOpenPinScreen === 'function') {
-
                     window.forceOpenPinScreen();
                 } else {
                     window.startProcess(false);
                 }
             };
-
-            btn.style.pointerEvents = 'auto';
-            btn.style.opacity = "1";
-            btn.classList.remove('locked');
         }
+
+        // 🔥 2. إصلاح التعليق (مهم جداً)
+        btn.style.pointerEvents = 'auto';
+        btn.style.opacity = "1";
+        btn.classList.remove('locked');
+        btn.disabled = false; // تأكيد تفعيل الزر
     };
 
     window.selectStar = function (val) {
@@ -5312,59 +4213,6 @@ document.addEventListener('click', (e) => {
         });
     };
 
-    window.saveMyStatus = async function () {
-        const user = auth.currentUser;
-        if (!user) return showToast("⚠️ يرجى تسجيل الدخول", 3000, "#f59e0b");
-
-        const isAdmin = sessionStorage.getItem("secure_admin_session_token_v99");
-
-        const inputId = isAdmin ? 'facultyStatusInput' : 'studentStatusInput';
-        const collectionName = isAdmin ? "faculty_members" : "user_registrations";
-
-        const inputEl = document.getElementById(inputId);
-        if (!inputEl) return;
-
-        const statusText = inputEl.value.trim();
-
-        if (statusText.length > 50) {
-            return showToast("⚠️ الحالة يجب أن تكون أقل من 50 حرف", 3000, "#f59e0b");
-        }
-        const activeModal = document.querySelector('.modal-overlay[style*="display: flex"]') || document.body;
-        const btn = activeModal.querySelector('.btn-save-status');
-        let originalIcon = '<i class="fa-solid fa-check"></i>';
-
-        if (btn) {
-            originalIcon = btn.innerHTML;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-            btn.disabled = true;
-        }
-
-        try {
-            await updateDoc(doc(db, collectionName, user.uid), {
-                status_message: statusText
-            });
-
-            const cached = localStorage.getItem('cached_profile_data');
-            if (cached) {
-                let obj = JSON.parse(cached);
-                if (obj.uid === user.uid) {
-                    obj.status_message = statusText;
-                    localStorage.setItem('cached_profile_data', JSON.stringify(obj));
-                }
-            }
-
-            showToast("✅ تم تحديث الحالة", 2000, "#10b981");
-
-        } catch (e) {
-            console.error("Save Status Error:", e);
-            showToast("خطأ في الاتصال", 3000, "#ef4444");
-        } finally {
-            if (btn) {
-                btn.innerHTML = originalIcon;
-                btn.disabled = false;
-            }
-        }
-    };
     window.expandAvatar = function () {
         const avatarEl = document.getElementById('publicAvatar');
         const iconClass = avatarEl.getAttribute('data-icon');
@@ -5381,94 +4229,6 @@ document.addEventListener('click', (e) => {
         zoomModal.style.display = 'flex';
     };
 
-    window.deleteMyStatus = async function () {
-        if (!confirm("هل تريد حذف الحالة؟")) return;
-
-        const user = auth.currentUser;
-        if (!user) return;
-
-        const sInput = document.getElementById('studentStatusInput');
-        const fInput = document.getElementById('facultyStatusInput');
-        if (sInput) sInput.value = "";
-        if (fInput) fInput.value = "";
-
-        try {
-            const isAdmin = sessionStorage.getItem("secure_admin_session_token_v99");
-            const collectionName = isAdmin ? "faculty_members" : "user_registrations";
-
-            await updateDoc(doc(db, collectionName, user.uid), {
-                status_message: ""
-            });
-
-            showToast("🗑️ تم حذف الحالة", 2000, "#ef4444");
-
-            const cached = localStorage.getItem('cached_profile_data');
-            if (cached) {
-                let obj = JSON.parse(cached);
-                obj.status_message = "";
-                localStorage.setItem('cached_profile_data', JSON.stringify(obj));
-            }
-
-        } catch (e) { console.error(e); }
-    };
-
-    window.triggerSessionEndOptions = function () {
-        if (typeof playClick === 'function') playClick();
-        const modal = document.getElementById('sessionActionModal');
-        if (modal) modal.style.display = 'flex';
-    };
-
-    window.performSessionPause = async function () {
-        const user = auth.currentUser;
-        if (!user) return;
-
-        const btn = document.querySelector('#sessionActionModal .btn-main');
-        if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري التجميد...';
-
-        try {
-            await updateDoc(doc(db, "active_sessions", user.uid), {
-                isDoorOpen: false,
-                sessionCode: "PAUSED"
-            });
-
-            const partsRef = collection(db, "active_sessions", user.uid, "participants");
-            const q = query(partsRef, where("status", "==", "active"));
-            const snapshot = await getDocs(q);
-
-            const batch = writeBatch(db);
-
-            snapshot.forEach(docSnap => {
-                const currentData = docSnap.data();
-
-                let currentCount = currentData.segment_count;
-                if (!currentCount || isNaN(currentCount)) {
-                    currentCount = 1;
-                }
-
-                const newCount = currentCount + 1;
-
-                batch.update(docSnap.ref, {
-                    status: "on_break",
-                    needs_reconfirmation: true,
-                    segment_count: newCount
-                });
-            });
-
-            await batch.commit();
-
-            showToast("☕ تم تفعيل وضع الاستراحة (الجولة التالية)", 3000, "#f59e0b");
-            document.getElementById('sessionActionModal').style.display = 'none';
-
-        } catch (e) {
-            console.error(e);
-            showToast(" ", 3000, "#ef4444");
-        } finally {
-            if (btn) btn.innerHTML = '(Break)';
-        }
-    };
-
-    window.triggerSessionEndOptions = triggerSessionEndOptions;
-    window.performSessionPause = performSessionPause;
 
     window.closeSetupModal = function () {
         document.getElementById('customTimeModal').style.display = 'none';
@@ -5583,45 +4343,7 @@ if ('serviceWorker' in navigator) {
             .catch(err => { console.error('ServiceWorker registration failed: ', err); });
     });
 }
-window.exportSubjectToExcel = function (subjectName) {
-    if (!window.cachedReportData || window.cachedReportData.length === 0) {
-        alert("لا توجد بيانات متاحة حالياً للتصدير.");
-        return;
-    }
 
-    const filteredStudents = window.cachedReportData.filter(s => s.subject === subjectName);
-
-    if (filteredStudents.length === 0) {
-        alert(`لا يوجد حضور مسجل في مادة: ${subjectName}`);
-        return;
-    }
-
-    const dataForExcel = filteredStudents.map((student, index) => ({
-        "م": index + 1,
-        "اسم الطالب": student.name,
-        "الكود الجامعي": student.uniID,
-        "المجموعة": student.group,
-        "وقت التسجيل": student.time,
-        "القاعة": student.hall || "غير محدد",
-        "كود الجلسة": student.code || "N/A"
-    }));
-
-    try {
-        const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "الحضور");
-
-        worksheet['!dir'] = 'rtl';
-
-        const fileName = `حضور_${subjectName}_${new Date().toLocaleDateString('ar-EG').replace(/\//g, '-')}.xlsx`;
-        XLSX.writeFile(workbook, fileName);
-    } catch (error) {
-        console.error("Excel Export Error:", error);
-        alert("حدث خطأ أثناء إنشاء ملف الإكسل. تأكد من إضافة مكتبة XLSX في ملف HTML.");
-    }
-};
-
-window.exportSubjectToExcel = exportSubjectToExcel;
 function playClick() {
     if (navigator.vibrate) navigator.vibrate(10);
 }
@@ -5798,244 +4520,6 @@ if (confirmBtn) {
     };
 }
 
-window.exportAttendanceSheet = async function (subjectName) {
-    if (typeof playClick === 'function') playClick();
-
-    let subjectsConfig = JSON.parse(localStorage.getItem('subjectsData_v4')) || {
-        "first_year": ["اساسيات تمريض 1 نظري", "اساسيات تمريض 1 عملي", "تقييم صحى نظرى", "مصطلحات طبية"],
-        "second_year": ["تمريض بالغين 1 نظرى", "باثولوجى", "علم الأدوية"]
-    };
-
-    let TARGET_LEVEL = "1";
-    if (subjectsConfig["first_year"]?.includes(subjectName)) TARGET_LEVEL = "1";
-    else if (subjectsConfig["second_year"]?.includes(subjectName)) TARGET_LEVEL = "2";
-    else if (subjectsConfig["third_year"]?.includes(subjectName)) TARGET_LEVEL = "3";
-    else if (subjectsConfig["fourth_year"]?.includes(subjectName)) TARGET_LEVEL = "4";
-
-    showToast(`⏳ جاري استخراج شيت (حضور + انضباط + تفاصيل) للفرقة ${TARGET_LEVEL}...`, 15000, "#3b82f6");
-
-    try {
-
-        const attendees = window.cachedReportData.filter(s => s.subject === subjectName);
-        const attendeesMap = {};
-
-        attendees.forEach(a => {
-            let cleanNotes = "منضبط";
-            if (a.notes && a.notes !== "منضبط") cleanNotes = a.notes;
-
-            let sessionCounter = a.segment_count || 1;
-            let docName = a.doctorName || "غير محدد";
-
-            attendeesMap[a.uniID] = {
-                ...a,
-                finalStatus: cleanNotes,
-                finalDoc: docName,
-                finalCount: sessionCounter
-            };
-        });
-
-        const q = query(collection(db, "students"), where("academic_level", "==", TARGET_LEVEL));
-        const querySnapshot = await getDocs(q);
-
-        let finalReport = [];
-
-        querySnapshot.forEach((doc) => {
-            const s = doc.data();
-            const attendanceRecord = attendeesMap[s.id];
-
-            if (attendanceRecord) {
-                let rowStyle = "background-color: #ecfdf5; color: #065f46;"; // أخضر
-                let statusText = "✅ حاضر";
-                let notesText = "منضبط";
-
-                if (attendanceRecord.finalStatus.includes("غير منضبط")) {
-                    rowStyle = "background-color: #fee2e2; color: #b91c1c; font-weight:bold;"; // أحمر
-                    statusText = "⚠️ حاضر (سلوك)";
-                    notesText = "غير منضبط";
-                } else if (attendanceRecord.finalStatus.includes("زي")) {
-                    rowStyle = "background-color: #ffedd5; color: #c2410c; font-weight:bold;"; // برتقالي
-                    statusText = "👕 حاضر (زي)";
-                    notesText = "مخالفة زي";
-                }
-
-                finalReport.push({
-                    name: s.name,
-                    id: s.id,
-                    level: s.academic_level,
-                    status: statusText,
-                    notes: notesText,
-                    time: attendanceRecord.time,
-                    group: attendanceRecord.group,
-                    doctor: attendanceRecord.finalDoc,   // ✅ اسم الدكتور
-                    sessions: attendanceRecord.finalCount, // ✅ عدد الجلسات
-                    rowColor: `style='${rowStyle}'`,
-                    isPresent: true
-                });
-
-                delete attendeesMap[s.id];
-
-            } else {
-                finalReport.push({
-                    name: s.name,
-                    id: s.id,
-                    level: s.academic_level,
-                    status: "❌ غائب",
-                    notes: "-",
-                    time: "--:--",
-                    group: "--",
-                    doctor: "-",
-                    sessions: "-",
-                    rowColor: "style='color: #64748b;'",
-                    isPresent: false
-                });
-            }
-        });
-
-        for (let intruderID in attendeesMap) {
-            const intruder = attendeesMap[intruderID];
-            finalReport.push({
-                name: intruder.name,
-                id: intruder.uniID,
-                level: "تخلفات",
-                status: "✅ حاضر (تخلفات)",
-                notes: intruder.finalStatus,
-                time: intruder.time,
-                group: intruder.group,
-                doctor: intruder.finalDoc,     // ✅ اسم الدكتور
-                sessions: intruder.finalCount, // ✅ عدد الجلسات
-                rowColor: "style='background-color: #fef08a; color: #854d0e; font-weight:bold;'", // أصفر
-                isPresent: true
-            });
-        }
-
-        finalReport.sort((a, b) => {
-            if (a.isPresent && !b.isPresent) return -1;
-            if (!a.isPresent && b.isPresent) return 1;
-
-            return a.id.toString().localeCompare(b.id.toString(), undefined, { numeric: true, sensitivity: 'base' });
-        });
-
-        const now = new Date();
-        const dayName = now.toLocaleDateString('ar-EG', { weekday: 'long' });
-        const dateOnly = now.toLocaleDateString('en-GB');
-        const dateStrForFile = dateOnly.replace(/\//g, '-');
-        const fileName = `تقرير_${subjectName}_${dateStrForFile}.xls`;
-
-        let tableContent = `
-            <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-            <head>
-                <meta charset="UTF-8">
-                <style>
-                    table { border-collapse: collapse; width: 100%; direction: rtl; font-family: 'Arial', sans-serif; }
-                    th { background-color: #1e293b; color: white; border: 1px solid #000; padding: 10px; text-align: center; font-size: 14px; }
-                    td { border: 1px solid #000; padding: 5px; text-align: center; vertical-align: middle; font-size: 12px; }
-                    .header-info { font-size: 16px; color: #334155; font-weight: normal; margin-top: 5px; }
-                </style>
-            </head>
-            <body>
-            
-            <div style="text-align:center; padding:15px; margin-bottom:10px;">
-                <h2 style="margin:0; color:#0f172a;">كشف تفصيلي لمادة: ${subjectName} (الفرقة ${TARGET_LEVEL})</h2>
-                <div class="header-info">
-                    اليوم: <b>${dayName}</b> &nbsp;|&nbsp; التاريخ: <b>${dateOnly}</b>
-                </div>
-            </div>
-
-            <table>
-                <thead>
-                    <tr>
-                        <th>م</th>
-                        <th>اسم الطالب</th>
-                        <th>الكود الجامعي</th>
-                        <th>حالة الحضور</th>
-                        <th>ملاحظات السلوك</th>
-                        <th>وقت التسجيل</th>
-                        <th>المجموعة</th>
-                        
-                        <!-- 🔥 الأعمدة الجديدة 🔥 -->
-                        <th style="background-color: #0f766e;">عدد الجلسات</th>
-                        <th style="background-color: #0369a1;">اسم الدكتور</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
-
-        finalReport.forEach((row, index) => {
-            tableContent += `
-                <tr ${row.rowColor}>
-                    <td>${index + 1}</td>
-                    <td>${row.name}</td>
-                    <td style='mso-number-format:"\\@"'>${row.id}</td>
-                    <td>${row.status}</td>
-                    <td>${row.notes}</td>
-                    <td>${row.time}</td>
-                    <td>${row.group}</td>
-                    
-                    <!-- بيانات الأعمدة الجديدة -->
-                    <td style="font-weight:bold;">${row.sessions}</td>
-                    <td>${row.doctor}</td>
-                </tr>
-            `;
-        });
-
-        tableContent += `</tbody></table></body></html>`;
-
-        if (typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform()) {
-
-            console.log("📲 Native Mode Detected: Starting Share Process...");
-
-            const { Filesystem, Directory, Encoding } = Capacitor.Plugins.Filesystem;
-            const { Share } = Capacitor.Plugins.Share;
-
-            try {
-                const base64Data = btoa(unescape(encodeURIComponent(tableContent)));
-
-                const result = await Filesystem.writeFile({
-                    path: fileName,
-                    data: base64Data,
-                    directory: Directory.Cache
-                });
-
-                console.log("✅ File saved at:", result.uri);
-
-                await Share.share({
-                    title: 'تصدير كشف الحضور',
-                    text: `إليك كشف حضور مادة ${subjectName}`,
-                    url: result.uri,
-                    dialogTitle: 'حفظ أو إرسال الملف'
-                });
-
-                showToast("✅ تم تجهيز الملف للمشاركة", 3000, "#10b981");
-
-            } catch (nativeError) {
-                console.error("Native Export Error:", nativeError);
-                downloadWebFile();
-            }
-
-        } else {
-            downloadWebFile();
-        }
-
-        function downloadWebFile() {
-            const blob = new Blob([tableContent], { type: 'application/vnd.ms-excel;charset=utf-8' });
-            const link = document.createElement("a");
-            const url = URL.createObjectURL(blob);
-            link.setAttribute("href", url);
-            link.setAttribute("download", fileName);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-
-        if (typeof playSuccess === 'function') playSuccess();
-        if (document.getElementById('toastNotification')) document.getElementById('toastNotification').style.display = 'none';
-
-    } catch (error) {
-        console.error(error);
-        alert("حدث خطأ: " + error.message);
-    }
-};
-
 if (typeof showToast === 'undefined') {
     window.showToast = function (message, duration = 3000, bgColor = '#334155') {
         const toast = document.getElementById('toastNotification');
@@ -6093,110 +4577,6 @@ window.toggleDateLabel = function () {
         label.innerText = "تاريخ المحاضرة:";
     }
     if (typeof playClick === 'function') playClick();
-};
-
-window.downloadHistoricalSheet = async function () {
-    playClick();
-
-    const level = document.getElementById('archiveLevelSelect').value;
-    const subjectName = document.getElementById('archiveSubjectInput').value.trim();
-    const rawDate = document.getElementById('historyDateInput').value;
-    const isWeekly = document.getElementById('repWeekly').checked; // هل اختار أسبوع؟
-
-    if (!level) { showToast("⚠️ اختر الفرقة", 3000, "#f59e0b"); return; }
-    if (!subjectName) { showToast("⚠️ اكتب اسم المادة", 3000, "#f59e0b"); return; }
-    if (!rawDate) { showToast("⚠️ اختر التاريخ", 3000, "#f59e0b"); return; }
-
-    const btn = document.querySelector('#attendanceRecordsModal .btn-main');
-    const oldText = btn.innerHTML;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري التجميع...';
-    btn.disabled = true;
-
-    try {
-        let datesToSearch = [];
-
-        if (isWeekly) {
-            const startDate = new Date(rawDate);
-            for (let i = 0; i < 7; i++) {
-                const nextDay = new Date(startDate);
-                nextDay.setDate(startDate.getDate() + i);
-
-                const dayStr = ('0' + nextDay.getDate()).slice(-2);
-                const monthStr = ('0' + (nextDay.getMonth() + 1)).slice(-2);
-                const yearStr = nextDay.getFullYear();
-                datesToSearch.push(`${dayStr}/${monthStr}/${yearStr}`);
-            }
-        } else {
-            datesToSearch.push(rawDate.split("-").reverse().join("/"));
-        }
-
-        console.log("Searching dates:", datesToSearch);
-
-        const attQuery = query(
-            collection(db, "attendance"),
-            where("subject", "==", subjectName),
-            where("date", "in", datesToSearch)
-        );
-
-        const attSnap = await getDocs(attQuery);
-
-        if (attSnap.empty) {
-            showToast(`❌ لا توجد بيانات لهذه الفترة`, 4000, "#ef4444");
-            btn.innerHTML = oldText;
-            btn.disabled = false;
-            return;
-        }
-
-        const recordsMap = {};
-        attSnap.forEach(d => {
-            const data = d.data();
-            const uniqueKey = `${data.id}_${data.date}`;
-            recordsMap[uniqueKey] = data;
-        });
-
-        const stQuery = query(collection(db, "students"), where("academic_level", "==", level));
-        const stSnap = await getDocs(stQuery);
-
-        let csvContent = "\uFEFFالاسم,الكود,التاريخ,الحالة,وقت الدخول\n";
-
-        datesToSearch.forEach(searchDate => {
-
-            stSnap.forEach(doc => {
-                const s = doc.data();
-                const key = `${s.id}_${searchDate}`;
-
-                if (recordsMap[key]) {
-                    const r = recordsMap[key];
-                    csvContent += `${s.name},"${s.id}",${searchDate},✅ حاضر,${r.time_str || '-'}\n`;
-                } else {
-                    csvContent += `${s.name},"${s.id}",${searchDate},❌ غائب,-\n`;
-                }
-            });
-        });
-
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-
-        let fileName = isWeekly
-            ? `Report_Week_${rawDate}_${subjectName}.csv`
-            : `Report_Day_${rawDate}_${subjectName}.csv`;
-
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        playSuccess();
-        document.getElementById('attendanceRecordsModal').style.display = 'none';
-
-    } catch (e) {
-        console.error("Archive Error:", e);
-        showToast("حدث خطأ تقني: " + e.message, 4000, "#ef4444");
-    } finally {
-        btn.innerHTML = oldText;
-        btn.disabled = false;
-    }
 };
 
 const SEARCH_DB = {
@@ -6832,30 +5212,36 @@ window.startSmartSearch = async function () {
     const modal = document.getElementById('makaniResultsModal');
     const btn = document.getElementById('btnMakani');
 
+    // التأكد من وجود دالة الترجمة
+    const t = window.t || ((k, def) => def);
+
     if (!rawInput) return;
 
     const queryNormal = smartNormalize(rawInput);
     const queryPhonetic = transliterateArabicToEnglish(rawInput);
 
     btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
-    content.innerHTML = '<div style="padding:30px; text-align:center;"><i class="fa-solid fa-wand-magic-sparkles fa-bounce" style="font-size:40px; color:#0ea5e9;"></i><p>جاري البحث الخارق...</p></div>';
+    content.innerHTML = '<div style="padding:30px; text-align:center;"><i class="fa-solid fa-wand-magic-sparkles fa-bounce" style="font-size:40px; color:#0ea5e9;"></i><p>' + t('processing_text', 'جاري البحث...') + '</p></div>';
     modal.style.display = 'flex';
 
     try {
+        // جلب الجلسات النشطة فقط
         const q = query(collection(db, "active_sessions"), where("isActive", "==", true));
         const querySnapshot = await getDocs(q);
         let resultsFound = [];
 
+        // استخدام for...of لدعم الـ await داخل اللوب
         for (const sessionDoc of querySnapshot.docs) {
             const data = { ...sessionDoc.data() };
             const doctorId = sessionDoc.id;
 
-            const dbDocName = data.doctorName.toLowerCase();
-            const dbDocNamePhonetic = transliterateArabicToEnglish(data.doctorName);
-            const dbSubject = smartNormalize(data.allowedSubject);
+            const dbDocName = (data.doctorName || "").toLowerCase();
+            const dbSubject = smartNormalize(data.allowedSubject || "");
 
             let isMatch = false;
+            let matchType = "session"; // session OR student
 
+            // 1. بحث عن المادة أو الدكتور أو الجروب
             if (dbDocName.includes(queryNormal) || dbDocName.includes(queryPhonetic)) {
                 isMatch = true;
             }
@@ -6866,65 +5252,119 @@ window.startSmartSearch = async function () {
                 isMatch = true;
             }
 
-            else if (!isNaN(rawInput) && rawInput.length >= 4) {
-                const studentSnap = await getDoc(doc(db, "active_sessions", doctorId, "participants", rawInput));
+            // 2. بحث عن كود طالب داخل الجلسة (إذا كان المدخل أرقام)
+            else if (!isNaN(rawInput) && rawInput.length >= 3) {
+                // البحث في sub-collection الخاص بالمشاركين
+                const studentRef = doc(db, "active_sessions", doctorId, "participants", rawInput);
+                const studentSnap = await getDoc(studentRef);
 
                 if (studentSnap.exists()) {
-                    isMatch = true;
                     const sData = studentSnap.data();
-
-                    data.friendName = sData.name;
-                    data.friendID = sData.uid || sData.id;
-                    data.isFriendMatch = true;
+                    // التأكد أن الطالب ما زال في الجلسة (status == active)
+                    if (sData.status === 'active') {
+                        isMatch = true;
+                        matchType = "student";
+                        data.friendName = sData.name;
+                        data.friendID = sData.uid || sData.id;
+                    }
                 }
             }
 
-            if (isMatch) resultsFound.push(data);
+            if (isMatch) {
+                // 🔥 جلب عدد الحضور الفعلي من السيرفر لهذه الجلسة
+                try {
+                    const participantsColl = collection(db, "active_sessions", doctorId, "participants");
+                    const countQuery = query(participantsColl, where("status", "==", "active"));
+                    const countSnapshot = await getCountFromServer(countQuery);
+                    data.liveCount = countSnapshot.data().count;
+                } catch (err) {
+                    console.log("Count error", err);
+                    data.liveCount = "?";
+                }
+
+                data.matchType = matchType; // تخزين نوع التطابق
+                data.doctorId = doctorId; // تخزين كود الدكتور
+                resultsFound.push(data);
+            }
         }
 
         if (resultsFound.length === 0) {
-            content.innerHTML = `<div class="empty-state">عذراً، لم نجد نتائج لـ "${rawInput}"</div>`;
+            // ❌ الرسالة المعدلة عند عدم وجود نتائج
+            content.innerHTML = `
+                <div class="empty-state-modern">
+                    <div class="empty-icon-bg"><i class="fa-solid fa-clock" style="font-size:30px; color:#94a3b8;"></i></div>
+                    <h3 style="margin-top:10px; font-size:14px; color:#64748b;">
+                        ${t('search_no_results_custom', 'هذه المحاضرة لم تبدأ بعد أو لم يتم إنشاؤها')}
+                    </h3>
+                    <p style="font-size:11px; color:#cbd5e1;">"${rawInput}"</p>
+                </div>`;
         } else {
             content.innerHTML = '';
             resultsFound.forEach(res => {
                 const card = document.createElement('div');
-                card.className = 'makani-card';
 
-                let clickAction = "";
-                let iconType = "";
+                // تحديد النصوص والأيقونات بناءً على نوع النتيجة
+                let titleText = "";
+                let subText = "";
+                let badgeClass = "hall-badge-formal"; // كلاس جديد للشكل الرسمي
 
-                if (res.isFriendMatch) {
-                    clickAction = `openPublicProfile('${res.friendID || rawInput}', false)`;
-                    iconType = '<i class="fa-solid fa-user-graduate" style="color:#10b981; font-size: 20px;"></i>';
+                if (res.matchType === 'student') {
+                    // حالة البحث عن طالب
+                    titleText = `👤 ${t('student_found', 'الطالب')}: ${res.friendName}`;
+                    subText = `${t('attending_now', 'يحضر الآن')}: ${res.allowedSubject}`;
                 } else {
-                    clickAction = `openPublicProfile('${res.doctorUID}', true)`;
-                    iconType = '<i class="fa-solid fa-user-doctor" style="color:#0ea5e9; font-size: 20px;"></i>';
+                    // حالة البحث عن جلسة/مادة
+                    titleText = res.allowedSubject;
+                    // استخدام Dr. بالإنجليزية
+                    subText = `Dr. ${res.doctorName}`;
                 }
 
-                card.setAttribute('onclick', clickAction);
-                card.style.cursor = "pointer";
-
-                let title = res.isFriendMatch ? `📍 زميلك: ${res.friendName}` : res.allowedSubject;
-                let subText = res.isFriendMatch ? `متواجد الآن في محاضرة د. ${res.doctorName}` : `بواسطة: د. ${res.doctorName}`;
+                // الكارت غير قابل للضغط (cursor default, no onclick)
+                card.className = 'makani-card no-hover';
+                card.style.cursor = "default";
 
                 card.innerHTML = `
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <div style="font-weight:900; font-size:15px; color:#0f172a;">${title}</div>
-                            ${iconType}
+                        <!-- الجزء العلوي: العنوان والدكتور -->
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
+                            <div>
+                                <div style="font-weight:900; font-size:16px; color:#0f172a; margin-bottom:4px;">
+                                    ${titleText}
+                                </div>
+                                <div style="font-size:13px; color:#64748b; font-weight:600; font-family:'Outfit', sans-serif;">
+                                    ${subText}
+                                </div>
+                            </div>
+                            <!-- عدد الحضور -->
+                            <div style="text-align:center; background:#f1f5f9; padding:5px 10px; border-radius:10px;">
+                                <div style="font-size:14px; font-weight:900; color:#0ea5e9; font-family:'Outfit', sans-serif;">
+                                    ${res.liveCount}
+                                </div>
+                                <div style="font-size:9px; color:#94a3b8; font-weight:bold;">
+                                    ${t('attendance_count', 'حضور')}
+                                </div>
+                            </div>
                         </div>
-                        <div style="font-size:12px; color:#64748b; margin-top:5px; font-weight:600;">
-                            ${subText}
-                        </div>
-                        <div class="hall-badge-big" style="margin-top:8px;">
-                            <i class="fa-solid fa-building-columns"></i> قاعة: ${res.hall}
+
+                        <!-- فاصل -->
+                        <div style="height:1px; background:#e2e8f0; width:100%; margin:10px 0;"></div>
+
+                        <!-- الجزء السفلي: التوجيه الرسمي للقاعة -->
+                        <div class="${badgeClass}">
+                            <div style="font-size:10px; color:#94a3b8; margin-bottom:2px; font-weight:700;">
+                                ${t('formal_direction', 'توجه نحو القاعة')}
+                            </div>
+                            <div style="font-size:22px; font-weight:900; color:#ffffff; font-family:'Outfit', sans-serif; letter-spacing:1px; display:flex; align-items:center; justify-content:center; gap:8px;">
+                                <i class="fa-solid fa-building-columns" style="font-size:16px; opacity:0.8;"></i> 
+                                ${res.hall}
+                            </div>
                         </div>
                     `;
                 content.appendChild(card);
             });
         }
     } catch (e) {
-        console.error(e);
-        content.innerHTML = '<div style="color:red; text-align:center;">حدث خطأ في البحث</div>';
+        console.error("Smart Search Error:", e);
+        content.innerHTML = `<div style="color:#ef4444; text-align:center; padding:20px;">حدث خطأ أثناء البحث</div>`;
     } finally {
         btn.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i>';
     }
@@ -6972,22 +5412,20 @@ function smartNormalize(text) {
         .toLowerCase();
 }
 function transliterateArabicToEnglish(text) {
-    if (!text) return "";
-    const charMap = {
-        'أ': 'a', 'إ': 'i', 'آ': 'a', 'ا': 'a', 'ب': 'b', 'ت': 't', 'ث': 'th',
-        'ج': 'j', 'ح': 'h', 'خ': 'kh', 'د': 'd', 'ذ': 'th', 'ر': 'r', 'ز': 'z',
-        'س': 's', 'ش': 'sh', 'ص': 's', 'ض': 'd', 'ط': 't', 'ظ': 'z', 'ع': 'a',
-        'غ': 'gh', 'ف': 'f', 'ق': 'q', 'ك': 'k', 'ل': 'l', 'م': 'm', 'ن': 'n',
-        'ه': 'h', 'و': 'w', 'ي': 'y', 'ى': 'a', 'ة': 'h', 'ئ': 'e', 'ؤ': 'o', 'لا': 'la'
+    const map = {
+        'أ': 'A', 'إ': 'E', 'آ': 'A', 'ا': 'A', 'ب': 'B', 'ت': 'T', 'ث': 'Th',
+        'ج': 'J', 'ح': 'H', 'خ': 'Kh', 'د': 'D', 'ذ': 'Dh', 'ر': 'R', 'ز': 'Z',
+        'س': 'S', 'ش': 'Sh', 'ص': 'S', 'ض': 'D', 'ط': 'T', 'ظ': 'Z', 'ع': 'A',
+        'غ': 'Gh', 'ف': 'F', 'ق': 'Q', 'ك': 'K', 'ل': 'L', 'م': 'M', 'ن': 'N',
+        'ه': 'H', 'و': 'W', 'ي': 'Y', 'ى': 'A', 'ة': 'h', 'ئ': 'E', 'ؤ': 'O'
     };
 
-    let cleanText = text.replace(/دكتور|دكتورة|د\.|أ\.|أستاذ|أستاذه/g, "").trim();
+    let res = text.split('').map(char => map[char] || char).join('');
 
-    return cleanText.split('').map(char => charMap[char] || char).join('')
-        .replace(/oo|ou|u/g, 'o')
-        .replace(/ee|ei|i/g, 'e')
-        .replace(/aa|a/g, 'a')
-        .toLowerCase();
+    if (res.length > 1) {
+        return res.charAt(0).toUpperCase() + res.slice(1).toLowerCase();
+    }
+    return res;
 }
 
 window.adjustDoorLimit = function (amount) {

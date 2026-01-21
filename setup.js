@@ -13,11 +13,12 @@ import {
 
 import { i18n, t, changeLanguage, toggleSystemLanguage } from './i18n.js';
 
-// 2. إعدادات السيرفر
+console.log = function () { };
+console.warn = function () { };
+
 const BACKEND_URL = "https://nursing-backend-eta.vercel.app";
 window.BACKEND_URL = BACKEND_URL;
 
-// 3. إعدادات Firebase
 const firebaseConfig = {
     apiKey: "AIzaSyBQjD4FZKkhXQIL5FlyBs_VaEzW2GBBtGs",
     authDomain: "attendance-system-pro-dbdf1.firebaseapp.com",
@@ -27,7 +28,6 @@ const firebaseConfig = {
     appId: "1:1094544109334:web:a7395159d617b3e6e82a37"
 };
 
-// 4. تشغيل Firebase
 const app = initializeApp(firebaseConfig);
 
 const db = initializeFirestore(app, {
@@ -38,18 +38,12 @@ const db = initializeFirestore(app, {
 
 const auth = getAuth(app);
 
-// 5. تصدير المتغيرات المهمة للـ Window (عشان الملف التاني يشوفهم)
 window.db = db;
 window.auth = auth;
 window.changeLanguage = changeLanguage; // بنحتاجها كتير
 
 console.log("🚀 Step 1 Complete: Firebase Config Loaded");
 
-// ==========================================
-// 6. الدوال المساعدة العامة (Utilities)
-// ==========================================
-
-// بصمة الجهاز (Device Fingerprint)
 window.getUniqueDeviceId = function () {
     let storedId = localStorage.getItem("unique_device_id_v3");
     if (storedId) return storedId;
@@ -76,7 +70,6 @@ window.getUniqueDeviceId = function () {
     return deviceId;
 };
 
-// نظام الضغط الآمن (لمنع التكرار)
 window.isProcessingClick = false;
 window.safeClick = function (element, callback) {
     if (window.isProcessingClick) return;
@@ -108,7 +101,6 @@ window.safeClick = function (element, callback) {
     }, 600);
 };
 
-// إظهار رسائل الخطأ
 window.showError = function (msg, isPermanent = false) {
     console.error("System Error:", msg);
     const errorMsgEl = document.getElementById('errorMsg');
@@ -130,11 +122,10 @@ window.showError = function (msg, isPermanent = false) {
     }
 };
 
-// تسجيل الخروج
 window.performLogout = async function () {
     try {
         const deviceId = localStorage.getItem("unique_device_id_v3");
-        await signOut(window.auth); // بنستخدم window.auth اللي عرفناه فوق
+        await signOut(window.auth); 
         sessionStorage.clear();
         localStorage.clear();
         if (deviceId) {
@@ -147,7 +138,6 @@ window.performLogout = async function () {
     }
 };
 
-// نظام التنبيهات (Toast)
 window.showToast = function (message, duration = 3000, bgColor = '#334155') {
     const toast = document.getElementById('toastNotification');
     if (toast) {
@@ -160,7 +150,6 @@ window.showToast = function (message, duration = 3000, bgColor = '#334155') {
     }
 };
 
-// التنقل بين الشاشات (Navigation)
 window.switchScreen = function (screenId) {
     const currentActive = document.querySelector('.section.active');
     if (currentActive && currentActive.id === screenId) return;
@@ -190,4 +179,3 @@ window.switchScreen = function (screenId) {
     }
 };
 
-console.log("🚀 Step 2 Complete: Helper Functions Loaded");

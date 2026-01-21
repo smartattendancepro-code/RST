@@ -1,44 +1,33 @@
-/* 1. ضبط الحاوية الأساسية (لإلغاء أي ستايل قديم) */
 #toastNotification {
     position: fixed;
     top: 30px;
-    /* مسافة من الأعلى */
     left: 50%;
     transform: translateX(-50%);
     z-index: 999999;
-    /* رقم عالي جداً ليظهر فوق كل النوافذ */
     background: transparent !important;
     box-shadow: none !important;
     border: none !important;
     padding: 0 !important;
     display: none;
-    /* مخفي افتراضياً */
 }
 
-/* 2. جسم الإشعار (الكارت الزجاجي) */
 .glass-toast-body {
     display: flex;
     align-items: center;
     gap: 15px;
     background: rgba(15, 23, 42, 0.80);
-    /* لون كحلي غامق مع شفافية */
     backdrop-filter: blur(12px);
-    /* تأثير الزجاج (غباشة) */
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    /* حدود خفيفة */
     box-shadow: 0 15px 40px -10px rgba(0, 0, 0, 0.6);
-    /* ظل عميق */
     padding: 12px 20px;
     border-radius: 16px;
     min-width: 320px;
     max-width: 90vw;
 
-    /* أنيميشن الدخول */
     animation: slideInDown 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
 }
 
-/* 3. حاوية اللوجو */
 .glass-logo-box {
     width: 45px;
     height: 45px;
@@ -49,7 +38,6 @@
     justify-content: center;
     border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: 0 0 15px rgba(14, 165, 233, 0.1);
-    /* توهج خفيف */
 }
 
 .glass-logo-box img {
@@ -59,7 +47,6 @@
     filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.2));
 }
 
-/* 4. النصوص */
 .glass-text-area {
     display: flex;
     flex-direction: column;
@@ -68,7 +55,6 @@
 
 .glass-title {
     font-family: inherit;
-    /* نفس خط الموقع */
     font-size: 14px;
     font-weight: 800;
     margin-bottom: 3px;
@@ -79,11 +65,9 @@
     font-family: inherit;
     font-size: 12px;
     color: #cbd5e1;
-    /* لون رمادي فاتح */
     line-height: 1.4;
 }
 
-/* 5. الأنيميشن (حركة مطاطية) */
 @keyframes slideInDown {
     0% {
         opacity: 0;
@@ -108,15 +92,12 @@
     }
 }
 
-/* زر العودة العائم (تم النقل لليمين) */
 .floating-back-btn {
     position: absolute;
     top: 65px;
 
     right: 30px;
-    /* ✅ هنا التغيير: أصبح يمين */
     left: auto;
-    /* إلغاء أي قيمة سابقة لليسار */
 
     width: 45px;
     height: 45px;
@@ -141,11 +122,9 @@
     background: #09a9c5;
 }
 
-/* حاوية السحب للتحديث */
 .ptr-container {
     position: fixed;
     top: -80px;
-    /* مخفي في البداية */
     left: 0;
     width: 100%;
     height: 80px;
@@ -153,13 +132,10 @@
     align-items: center;
     justify-content: center;
     z-index: 9999999;
-    /* فوق كل شيء */
     pointer-events: none;
-    /* عشان ميعطلش اللمس */
     transition: top 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-/* الدائرة البيضاء */
 .ptr-box {
     width: 45px;
     height: 45px;
@@ -174,15 +150,12 @@
     transition: transform 0.2s;
 }
 
-/* الأيقونة داخل الدائرة */
 #ptrIcon {
     color: #0ea5e9;
-    /* لون أزرق */
     font-size: 18px;
     transition: transform 0.2s;
 }
 
-/* حركة الدوران أثناء التحميل */
 .ptr-loading #ptrIcon {
     animation: spin 1s linear infinite;
 }
@@ -193,26 +166,20 @@
     }
 }
 
-/* الأيقونة داخل الدائرة */
 .ptr-box i {
     color: #0ea5e9;
-    /* لون السيستم الأزرق */
     font-size: 18px;
     transition: transform 0.2s;
 }
 
-/* كلاس الدوران عند التحميل */
 .ptr-loading .ptr-box i {
     animation: spin 1s linear infinite;
     content: "\f2f1";
-    /* كود أيقونة التحديث (Rotate) في FontAwesome */
     font-family: "Font Awesome 6 Free";
     font-weight: 900;
     transform: rotate(0deg) !important;
-    /* ريست للدوران اليدوي */
 }
 
-/* حركة الدوران */
 @keyframes spin {
     0% {
         transform: rotate(0deg);
@@ -223,7 +190,6 @@
     }
 }
 
-/* ستارة التحميل */
 .loader-overlay {
     position: fixed;
     top: 0;
@@ -231,11 +197,8 @@
     width: 100%;
     height: 100%;
     background: #f8fafc;
-    /* لون خلفية مريح للعين */
     z-index: 999999999;
-    /* فوق كل شيء */
     display: flex;
-    /* ظاهرة افتراضياً */
     align-items: center;
     justify-content: center;
     transition: opacity 0.5s ease;
@@ -246,13 +209,11 @@
     animation: pulse 1s infinite alternate;
 }
 
-/* كلاس للإخفاء الناعم */
 .loader-hidden {
     opacity: 0;
     pointer-events: none;
 }
 
-/* حاوية الكاميرا المودرن */
 .scanner-container {
     position: relative;
     width: 100%;
@@ -262,20 +223,16 @@
     border-radius: 20px;
     overflow: hidden;
     box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.85);
-    /* تعتيم الخلفية */
     border: 2px solid rgba(255, 255, 255, 0.2);
 }
 
-/* الفيديو */
 #video {
     width: 100%;
     height: 100%;
     object-fit: cover;
     transform: scaleX(-1);
-    /* مرآة */
 }
 
-/* إطار التركيز (المربع الشفاف) */
 .scan-region {
     position: absolute;
     top: 50%;
@@ -289,7 +246,6 @@
     z-index: 10;
 }
 
-/* زوايا التركيز الملونة */
 .scan-region::before,
 .scan-region::after {
     content: '';
@@ -297,7 +253,6 @@
     width: 40px;
     height: 40px;
     border: 4px solid #0ea5e9;
-    /* لون أزرق افتراضي */
     transition: 0.3s;
 }
 
@@ -317,7 +272,6 @@
     border-bottom-right-radius: 20px;
 }
 
-/* خط الليزر المتحرك */
 .scan-line {
     position: absolute;
     width: 100%;
@@ -328,7 +282,6 @@
     z-index: 15;
     animation: scanning 2s infinite linear;
     display: none;
-    /* مخفي حتى يتم اكتشاف الوجه */
 }
 
 @keyframes scanning {
@@ -347,7 +300,6 @@
     }
 }
 
-/* حالات الإطار (ناجح/خطأ) */
 .scan-region.success {
     border-color: #10b981;
 }
@@ -366,7 +318,6 @@
     border-color: #ef4444;
 }
 
-/* النصوص */
 .hint-text {
     text-align: center;
     color: white;
@@ -376,7 +327,6 @@
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
-/* تصميم العناوين (بدون أرقام) */
 .setup-label {
     display: block;
     font-size: 13px;
@@ -384,10 +334,8 @@
     color: #334155;
     margin-bottom: 6px;
     text-align: start;
-    /* محاذاة تلقائية حسب اللغة */
 }
 
-/* حاوية القائمة الذكية */
 .smart-picker-container {
     border: 1px solid #e2e8f0;
     border-radius: 12px;
@@ -401,7 +349,6 @@
     box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
 }
 
-/* حقل البحث داخل القائمة */
 .search-row {
     display: flex;
     align-items: center;
@@ -427,15 +374,12 @@
     font-size: 12px;
 }
 
-/* صندوق القائمة (Scrollable) */
 .custom-list-box {
     max-height: 110px;
-    /* ارتفاع ثابت للقائمة */
     overflow-y: auto;
     background: #fff;
 }
 
-/* العنصر الفردي داخل القائمة */
 .list-item-option {
     padding: 10px 12px;
     font-size: 13px;
@@ -451,18 +395,13 @@
     background: #f1f5f9;
 }
 
-/* 🔥 التمييز الثابت (اللون الأزرق) 🔥 */
 .list-item-option.selected {
     background-color: #e0f2fe !important;
-    /* خلفية سماوي */
     color: #0284c7 !important;
-    /* نص أزرق غامق */
     font-weight: 800;
     border-left: 3px solid #0284c7;
-    /* خط جانبي مميز */
 }
 
-/* حقول الإدخال العادية */
 .simple-input {
     width: 100%;
     padding: 12px;
@@ -479,7 +418,6 @@
     border-color: #0ea5e9;
 }
 
-/* الأزرار */
 .btn-start-action {
     width: 100%;
     background: #0f172a;
@@ -504,7 +442,6 @@
     cursor: pointer;
 }
 
-/* تنسيق صف الأزرار الجانبية */
 .dual-buttons-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -535,11 +472,9 @@
     border-color: #94a3b8;
 }
 
-/* إخفاء زر العودة العائم القديم في هذه الشاشة تحديداً */
 #screenDataEntry .floating-back-btn {
     display: none !important;
 }
-/* إصلاح عنوان البحث ليكون سطراً واحداً */
 #step1_search .header-content-center {
     width: 100%;
     display: flex;
@@ -547,26 +482,24 @@
 }
 
 #step1_search .auth-main-title {
-    font-size: 22px !important;       /* تصغير الخط قليلاً ليناسب العرض */
-    white-space: nowrap !important;   /* منع نزول النص للسطر الثاني نهائياً */
+    font-size: 22px !important;       
+    white-space: nowrap !important;   
     width: 100%;
     text-align: center;
-    margin-bottom: 15px;              /* مسافة سفلية لراحة العين */
+    margin-bottom: 15px;              
 }
-/* تنسيق زر النجمة الثابت */
 .btn-feedback-static {
-    background: #fffbeb;     /* خلفية صفراء فاتحة */
-    color: #d97706;          /* أيقونة ذهبية غامقة */
+    background: #fffbeb;     
+    color: #d97706;          
     border: 1px solid #fcd34d;
-    position: relative;      /* ضروري عشان العداد يظهر في الركن */
-    overflow: visible !important; /* عشان العداد يخرج برا الحدود لو عايز */
+    position: relative;     
+    overflow: visible !important; 
 }
 
-/* تأثير اللمعان عند وجود تقييمات جديدة */
 .star-glowing {
     animation: goldPulseBorder 1.5s infinite;
-    background: #f59e0b !important; /* يتحول لذهبي غامق */
-    color: #fff !important;         /* النص يبقى أبيض */
+    background: #f59e0b !important; 
+    color: #fff !important;         
     border-color: #fff !important;
 }
 
@@ -576,7 +509,6 @@
     100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); transform: scale(1); }
 }
 
-/* تنسيق العداد الأحمر (Badge) فوق الزر */
 .feedback-badge-static {
     position: absolute;
     top: -8px;

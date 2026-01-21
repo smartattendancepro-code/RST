@@ -24,11 +24,8 @@
     <script src="https://unpkg.com/read-excel-file@5.x/bundle/read-excel-file.min.js"></script>
     <script defer src="./face-api.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <!-- مكتبة الرسوم البيانية -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- مكتبة تصدير الصور -->
     <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
-    <!-- مكتبة تصدير PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link rel="stylesheet" href="notifications.css">
     <link rel="stylesheet" href="profile-style.css">
@@ -339,7 +336,6 @@
                 </button>
             </div>
         </div>
-        <!-- 🔔 جرس الإشعارات (يمين) -->
         <div class="card-body">
 
             <div class="hero-icon-wrapper" id="heroIconWrapper">
@@ -356,9 +352,7 @@
             </div>
 
             <div class="card-body-content">
-                <!-- ✅✅✅ ضع هذا الكود داخل card-body-content بدلاً من القديم ✅✅✅ -->
                 <div id="screenFaceCheck" class="section">
-                    <!-- زر الرجوع -->
                     <button onclick="goBackToWelcome()" class="floating-back-btn">
                         <i class="fa-solid fa-arrow-right"></i>
                     </button>
@@ -366,27 +360,22 @@
                     <div style="padding-top: 20px; width: 100%; text-align: center;">
                         <h1 style="margin-bottom: 20px;">التعرف على الهوية</h1>
 
-                        <!-- حاوية الكاميرا بالتصميم الجديد -->
                         <div class="camera-wrapper"
                             style="position: relative; width: 100%; height: 50vh; background: #000; display: flex; justify-content: center; align-items: center; overflow: hidden; border-radius: 20px; margin: 0 auto; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
 
-                            <!-- عنصر الفيديو -->
                             <video id="video" autoplay muted playsinline
                                 style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);"></video>
 
-                            <!-- الرسوم المتحركة للتحميل -->
                             <div id="loaderSpinner" class="spinner-overlay" style="display: none;">
                                 <i class="fa-solid fa-user-shield large-loader-icon"></i>
                                 <div class="spinner"></div>
                             </div>
 
-                            <!-- إطار الوجه -->
                             <div class="face-overlay"
                                 style="position: absolute; width: 220px; height: 220px; border: 3px solid rgba(255, 255, 255, 0.6); border-radius: 50%; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);">
                             </div>
                         </div>
 
-                        <!-- نصوص الحالة -->
                         <h3 id="statusTxt" style="color:#0ea5e9; font-weight:bold; margin-top:20px; font-size: 1.2rem;">
                             جاري تشغيل الكاميرا...
                         </h3>
@@ -394,7 +383,6 @@
                             يرجى تثبيت وجهك داخل الإطار وعدم التحرك
                         </p>
 
-                        <!-- زر الطوارئ -->
                         <button onclick="window.goBackToWelcome()"
                             style="margin-top: 20px; background: #fee2e2; color: #ef4444; border: none; padding: 10px 20px; border-radius: 10px; font-weight: bold; cursor: pointer;">
                             إلغاء وعودة
@@ -405,7 +393,6 @@
                     <div class="halo-container-v2">
 
                         <button id="btnLangNew" onclick="toggleSystemLanguage()" class="halo-item halo-center">
-                            <!-- أيقونة الشبكة -->
                             <i class="fa-solid fa-globe"></i>
                         </button>
 
@@ -429,11 +416,9 @@
                             id="mainActionBtn">
                             <span data-i18n="main_reg_btn">تسجيل الحضور</span> <i class="fa-solid fa-fingerprint"></i>
                         </button>
-                        <!-- [لوحة تحكم العميد - بتصميم الموقع الأصلي] -->
                         <div id="deanPrivateZone"
                             style="display:none; width: 100%; margin-top: 15px; animation: slideDown 0.5s ease-out;">
 
-                            <!-- العنوان -->
                             <div
                                 style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding: 0 5px;">
                                 <span style="font-weight: 800; color: #1e293b; font-size: 15px;">
@@ -447,11 +432,9 @@
                                 </span>
                             </div>
 
-                            <!-- شبكة الأزرار -->
                             <div class="dean-grid-layout"
                                 style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
 
-                                <!-- 1. رادار المراقبة -->
                                 <button onclick="openDeanOversight()" class="dean-btn-modern monitor-style">
                                     <div class="dean-icon-box"><i class="fa-solid fa-tower-broadcast fa-fade"></i></div>
                                     <div class="dean-btn-text">
@@ -460,7 +443,6 @@
                                     </div>
                                 </button>
 
-                                <!-- 2. إدارة التقارير -->
                                 <button onclick="openDeanReports()" class="dean-btn-modern report-style">
                                     <div class="dean-icon-box"><i class="fa-solid fa-chart-pie"></i></div>
                                     <div class="dean-btn-text">
@@ -469,7 +451,6 @@
                                     </div>
                                 </button>
 
-                                <!-- 3. الإنذارات (مؤجل) -->
                                 <button class="dean-btn-modern locked-style">
                                     <div class="dean-icon-box"><i class="fa-solid fa-bell"></i></div>
                                     <div class="dean-btn-text">
@@ -478,7 +459,6 @@
                                     </div>
                                 </button>
 
-                                <!-- 4. الإعدادات -->
                                 <button onclick="openDeanSettings()" class="dean-btn-modern settings-style">
                                     <div class="dean-icon-box"><i class="fa-solid fa-sliders"></i></div>
                                     <div class="dean-btn-text">
@@ -490,19 +470,15 @@
                             </div>
                         </div>
 
-                        <!-- مودال رادار المراقبة السيادي (النسخة الاحترافية المنظمة) -->
                         <div id="deanOversightModal" class="modal-overlay">
                             <div class="modal-box pro-oversight-box">
 
-                                <!-- الهيدر الملكي الجديد -->
                                 <div class="oversight-header-premium">
                                     <div class="header-top-actions">
-                                        <!-- جرس التنبيهات -->
                                         <button class="icon-circle-btn">
                                             <i class="fa-solid fa-bell"></i>
                                         </button>
 
-                                        <!-- زر الإغلاق -->
                                         <button class="icon-circle-btn danger-text"
                                             onclick="document.getElementById('deanOversightModal').style.display='none'">
                                             <i class="fa-solid fa-xmark"></i>
@@ -517,7 +493,6 @@
                                     </div>
                                 </div>
 
-                                <!-- شريط الإحصائيات الفوري -->
                                 <div class="dean-stats-bar-modern">
                                     <div class="d-stat-card-modern lectures-stat">
                                         <div class="stat-icon-mini"><i class="fa-solid fa-tower-broadcast"></i></div>
@@ -535,14 +510,12 @@
                                     </div>
                                 </div>
 
-                                <!-- حاوية الكروت الحية -->
                                 <div id="oversightLoader" class="loader-box-center">
                                     <div class="exam-loader"></div>
                                     <p data-i18n="scanning_halls">جاري مسح القاعات...</p>
                                 </div>
 
                                 <div id="oversightContainer" class="oversight-live-grid">
-                                    <!-- الكروت تظهر هنا -->
                                 </div>
 
                             </div>
@@ -550,15 +523,12 @@
 
                         <div id="deanReportsModal" class="modal-overlay" style="z-index: 2147483647; display: none;">
                             <div class="modal-box dashboard-box">
-                                <!-- Header -->
                                 <div class="dashboard-header">
-                                    <!-- العنوان -->
                                     <h2 class="dash-title">
                                         <i class="fa-solid fa-chart-pie"></i>
                                         <span data-i18n="dashboard_title">مركز التحليلات المتقدم</span>
                                     </h2>
                                     <div class="dash-actions">
-                                        <!-- أزرار التصدير مع ترجمة العنوان -->
                                         <button onclick="exportDashboard('image')" class="btn-export"
                                             data-i18n-title="save_as_image" title="حفظ كصورة">
                                             <i class="fa-solid fa-camera"></i>
@@ -575,7 +545,6 @@
                                     </div>
                                 </div>
 
-                                <!-- Filters -->
                                 <div class="dashboard-controls">
                                     <input type="date" id="reportStartDate" class="dash-input">
                                     <span style="color:#94a3b8" data-i18n="date_to">إلى</span>
@@ -585,10 +554,8 @@
                                     </button>
                                 </div>
 
-                                <!-- Dashboard Content -->
                                 <div id="dashboardContent" class="dashboard-body">
 
-                                    <!-- 1. نظرة عامة (Cards) -->
                                     <div class="stats-grid">
                                         <div class="stat-card blue">
                                             <div class="st-icon"><i class="fa-solid fa-users-viewfinder"></i></div>
@@ -614,10 +581,8 @@
                                         </div>
                                     </div>
 
-                                    <!-- 2. الرسوم البيانية (Charts) -->
                                     <div class="charts-container">
 
-                                        <!-- صف 1 -->
                                         <div class="chart-row">
                                             <div class="chart-box">
                                                 <h4><i class="fa-solid fa-chart-area"></i> <span
@@ -631,7 +596,6 @@
                                             </div>
                                         </div>
 
-                                        <!-- صف 2 -->
                                         <div class="chart-row">
                                             <div class="chart-box">
                                                 <h4><i class="fa-solid fa-user-doctor"></i> <span
@@ -647,7 +611,6 @@
 
                                     </div>
 
-                                    <!-- التوقيع -->
                                     <div class="report-footer">
                                         <span data-i18n="report_footer_text">تم استخراج التقرير آلياً من نظام إدارة
                                             الكلية الذكي -</span>
@@ -657,7 +620,6 @@
                             </div>
                         </div>
 
-                        <!-- [نافذة رادار المراقبة الصقرية] -->
                         <div id="deanOversightModal" class="modal-overlay" style="z-index: 2147483647; display: none;">
                             <div class="modal-box dean-oversight-box">
                                 <div class="oversight-header">
@@ -670,12 +632,9 @@
                                 </div>
 
                                 <div id="oversightRoomsContainer" class="oversight-scroll-area">
-                                    <!-- المحاضرات ستظهر هنا بترتيب الأولوية -->
                                 </div>
                             </div>
                         </div>
-                        <!-- [1. إضافة بار بحث "مكاني" الذكي] -->
-                        <!-- أضفنا ID وافتراضياً هو مخفي display: none -->
                         <div id="makaniSearchBar" class="makani-search-container" style="display: none;">
                             <div class="makani-input-wrapper">
                                 <i class="fa-solid fa-location-crosshairs search-icon-main"></i>
@@ -688,7 +647,6 @@
                             </div>
                         </div>
 
-                        <!-- [2. نافذة نتائج البحث الذكي] -->
                         <div id="makaniResultsModal" class="modal-overlay" style="z-index: 2147483647; display: none;"
                             onclick="this.style.display='none'">
                             <div class="modal-box makani-result-box" onclick="event.stopPropagation()">
@@ -697,7 +655,6 @@
                                     <span data-i18n="radar_results_title">نتائج رادار الكلية</span>
                                 </div>
                                 <div id="makaniContent">
-                                    <!-- النتائج ستظهر هنا -->
                                 </div>
                                 <button onclick="document.getElementById('makaniResultsModal').style.display='none'"
                                     class="btn-close-stylish" data-i18n="close_btn">إغلاق</button>
@@ -724,7 +681,6 @@
                                 <span data-i18n="attendance_report">سجل الحضور</span>
                             </button>
 
-                            <!-- زرار طلب التجهيزات (لازم يكون واخد الـ ID ده عشان يختفي من عند الطلاب) -->
                             <button id="btnToolsRequest" onclick="openToolsRequestModal()"
                                 class="admin-sub-btn btn-tools"
                                 style="background: #ecfdf5; color: #047857; border-color: #a7f3d0; display: none;">
@@ -734,7 +690,6 @@
                             <button id="btnLiveFeedback" onclick="openFeedbackStats()"
                                 class="admin-sub-btn btn-feedback-static" style="display: none;">
                                 <i class="fa-solid fa-star sub-btn-icon"></i>
-                                <!-- العداد الأحمر -->
                                 <span id="badgeFeedbackCount" class="feedback-badge-static"
                                     style="display:none;">0</span>
                                 <span>التقييمات</span>
@@ -825,7 +780,6 @@
                 </div>
 
                 <div id="screenDataEntry" class="section">
-                    <!-- زر العودة العائم (تم إخفاؤه في هذه الشاشة بناء على طلبك السابق) -->
                     <button onclick="goBackToWelcome()" class="floating-back-btn" style="display: none;">
                         <i class="fa-solid fa-arrow-right"></i>
                     </button>
@@ -833,17 +787,10 @@
                     <div
                         style="display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 10px; min-height: 80vh;">
 
-                        <!-- 📦 الحاوية الرئيسية (تم تقليل الهوامش لرفع الكارت) -->
                         <div
                             style="background: white; padding: 20px 25px 30px 25px; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); width: 90%; max-width: 360px; text-align: center; position: relative; margin-top: 10px;">
 
-                            <!-- ❌ تم حذف أيقونة الطبق (Satellite Dish) من هنا نهائياً -->
-
-                            <!-- ================================================== -->
-                            <!--  STEP 1: SEARCH (شاشة البحث) -->
-                            <!-- ================================================== -->
                             <div id="step1_search" class="minimal-join-container">
-                                <!-- (نفس محتوى البحث السابق بدون تغيير) -->
                                 <div class="top-status-icon">
                                     <div class="icon-glow"></div>
                                     <i class="fa-solid fa-bolt-lightning"></i>
@@ -868,12 +815,8 @@
                                 <p class="minimal-hint">ENTER THE 6-DIGIT CODE FROM YOUR DOCTOR</p>
                             </div>
 
-                            <!-- ================================================== -->
-                            <!--  STEP 2: AUTH (شاشة التأكيد - التعديلات هنا) -->
-                            <!-- ================================================== -->
                             <div id="step2_auth" style="display: none; animation: fadeIn 0.5s ease-out; width: 100%;">
 
-                                <!-- 1. التايمر (تم تقليل المسافة العلوية لرفعه) -->
                                 <div id="authCountdownBox"
                                     style="display: flex; justify-content: center; margin-top: 10px; margin-bottom: 20px;">
                                     <div class="auth-timer-pill"
@@ -883,7 +826,6 @@
                                     </div>
                                 </div>
 
-                                <!-- 2. كارت بيانات المحاضرة -->
                                 <div class="royal-session-card" style="padding-bottom: 25px;">
                                     <div class="r-card-accent"></div>
                                     <div class="r-avatar-area">
@@ -896,11 +838,9 @@
                                     <div class="r-info-content">
                                         <span class="r-label-tag">CURRENT LECTURER</span>
 
-                                        <!-- اسم الدكتور -->
                                         <h3 id="foundDocName" class="r-doctor-name" style="margin-bottom: 5px;">Dr. Name
                                         </h3>
 
-                                        <!-- 🔥🔥 تعديل اسم المادة (واخد راحته) 🔥🔥 -->
                                         <h4 id="foundSubjectName" class="r-subject-title"
                                             style="font-size: 18px; line-height: 1.6; margin-top: 10px; color: #0077b6; font-weight: 800; white-space: normal;">
                                             --
@@ -908,7 +848,6 @@
                                     </div>
                                 </div>
 
-                                <!-- 3. إدخال كلمة المرور -->
                                 <div class="auth-input-zone" style="margin-top: 25px;">
                                     <div class="floating-group">
                                         <i class="fa-solid fa-lock icon-inside"></i>
@@ -918,7 +857,6 @@
                                     </div>
                                 </div>
 
-                                <!-- 4. الأزرار -->
                                 <div class="auth-action-area">
                                     <button id="btnJoinFinal" onclick="joinSessionAction()"
                                         class="btn-main join-btn-premium">
@@ -1011,14 +949,14 @@
             </div>
             <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
-            <script type="module" src="./setup.js"></script> 
+            <script type="module" src="./setup.js"></script>
             <script type="module" src="security.js"></script>
             <script type="module" src="script.js"></script>
+            <script type="module" src="admin-session.js"></script>
             <script type="module" src="face-system.js"></script>
             <script type="module" src="profile-system.js"></script>
+            <script type="module" src="reports-module.js"></script>
 
-
-            <!-- 🔥 تم رفع الـ z-index وتعديل المحتوى لإضافة خيار الأسبوع -->
             <div id="attendanceRecordsModal" class="modal-overlay" style="z-index: 200000000;">
                 <div class="modal-box">
                     <div class="report-modal-header">
@@ -1029,7 +967,6 @@
 
                     <div class="report-views-container" style="padding: 20px;">
 
-                        <!-- خيارات نوع التقرير (يومي / أسبوعي) -->
                         <label style="display:block; margin-bottom:10px; font-weight:bold; color:#1e293b;">نوع
                             التقرير:</label>
                         <div class="segment-control"
@@ -1047,7 +984,6 @@
                                 id="lblWeekly">أسبوع كامل</label>
                         </div>
 
-                        <!-- العنوان سيتغير بالجافاسكريبت حسب الاختيار -->
                         <label id="dateInputLabel"
                             style="display:block; margin-bottom:5px; font-weight:bold; color:#1e293b;">تاريخ
                             المحاضرة:</label>
@@ -1073,15 +1009,12 @@
                         </label>
 
                         <div style="position: relative; margin-bottom:20px;">
-                            <!-- حقل الإدخال -->
                             <input type="text" id="archiveSubjectInput" class="modern-input" list="subjectsList"
                                 placeholder="اكتب للبحث (أ = ا)..." style="width:100%;" oninput="smartSubjectSearch()"
                                 onfocus="smartSubjectSearch()">
 
-                            <!-- ✅ هذا هو السطر الذي كان ناقصاً ويسبب الخطأ في الكونسول -->
                             <datalist id="subjectsList"></datalist>
 
-                            <!-- صندوق الاقتراحات المخصص (للبحث الذكي) -->
                             <div id="suggestionBox"
                                 style="display:none; position:absolute; top:100%; left:0; right:0; background:white; border:1px solid #cbd5e1; border-radius:0 0 8px 8px; max-height:150px; overflow-y:auto; z-index:1000; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);">
                             </div>
@@ -1096,7 +1029,6 @@
                 </div>
             </div>
 
-            <!-- ستايل بسيط للتبديل بين اليومي والأسبوعي -->
             <style>
                 input[name="reportType"]:checked+label {
                     background: #fff;
@@ -1166,7 +1098,6 @@
             </div>
 
             <style>
-                /* تنسيقات النافذة المودرن */
                 .time-grid-modern {
                     display: grid;
                     grid-template-columns: repeat(2, 1fr);
@@ -1201,7 +1132,6 @@
                 <div class="sys-modal-box"
                     style="width: 90%; max-width: 380px; background: #fff; border-radius: 24px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,0.2);">
 
-                    <!-- Header -->
                     <div style="padding: 20px 20px 10px 20px; text-align: center;">
                         <div
                             style="width: 50px; height: 50px; background: #e0f2fe; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px auto;">
@@ -1213,7 +1143,6 @@
 
                     <div style="padding: 0 20px 25px 20px; overflow-y: auto; max-height: 70vh;">
 
-                        <!-- 1. Subject Section -->
                         <div style="margin-bottom: 15px;">
                             <label class="setup-label" data-i18n="setup_subject_label">Subject</label>
                             <div class="smart-picker-container">
@@ -1230,13 +1159,11 @@
                             </div>
                         </div>
 
-                        <!-- 2. Hall Section (تم تغيير الـ ID هنا لحل المشكلة) -->
                         <div style="margin-bottom: 15px;">
                             <label class="setup-label" data-i18n="setup_hall_label">Hall</label>
                             <div class="smart-picker-container">
                                 <div class="search-row">
                                     <i class="fa-solid fa-building-columns search-icon"></i>
-                                    <!-- 🔥 تم التغيير هنا: id="setupHallSearchInput" -->
                                     <input type="text" id="setupHallSearchInput" class="picker-search"
                                         data-i18n-placeholder="hall_search_placeholder" placeholder="Search Hall..."
                                         oninput="filterCustomList('hallList', this.value)">
@@ -1248,7 +1175,6 @@
                             </div>
                         </div>
 
-                        <!-- 3. Group & Password -->
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 15px;">
                             <div>
                                 <label class="setup-label" data-i18n="setup_group_label">Group</label>
@@ -1260,7 +1186,6 @@
                             </div>
                         </div>
 
-                        <!-- Actions -->
                         <div style="margin-top: 25px; display: flex; flex-direction: column; gap: 10px;">
                             <button onclick="confirmSessionStart()" class="btn-start-action">
                                 <span data-i18n="start_setup_btn">Start Lecture</span>
@@ -1378,13 +1303,11 @@
                                     required>
                                 <label class="floating-label">University Email</label>
                             </div>
-                            <!-- قسم الباسورد في تسجيل الدخول -->
                             <div class="floating-group">
                                 <i class="fa-solid fa-lock icon-inside"></i>
                                 <input type="password" id="studentLoginPass" class="floating-input" placeholder=" "
                                     required>
                                 <label class="floating-label">Password</label>
-                                <!-- أضف السطر التالي هنا -->
                                 <i class="fa-solid fa-eye eye-toggle"
                                     onclick="togglePass('studentLoginPass', this)"></i>
                             </div>
@@ -1489,12 +1412,10 @@
                     </div>
                 </div>
             </div>
-            <!-- [نافذة البروفايل الشخصي للطالب + تعديل الحالة] -->
-            <!-- [نافذة البروفايل الشخصي للطالب + تعديل الحالة] -->
+
             <div id="studentProfileModal" class="profile-overlay">
                 <div class="pro-card">
 
-                    <!-- الهيدر: زر الإغلاق -->
                     <div class="card-header-bg">
                         <button
                             onclick="document.getElementById('infoBtn').style.display='flex'; document.getElementById('studentProfileModal').classList.remove('active'); setTimeout(()=>document.getElementById('studentProfileModal').style.display='none', 300);"
@@ -1503,7 +1424,6 @@
                         </button>
                     </div>
 
-                    <!-- صورة البروفايل -->
                     <div class="avatar-wrapper" onclick="openAvatarSelector()">
                         <div id="currentAvatar" class="pro-avatar">
                             <i class="fa-solid fa-user"></i>
@@ -1513,28 +1433,10 @@
                         </div>
                     </div>
 
-                    <!-- الاسم والرتبة -->
                     <h2 id="profFullName" class="pro-name" data-i18n="loading_user">جاري التحميل...</h2>
                     <p class="pro-role" data-i18n="student_role">طالب تمريض</p>
 
-                    <!-- 🔥 [التعديل هنا] خانة الحالة باسم ID جديد (studentStatusInput) -->
-                    <div class="status-edit-container">
-                        <div class="input-with-icon">
-                            <i class="fa-solid fa-pen-nib"></i>
-                            <!-- 👇👇 لاحظ الاسم الجديد هنا 👇👇 -->
-                            <input type="text" id="studentStatusInput" maxlength="50"
-                                placeholder="اكتب حالة أو إيموجي 😊...">
-                        </div>
-                        <button onclick="saveMyStatus()" class="btn-save-status" style="background: #10b981;">
-                            <i class="fa-solid fa-check"></i>
-                        </button>
-                        <button onclick="deleteMyStatus()" class="btn-save-status"
-                            style="background: #fee2e2; color: #ef4444;">
-                            <i class="fa-solid fa-trash"></i>
-                        </button>
-                    </div>
 
-                    <!-- شبكة المعلومات -->
                     <div class="info-grid">
                         <div class="info-card">
                             <div class="info-icon-box bg-blue">
@@ -1589,7 +1491,6 @@
                         </div>
                     </div>
 
-                    <!-- زر تسجيل الخروج -->
                     <button onclick="performLogout()" class="btn-logout-pro">
                         <span data-i18n="sign_out">تسجيل الخروج</span> <i
                             class="fa-solid fa-arrow-right-from-bracket"></i>
@@ -1615,7 +1516,6 @@
                     </button>
                 </div>
             </div>
-            <!-- [زر البروفايل الموحد - نسخة واحدة فقط] -->
             <div id="unifiedProfileBtn" class="modern-profile-trigger" onclick="handleProfileIconClick()">
                 <div class="profile-glow-ring"></div>
                 <div class="profile-inner-container" id="profileIconWrapper">
@@ -1629,7 +1529,6 @@
                     border: none !important;
                     box-shadow: none !important;
                     padding: 0 !important;
-                    /* تكبير الحاوية الخارجية */
                     width: 80px !important;
                     height: 80px !important;
                     display: flex;
@@ -1639,7 +1538,6 @@
                 }
 
                 #facultyProfileBtn .trigger-avatar-wrapper {
-                    /* تكبير الدائرة الزرقاء */
                     width: 65px !important;
                     height: 65px !important;
                     background: linear-gradient(135deg, #0ea5e9, #0284c7);
@@ -1648,25 +1546,21 @@
                     align-items: center;
                     justify-content: center;
                     border: 3px solid #fff;
-                    /* زيادة سمك الإطار الأبيض */
                     box-shadow: 0 6px 20px rgba(14, 165, 233, 0.4);
                     position: relative;
                     transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
                 }
 
-                /* تكبير حجم أيقونة الدكتور */
                 #facultyProfileBtn .trigger-avatar-wrapper i {
                     color: white !important;
                     font-size: 30px !important;
                 }
 
-                /* إلغاء النقطة الخضراء تماماً */
                 #facultyProfileBtn::after {
                     display: none !important;
                     content: none !important;
                 }
 
-                /* تأثير عند الضغط */
                 #facultyProfileBtn:active .trigger-avatar-wrapper {
                     transform: scale(0.9);
                 }
@@ -1678,7 +1572,6 @@
 
 </html>
 <style>
-    /* --- Premium Glassmorphism & Notch Labels --- */
     .faculty-modal.modal-overlay {
         background: rgba(15, 23, 42, 0.5);
         backdrop-filter: blur(15px);
@@ -1705,7 +1598,6 @@
         color: #fff;
     }
 
-    /* Floating Label "On the Border" */
     .input-group {
         position: relative;
         margin-bottom: 22px;
@@ -1725,10 +1617,8 @@
         transition: all 0.3s ease;
     }
 
-    /* --- [تعديل أساسي] حقل كلمة السر لمنع التداخل مع العين --- */
     .modern-input-pass {
         padding-right: 55px !important;
-        /* مساحة إجبارية تمنع النقاط من الوصول للعين */
     }
 
     .input-group label {
@@ -1744,7 +1634,6 @@
         background: transparent;
     }
 
-    /* الحالة عند الضغط أو الكتابة: العنوان يجلس على الخط */
     .modern-input:focus~label,
     .modern-input:not(:placeholder-shown)~label,
     .input-group.has-value label {
@@ -1753,7 +1642,6 @@
         color: #fff;
         font-weight: 600;
         background: #2e384d;
-        /* لون خلفية النافذة لقص الخط العلوي */
         border-radius: 4px;
     }
 
@@ -1762,13 +1650,11 @@
         box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.05);
     }
 
-    /* تجميل القوائم المنسدلة */
     select.modern-input option {
         background: #1e293b;
         color: #fff;
     }
 
-    /* أيقونة العين - ضبط التوسيط الدقيق */
     .password-wrapper {
         position: relative;
         width: 100%;
@@ -1788,7 +1674,6 @@
         height: 100%;
     }
 
-    /* --- [تعديل أساسي] تنسيق الماستر كود ليكون ظاهراً وواضحاً --- */
     #facMasterKey {
         text-align: center;
         letter-spacing: 2px;
@@ -1858,8 +1743,8 @@
                     </div>
 
                     <div class="input-group">
-                        <input type="text" id="facSubject" class="modern-input" placeholder=" ">
-                        <label>Academic Subject</label>
+                        <input type="text" id="facJobTitle" class="modern-input" placeholder=" ">
+                        <label>Job Title</label>
                     </div>
 
                     <div class="input-group">
@@ -1948,39 +1833,31 @@
         box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.1);
     }
 
-    /* إصلاح شفافية النصوص في نافذة إعدادات الجلسة */
     #customTimeModal .modern-input {
         background-color: #ffffff !important;
-        /* خلفية بيضاء صريحة */
         color: #1e293b !important;
-        /* نص كحلي غامق جداً للقراءة */
         border: 1.5px solid #cbd5e1 !important;
-        /* إطار رمادي واضح */
         padding: 12px !important;
     }
 
-    /* إصلاح لون النص داخل القوائم المنسدلة (المدرج والمادة) */
     #modalSubjectSelect,
     #modalHallSelect {
         color: #1e293b !important;
         font-weight: 700 !important;
     }
 
-    /* إصلاح ظهور النص أثناء الكتابة في كلمة السر والعدد */
     #modalSessionPassInput,
     #modalMaxStudents {
         color: #0f172a !important;
         background: #f8fafc !important;
     }
 
-    /* تنسيق الخيارات داخل السلكت لضمان ظهورها في كل الهواتف */
     #customTimeModal select option {
         color: #1e293b !important;
         background-color: #fff !important;
         padding: 10px;
     }
 
-    /* تغيير لون الـ Placeholder (النص التوضيحي) ليكون رمادي واضح */
     #customTimeModal .modern-input::placeholder {
         color: #94a3b8 !important;
         opacity: 1;
@@ -1989,7 +1866,6 @@
 <div id="facultyProfileModal" class="modal-overlay faculty-modal" style="z-index: 2147483646;">
     <div class="modal-box" style="max-width: 400px; text-align: center; padding-bottom: 20px;">
 
-        <!-- الهيدر: العنوان وزر الإغلاق -->
         <div
             style="padding: 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1);">
             <h3 style="margin: 0; font-size: 18px; letter-spacing: 1px; color: white;">Admin Profile</h3>
@@ -1998,7 +1874,6 @@
         </div>
 
         <div style="padding: 30px 20px;">
-            <!-- صورة الدكتور -->
             <div style="position: relative; display: inline-block; margin-bottom: 20px;">
                 <div id="facCurrentAvatar" class="profile-avatar-circle"
                     style="width: 100px; height: 100px; font-size: 45px; border: 3px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff;">
@@ -2010,30 +1885,11 @@
                 </button>
             </div>
 
-            <!-- الاسم والرتبة -->
             <h2 id="profFacName" style="margin: 0; font-size: 22px; font-weight: 800; color: white;">Loading...</h2>
             <p id="profFacRole"
                 style="margin: 5px 0 20px 0; color: rgba(255,255,255,0.6); font-size: 14px; text-transform: uppercase; letter-spacing: 2px;">
                 Faculty Member</p>
 
-            <!-- 🔥 [تم التعديل هنا] تغيير ID خانة الحالة للدكتور -->
-            <div class="status-edit-container" style="margin-bottom: 25px;">
-                <div class="input-with-icon">
-                    <i class="fa-solid fa-pen-nib" style="color: rgba(255,255,255,0.7);"></i>
-                    <!-- 👇👇 الاسم الجديد: facultyStatusInput 👇👇 -->
-                    <input type="text" id="facultyStatusInput" maxlength="50" placeholder="اكتب حالة أو إيموجي..."
-                        style="background: rgba(0,0,0,0.25); color: white; border: 1px solid rgba(255,255,255,0.2); padding-right: 35px;">
-                </div>
-                <button onclick="saveMyStatus()" class="btn-save-status" style="background: white; color: #0f172a;">
-                    <i class="fa-solid fa-check"></i>
-                </button>
-                <button onclick="deleteMyStatus()" class="btn-save-status"
-                    style="background: rgba(239, 68, 68, 0.2); color: #ef4444;">
-                    <i class="fa-solid fa-trash"></i>
-                </button>
-            </div>
-
-            <!-- تفاصيل الحساب -->
             <div
                 style="text-align: left; background: rgba(0,0,0,0.2); border-radius: 20px; padding: 15px; border: 1px solid rgba(255,255,255,0.05);">
                 <div style="margin-bottom: 15px;">
@@ -2061,7 +1917,6 @@
             </div>
         </div>
 
-        <!-- زر الخروج -->
         <button onclick="performLogout()"
             style="width: 80%; background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid #ef4444; padding: 12px; border-radius: 12px; font-weight: 700; cursor: pointer; transition: 0.3s;">
             <i class="fa-solid fa-right-from-bracket"></i> SIGN OUT
@@ -2069,7 +1924,6 @@
     </div>
 </div>
 <style>
-    /* 1. Main Container Setup - تم تعديل المحاذاة والبادينج */
     #screenLiveSession {
         position: fixed;
         top: 0;
@@ -2081,31 +1935,25 @@
         display: none;
         flex-direction: column;
         align-items: center;
-        /* التعديل الجراحي: جعل العناصر تبدأ من الأعلى بدلاً من التوزيع المتساوي */
         justify-content: flex-start !important;
         padding: 10px 10px 0 10px;
-        /* تقليل المسافة العلوية من 20 إلى 10 */
         overflow-y: auto;
         pointer-events: auto !important;
         touch-action: auto !important;
     }
 
-    /* تنسيق الحاوية العلوية - تم تقليل البادينج */
     .live-top-bar {
         width: 100%;
         display: flex;
         justify-content: space-between;
         align-items: center;
         padding: 5px 15px;
-        /* تقليل المسافة من 20 إلى 10 */
         background: transparent;
         position: relative;
         z-index: 10;
         margin-bottom: 5px;
-        /* إضافة هامش صغير جداً تحت أزرار السقف */
     }
 
-    /* تعديل زر الهوم ليكون جزءاً من التصميم */
     .home-floating-btn {
         position: static !important;
         transform: none !important;
@@ -2126,7 +1974,6 @@
         transform: scale(0.9);
     }
 
-    /* Live Status Pill (Top Right) */
     .live-pill {
         background: #fee2e2;
         color: #ef4444;
@@ -2732,7 +2579,6 @@
             <span data-i18n="feedback_subtitle">يرجى تقييم محاضرة اليوم للمتابعة:</span><br>
             <b id="feedbackSubjectName" style="color: #0ea5e9; font-size: 15px;">--</b> <br>
 
-            <!-- هنا حل مشكلة "د." -->
             <span style="font-size: 12px; background: #f1f5f9; padding: 2px 8px; border-radius: 6px;">
                 <span data-i18n="doctor_prefix">د.</span>
                 <span id="feedbackDocName" class="en-font">--</span>
@@ -2753,7 +2599,6 @@
         <input type="hidden" id="selectedRating" value="0">
         <input type="hidden" id="targetAttendanceDocId" value="">
 
-        <!-- التنويه الرسمي (مترجم) -->
         <div class="privacy-alert-box">
             <i class="fa-solid fa-user-shield"></i>
             <span data-i18n="privacy_notice_formal">
@@ -2793,16 +2638,12 @@
         text-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
     }
 
-    /* تصميم صندوق الخصوصية في التقييم */
     .privacy-alert-box {
         background-color: #f8fafc;
-        /* خلفية رمادية فاتحة جداً */
         border: 1px dashed #cbd5e1;
-        /* إطار منقط أنيق */
         border-radius: 12px;
         padding: 10px 15px;
         margin-bottom: 20px;
-        /* مسافة قبل الزر */
         display: flex;
         align-items: center;
         gap: 10px;
@@ -2812,7 +2653,6 @@
 
     .privacy-alert-box i {
         color: #10b981;
-        /* أيقونة خضراء لتعطي شعور بالأمان */
         font-size: 18px;
         flex-shrink: 0;
     }
@@ -2828,47 +2668,32 @@
         color: #334155;
     }
 </style>
-<!-- بروفايل الطالب (نسخة المعلومات فقط - Clean Version) -->
 <div id="publicProfileModal" class="modal-overlay" style="z-index: 2147483647 !important;">
     <div class="modal-box social-profile-box extended-card">
 
-        <!-- زر الإغلاق -->
         <button onclick="document.getElementById('publicProfileModal').style.display='none'" class="btn-close-absolute">
             <i class="fa-solid fa-xmark"></i>
         </button>
 
-        <!-- صورة البروفايل -->
         <div class="social-avatar-wrapper" onclick="expandAvatar()">
             <div id="publicAvatar" class="social-avatar-img"></div>
             <div class="zoom-hint"><i class="fa-solid fa-magnifying-glass-plus"></i></div>
         </div>
 
-        <!-- الاسم والرتبة -->
         <h2 id="publicName" class="social-name">--</h2>
         <div id="publicRoleBadge" class="social-role-badge">--</div>
 
-        <!-- صندوق الحالة -->
-        <div class="social-status-box">
-            <i class="fa-solid fa-quote-right quote-icon"></i>
-            <p id="publicStatusText">...</p>
-            <i class="fa-solid fa-quote-left quote-icon"></i>
-        </div>
-
-        <!-- الإحصائيات الأساسية -->
         <div class="stats-tri-grid">
-            <!-- حضور -->
             <div class="stat-mini-card">
                 <div class="stat-icon s-green"><i class="fa-solid fa-calendar-check"></i></div>
                 <div class="stat-num" id="statAttendance">0</div>
                 <div class="stat-lbl">أيام الحضور</div>
             </div>
-            <!-- غياب -->
             <div class="stat-mini-card">
                 <div class="stat-icon s-red"><i class="fa-solid fa-calendar-xmark"></i></div>
                 <div class="stat-num" id="statAbsence">0</div>
                 <div class="stat-lbl">أيام الغياب</div>
             </div>
-            <!-- انضباط -->
             <div class="stat-mini-card">
                 <div class="stat-icon s-blue"><i class="fa-solid fa-scale-balanced"></i></div>
                 <div class="stat-num" id="statDiscipline" style="font-size: 11px;">--</div>
@@ -2876,7 +2701,6 @@
             </div>
         </div>
 
-        <!-- المعلومات الإضافية -->
         <div class="social-info-grid">
             <div class="s-info-item">
                 <span class="lbl">القسم/الفرقة</span>
@@ -2890,7 +2714,6 @@
     </div>
 </div>
 
-<!-- مودال تكبير الصورة (كما هو) -->
 <div id="imageZoomModal" class="modal-overlay" style="z-index: 2147483665 !important; background: rgba(0,0,0,0.95);"
     onclick="this.style.display='none'">
     <div id="zoomedAvatarContainer" class="zoomed-img-box"></div>
@@ -3022,10 +2845,8 @@
         </button>
     </div>
 </div>
-<!-- مودال إحصائيات التقييم اللحظي (محسن التصميم) -->
 <div id="liveFeedbackModal" class="modal-overlay" style="z-index: 2147483650; display: none;">
 
-    <!-- تنسيق خاص لهذه النافذة فقط -->
     <style>
         #liveFeedbackModal .modal-box {
             padding: 0;
@@ -3036,14 +2857,12 @@
             background: #fff;
         }
 
-        /* تنسيق الهيدر */
         .feedback-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             padding: 15px 20px;
             background: #fffbeb;
-            /* خلفية صفراء فاتحة جداً */
             border-bottom: 1px solid #fef3c7;
         }
 
@@ -3076,10 +2895,8 @@
             color: #ef4444;
             border-color: #fecaca;
             transform: rotate(90deg);
-            /* حركة دوران لطيفة */
         }
 
-        /* تنسيق الجسم */
         .feedback-body {
             padding: 20px;
             text-align: center;
@@ -3096,7 +2913,6 @@
             margin-bottom: 20px;
         }
 
-        /* تنسيق صفوف النجوم */
         .star-row-modern {
             display: flex;
             align-items: center;
@@ -3138,7 +2954,6 @@
             text-align: left;
         }
 
-        /* الفوتر (العدد الكلي) */
         .total-box {
             margin-top: 15px;
             padding-top: 15px;
@@ -3161,7 +2976,6 @@
     </style>
 
     <div class="modal-box">
-        <!-- الهيدر المنسق -->
         <div class="feedback-header">
             <div class="feedback-title">
                 <i class="fa-solid fa-star"></i> تقييمات اليوم
@@ -3172,18 +2986,14 @@
         </div>
 
         <div class="feedback-body">
-            <!-- التاريخ -->
             <div class="date-badge">
                 <i class="fa-regular fa-calendar"></i> <span id="feedbackDateStr" class="en-font">--/--/----</span>
             </div>
 
-            <!-- الأعمدة -->
             <div id="starsStatsContainer">
-                <!-- سيتم تعبئته بالجافاسكريبت -->
                 <div style="color:#94a3b8;"><i class="fa-solid fa-circle-notch fa-spin"></i> تحميل...</div>
             </div>
 
-            <!-- العدد الكلي -->
             <div class="total-box">
                 <div id="totalFeedbackVal" class="total-number">0</div>
                 <div class="total-label">إجمالي الطلاب المقيمين</div>
@@ -3191,7 +3001,29 @@
         </div>
     </div>
 </div>
+<!-- Signup Success Modal -->
+<div id="signupSuccessModal" class="modal-overlay">
+    <div class="modal-box" style="text-align: center; padding: 30px;">
+        <!-- أيقونة النجاح المتحركة -->
+        <div
+            style="width: 70px; height: 70px; background: #dcfce7; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
+            <i class="fa-solid fa-envelope-circle-check fa-bounce" style="font-size: 35px; color: #16a34a;"></i>
+        </div>
 
+        <h3 id="successModalTitle" style="font-size: 20px; font-weight: 900; color: #1e293b; margin-bottom: 10px;">
+            تم إنشاء الحساب بنجاح!
+        </h3>
+
+        <div id="successModalBody" style="font-size: 14px; color: #64748b; line-height: 1.6;">
+            <!-- الكلام هيتغير بالجافاسكريبت -->
+        </div>
+
+        <button onclick="document.getElementById('signupSuccessModal').style.display='none'; toggleAuthMode('login');"
+            class="btn-main" style="width: 100%; margin-top: 25px; justify-content: center;">
+            تسجيل الدخول الآن <i class="fa-solid fa-arrow-right-to-bracket"></i>
+        </button>
+    </div>
+</div>
 </body>
 
 </html>

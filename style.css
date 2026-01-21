@@ -1,4 +1,3 @@
-/* === الأساسيات === */
 #desktop-blocker {
     position: fixed;
     top: 0;
@@ -1090,7 +1089,6 @@ p {
     color: white;
 }
 
-/* === زر التحديد الجديد === */
 .btn-highlight-item {
     width: 38px;
     height: 38px;
@@ -1651,7 +1649,6 @@ p {
     font-family: 'Outfit', sans-serif !important;
 }
 
-/* === MODIFIED SCAN TITLE === */
 .scan-title-modern {
     font-size: 24px;
     font-weight: 900;
@@ -1664,7 +1661,6 @@ p {
     text-shadow: 0 2px 10px rgba(99, 102, 241, 0.2);
 }
 
-/* === MODIFIED DISCIPLINE SCORE IN CARD === */
 .discipline-score-display {
     font-family: 'Outfit', sans-serif !important;
     font-weight: 900;
@@ -2335,7 +2331,6 @@ p {
     }
 }
 
-/* تعديل 4: مودال التجاوز الأنيق */
 #bypassModal .modal-box {
     border-top: 5px solid #10b981;
 }
@@ -2347,22 +2342,18 @@ p {
     animation: popUp 0.5s;
 }
 
-/* تعديل 2: مودال انتهاء الوقت والحظر */
 #timeoutModal .modal-box {
     border-bottom: 5px solid #ef4444;
 }
 
-/* تعديل 6: مودال التكرار */
 #duplicateModal .modal-box {
     border-top: 5px solid #f59e0b;
 }
 
-/* === Styles for MODERN Evaluation Modal === */
 #evaluationModal {
     z-index: 2147483647 !important;
 }
 
-/* Glassmorphism Effect */
 #evaluationModal .modal-box {
     background: rgba(255, 255, 255, 0.85);
     backdrop-filter: blur(20px);
@@ -2380,7 +2371,6 @@ p {
     background: transparent;
 }
 
-/* The Range Slider Track */
 .range-slider {
     -webkit-appearance: none;
     appearance: none;
@@ -2390,12 +2380,10 @@ p {
     outline: none;
     transition: all 0.3s ease;
     cursor: pointer;
-    /* Dynamic background set via JS */
     background: linear-gradient(to right, #e2e8f0 0%, #e2e8f0 100%);
     box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
-/* The Range Slider Thumb */
 .range-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
@@ -2408,7 +2396,6 @@ p {
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
     transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     margin-top: -8px;
-    /* Center thumb */
 }
 
 .range-slider::-webkit-slider-thumb:hover {
@@ -2419,7 +2406,6 @@ p {
     transform: scale(0.95);
 }
 
-/* Dynamic classes for slider track colors (handled by JS) */
 .slider-green::-webkit-slider-thumb {
     border: 4px solid #10b981;
 }
@@ -2444,7 +2430,6 @@ p {
     transition: color 0.3s;
 }
 
-/* === NEW: Modern Cancel Button Style === */
 .btn-cancel-modern {
     background: #ffffff;
     color: #64748b;
@@ -2470,7 +2455,6 @@ p {
     transform: scale(0.98);
 }
 
-/* Total Score Display */
 .total-score-display {
     background: #f8fafc;
     padding: 12px 15px;
@@ -2485,9 +2469,6 @@ p {
     border: 1px solid #e2e8f0;
 }
 
-/* ========================================================
-    NEW STYLE: MODERN INSTALL PROMPT (PWA)
-    ======================================================== */
 .install-prompt-box {
     background: linear-gradient(135deg, #1e293b, #0f172a);
     color: white;
@@ -2495,7 +2476,6 @@ p {
     border-radius: 20px;
     margin-top: 15px;
     display: none;
-    /* Hidden by default */
     align-items: center;
     justify-content: space-between;
     box-shadow: 0 10px 25px -5px rgba(30, 41, 59, 0.3);
@@ -2547,7 +2527,6 @@ p {
     left: 15px;
     transform: translateY(-50%);
     background: #10b981;
-    /* لون أخضر إكسل */
     color: white;
     border: none;
     padding: 8px 12px;
@@ -2566,12 +2545,10 @@ p {
     box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3);
 }
 
-/* لضمان عدم تداخل النص مع الزر في الشاشات الصغيرة */
 .sub-card-info {
     padding-left: 80px !important;
 }
 
-/* تصميم الكروت */
 .modern-card-action {
     background: white;
     border: 1px solid #e2e8f0;
@@ -2591,7 +2568,6 @@ p {
     gap: 8px;
 }
 
-/* تصميم القائمة المنسدلة الحديث */
 .modern-select-wrapper {
     position: relative;
     width: 100%;
@@ -2601,7 +2577,6 @@ p {
     width: 100%;
     padding: 12px 15px;
     appearance: none;
-    /* إخفاء السهم الافتراضي القبيح */
     -webkit-appearance: none;
     background-color: #f8fafc;
     border: 2px solid #e2e8f0;
@@ -2630,7 +2605,6 @@ p {
     font-size: 12px;
 }
 
-/* زر الرفع */
 .btn-action-modern {
     width: 100%;
     padding: 12px;
@@ -2656,7 +2630,6 @@ p {
     transform: scale(0.98);
 }
 
-/* الفاصل */
 .separator-line {
     text-align: center;
     margin: 15px 0;
@@ -2683,7 +2656,6 @@ p {
     left: 0;
 }
 
-/* زر السجل */
 .btn-history-modern {
     width: 100%;
     padding: 12px;
@@ -2707,7 +2679,6 @@ p {
     background: #fff7ed;
 }
 
-/* زر تنزيل الإكسيل في الكارت */
 .btn-download-excel {
     width: 40px;
     height: 40px;
@@ -2735,31 +2706,22 @@ p {
     transform: scale(0.95);
 }
 
-/* تنسيق مستطيل الخطأ الأحمر (مودرن) */
 .alert-box {
     background-color: #fee2e2;
-    /* لون أحمر فاتح هادي */
     color: #991b1b;
-    /* لون النص أحمر غامق */
     border: 1px solid #fecaca;
-    /* حدود ناعمة */
     padding: 12px 15px;
     border-radius: 12px;
-    /* حواف دائرية */
     margin-bottom: 20px;
     font-size: 13px;
     font-weight: 800;
     display: none;
-    /* مخفي في البداية */
     align-items: center;
     justify-content: center;
     gap: 8px;
-    /* مسافة بين النص والأيقونة */
     animation: shake 0.4s ease-in-out;
-    /* حركة الاهتزاز */
 }
 
-/* كود حركة الاهتزاز */
 @keyframes shake {
 
     0%,
@@ -2776,48 +2738,32 @@ p {
     }
 }
 
-/* تنسيق التنبيهات المودرن (Toast) */
 #toastNotification {
     position: fixed;
-    /* تثبيت في الشاشة */
     top: 20px;
-    /* مسافة من الأعلى */
     left: 50%;
-    /* في منتصف العرض */
     transform: translateX(-50%);
-    /* توسيط دقيق */
 
     background-color: #334155;
-    /* لون افتراضي */
     color: #fff;
-    /* لون النص أبيض */
 
     padding: 12px 25px;
-    /* مساحات داخلية مريحة */
     border-radius: 50px;
-    /* حواف دائرية (شكل كبسولة) */
 
     font-family: 'Cairo', sans-serif;
     font-size: 14px;
     font-weight: 600;
 
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-    /* ظل ناعم */
     z-index: 99999;
-    /* يظهر فوق أي شيء */
 
     display: none;
-    /* مخفي افتراضياً */
     min-width: 280px;
-    /* عرض مناسب */
     text-align: center;
-    /* توسيط الكلام */
 
-    /* حركة ظهور ناعمة */
     animation: slideDownFade 0.4s ease-out;
 }
 
-/* حركة الانزلاق */
 @keyframes slideDownFade {
     from {
         top: -50px;
@@ -2830,7 +2776,6 @@ p {
     }
 }
 
-/* 1. تصميم زر إزالة المخالفات */
 .btn-reset-modern {
     width: 100%;
     padding: 12px;
@@ -2849,20 +2794,16 @@ p {
     transform: scale(0.98);
 }
 
-/* 2. تصميم النافذة العائمة للطالب (تظهر وتختفي) */
 .unruly-popup {
     position: fixed;
     top: 20px;
-    /* تظهر من الأعلى */
     left: 50%;
     transform: translateX(-50%) translateY(-100px);
-    /* مخفية للأعلى */
     background: #fee2e2;
     color: #ef4444;
     border: 1px solid #fca5a5;
     padding: 10px 20px;
     border-radius: 50px;
-    /* شكل كبسولة */
     display: flex;
     align-items: center;
     gap: 10px;
@@ -2875,13 +2816,9 @@ p {
 
 .unruly-popup.show {
     transform: translateX(-50%) translateY(20px);
-    /* تنزل لتحت */
     opacity: 1;
 }
 
-/* =========================================
-   تنسيقات نافذة الوقت (Time Modal)
-   ========================================= */
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -2889,11 +2826,8 @@ p {
     width: 100%;
     height: 100%;
     background: rgba(0, 0, 0, 0.6);
-    /* خلفية سوداء شفافة */
     backdrop-filter: blur(5px);
-    /* تأثير الضباب */
     display: none;
-    /* مخفية افتراضياً */
     justify-content: center;
     align-items: center;
     z-index: 10000;
@@ -2913,7 +2847,6 @@ p {
 .time-grid-modern {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    /* 3 أعمدة */
     gap: 12px;
     margin: 20px 0;
 }
@@ -2940,10 +2873,8 @@ p {
     background: #f0f9ff;
 }
 
-/* زر الوقت المفتوح (مميز) */
 .time-btn.open-time {
     grid-column: span 3;
-    /* ياخد العرض كله */
     background: #ecfdf5;
     border-color: #10b981;
     color: #059669;
@@ -2960,7 +2891,6 @@ p {
     cursor: pointer;
 }
 
-/* أنيميشن ظهور النافذة */
 @keyframes slideUp {
     from {
         transform: translateY(20px);
@@ -2973,7 +2903,6 @@ p {
     }
 }
 
-/* تنسيق زر الجلسة وهو مفتوح (العداد) */
 .session-open {
     animation: pulse-orange 2s infinite;
 }
@@ -2992,14 +2921,10 @@ p {
     }
 }
 
-/* =========================================
-   تصميم العداد العائم (Floating Timer)
-   ========================================= */
 .floating-timer {
     position: fixed;
     top: 20px;
     left: 20px;
-    /* مكانها شمال فوق بعيد عن الزحمة */
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(8px);
     padding: 8px 15px;
@@ -3010,7 +2935,6 @@ p {
     gap: 10px;
     z-index: 999999;
     border: 2px solid #10b981;
-    /* أخضر في البداية */
     transition: all 0.3s ease;
     animation: slideInDown 0.5s ease-out;
 }
@@ -3021,14 +2945,12 @@ p {
     color: #1e293b;
 }
 
-/* حركة الأيقونة */
 .timer-icon-pulse {
     color: #10b981;
     font-size: 16px;
     animation: spin-slow 3s linear infinite;
 }
 
-/* لما الوقت يقرب يخلص (أحمر) */
 .floating-timer.urgent {
     border-color: #ef4444;
     background: #fef2f2;
@@ -3069,11 +2991,9 @@ p {
     }
 }
 
-/* تنسيق أزرار اختيار الوقت داخل SweetAlert */
 .swal-time-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    /* 3 أعمدة */
     gap: 12px;
     margin-top: 15px;
 }
@@ -3103,10 +3023,8 @@ p {
     transform: scale(0.96);
 }
 
-/* زر الوقت المفتوح المميز */
 .modern-time-btn.infinite-time {
     grid-column: span 3;
-    /* ياخد العرض كله */
     background: linear-gradient(135deg, #10b981 0%, #059669 100%);
     color: white;
     border: none;
@@ -3119,9 +3037,6 @@ p {
     background: linear-gradient(135deg, #34d399 0%, #059669 100%);
 }
 
-/* =========================================
-   تصميم نافذة الوقت (V3 - Ultra Modern)
-   ========================================= */
 .sys-modal-overlay {
     position: fixed;
     top: 0;
@@ -3129,7 +3044,6 @@ p {
     width: 100%;
     height: 100%;
     background: rgba(15, 23, 42, 0.75);
-    /* خلفية أغمق للتركيز */
     backdrop-filter: blur(8px);
     z-index: 999999;
     display: flex;
@@ -3144,14 +3058,12 @@ p {
     width: 90%;
     max-width: 400px;
     border-radius: 28px;
-    /* حواف دائرية أكثر */
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
     text-align: center;
     transform: scale(0.95);
     animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
-/* أيقونة الهيدر */
 .header-icon-bg {
     width: 50px;
     height: 50px;
@@ -3180,7 +3092,6 @@ p {
     margin-top: 5px;
 }
 
-/* الشبكة */
 .sys-time-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -3199,7 +3110,6 @@ p {
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     font-family: sans-serif;
-    /* للأرقام الإنجليزية */
 }
 
 .sys-time-btn span {
@@ -3221,12 +3131,10 @@ p {
     color: #60a5fa;
 }
 
-/* زر الـ 2 دقيقة ياخد العرض كله */
 .full-width-btn {
     grid-column: span 3;
 }
 
-/* زر الوقت المفتوح (تصميم الجريدينت) */
 .sys-time-btn.sys-infinite {
     grid-column: span 3;
     background: linear-gradient(135deg, #10b981 0%, #059669 100%);
@@ -3248,7 +3156,6 @@ p {
     color: #d1fae5;
 }
 
-/* زر الإلغاء الجديد */
 .sys-close-btn {
     background: #f1f5f9;
     border: none;
@@ -3278,7 +3185,6 @@ p {
     }
 }
 
-/* تأثير العنصر المعطل (باهت وغير قابل للنقر) */
 .faded-disabled {
     opacity: 0.5 !important;
     pointer-events: none !important;
@@ -3288,7 +3194,6 @@ p {
     background: #f1f5f9 !important;
 }
 
-/* شارة "تم التخطي" تظهر فوق العنصر */
 .faded-disabled::after {
     content: "تم التخطي تلقائياً ⚡";
     position: absolute;
@@ -3306,12 +3211,9 @@ p {
     width: max-content;
 }
 
-/* تنسيق الزر ليصبح دائري وفي اليمين */
-/* الكود المعدل: رفعنا الزر قليلاً ليوازي الجرس */
 .info-btn {
     position: absolute;
     top: 35px;
-    /* جربنا 15 بدلاً من 20 لرفع الزر قليلاً */
     right: 33px;
     width: 45px;
     height: 45px;
@@ -3324,11 +3226,9 @@ p {
     cursor: pointer;
     z-index: 100;
     margin: 0;
-    /* ضمان عدم وجود هوامش إضافية */
     transition: all 0.3s ease;
 }
 
-/* القلب النابض */
 .info-btn i {
     color: #ef4444;
     font-size: 22px;
@@ -3727,9 +3627,6 @@ p {
     text-align: left;
 }
 
-/* --- تحسين قوائم النوع والفرقة (Select Menus) --- */
-
-/* --- Custom Glass Dropdown Styling --- */
 
 .custom-dropdown {
     position: relative;
@@ -3743,10 +3640,8 @@ p {
     background: rgba(255, 255, 255, 0.7) !important;
 }
 
-/* السهم المخصص */
 .custom-select-display::after {
     content: "\f0d7";
-    /* أيقونة سهم FontAwesome */
     font-family: "Font Awesome 6 Free";
     font-weight: 900;
     margin-left: auto;
@@ -3754,7 +3649,6 @@ p {
     transition: 0.3s;
 }
 
-/* القائمة المخفية */
 .dropdown-list {
     position: absolute;
     top: 105%;
@@ -3769,7 +3663,6 @@ p {
     padding: 8px 0;
     margin: 0;
     display: none;
-    /* مخفية افتراضياً */
     z-index: 2000;
 }
 
@@ -3787,7 +3680,6 @@ p {
     color: #0ea5e9;
 }
 
-/* حالة الفتح */
 .dropdown-list.show {
     display: block;
     animation: fadeIn 0.3s ease;
@@ -3800,14 +3692,12 @@ p {
     color: #0ea5e9 !important;
 }
 
-/* الأيقونة الأساسية */
 .icon-main {
     font-size: 22px !important;
     color: #94a3b8;
     transition: 0.3s;
 }
 
-/* سهم صغير جداً جانبي للتوضيح */
 .mini-arrow {
     position: absolute;
     bottom: 8px;
@@ -3817,12 +3707,8 @@ p {
     opacity: 0.6;
 }
 
-/* =========================================
-   WORLD CLASS PROFILE - STYLE
-   ========================================= */
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;900&display=swap');
 
-/* Modal Overlay (Dark & Blur) */
 .profile-overlay {
     position: fixed;
     top: 0;
@@ -3844,7 +3730,6 @@ p {
     opacity: 1;
 }
 
-/* The Main Card */
 .pro-card {
     position: relative;
     width: 90%;
@@ -3856,7 +3741,6 @@ p {
     text-align: center;
     font-family: 'Outfit', sans-serif;
     overflow: visible;
-    /* Important for avatar overlap */
     transform: translateY(20px);
     transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
@@ -3865,7 +3749,6 @@ p {
     transform: translateY(0);
 }
 
-/* Header Background (The Curve Effect) */
 .card-header-bg {
     position: absolute;
     top: 0;
@@ -3878,7 +3761,6 @@ p {
     overflow: hidden;
 }
 
-/* Decorative Circles in Header */
 .card-header-bg::before {
     content: '';
     position: absolute;
@@ -3901,7 +3783,6 @@ p {
     border-radius: 50%;
 }
 
-/* Close Button */
 .btn-close-pro {
     position: absolute;
     top: 20px;
@@ -3926,13 +3807,11 @@ p {
     background: rgba(255, 255, 255, 0.4);
 }
 
-/* Avatar Container (Floating) */
 .avatar-wrapper {
     position: relative;
     width: 110px;
     height: 110px;
     margin: 60px auto 15px auto;
-    /* Push down to overlap */
     z-index: 2;
 }
 
@@ -3942,7 +3821,6 @@ p {
     border-radius: 50%;
     background: #f1f5f9;
     border: 5px solid #ffffff;
-    /* The cut-out effect */
     box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
     display: flex;
     align-items: center;
@@ -3981,7 +3859,6 @@ p {
     transform: scale(0.9);
 }
 
-/* Typography */
 .pro-name {
     font-size: 22px;
     font-weight: 800;
@@ -4000,7 +3877,6 @@ p {
     letter-spacing: 1px;
 }
 
-/* Info Grid */
 .info-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -9550,7 +9426,6 @@ input:checked+.slider:before {
     animation: popUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-/* 2. اسم الطالب */
 .confirm-student-name {
     font-size: 20px;
     font-weight: 900;
@@ -9559,7 +9434,6 @@ input:checked+.slider:before {
     font-family: 'Cairo', sans-serif;
 }
 
-/* 3. شارة الكود (Badge) */
 .confirm-id-badge {
     display: inline-flex;
     align-items: center;
@@ -9576,7 +9450,6 @@ input:checked+.slider:before {
     letter-spacing: 1px;
 }
 
-/* 4. رسالة التأكيد */
 .confirm-msg-text {
     font-size: 13px;
     color: #64748b;
@@ -9584,7 +9457,6 @@ input:checked+.slider:before {
     line-height: 1.6;
 }
 
-/* 5. زر التأكيد الأخضر */
 .btn-confirm-green {
     background: linear-gradient(135deg, #10b981, #059669);
     color: white;
@@ -9605,4 +9477,41 @@ input:checked+.slider:before {
 
 .btn-confirm-green:active {
     transform: scale(0.97);
+}
+/* كارت البحث - إزالة تأثيرات الضغط */
+.makani-card.no-hover {
+    transform: none !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    transition: none;
+}
+
+.makani-card.no-hover:active {
+    transform: none !important;
+    background: #ffffff !important;
+}
+
+/* بادج القاعة الرسمي (الأسود) */
+.hall-badge-formal {
+    background: #0f172a; /* كحلي غامق جداً يميل للأسود */
+    color: white;
+    padding: 12px;
+    border-radius: 12px;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+    border: 1px solid #1e293b;
+    position: relative;
+    overflow: hidden;
+}
+
+/* زخرفة خفيفة للبادج */
+.hall-badge-formal::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: #0ea5e9;
 }

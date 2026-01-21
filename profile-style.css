@@ -1,21 +1,14 @@
-/* ========================================= */
-/*  PROFILE SYSTEM STYLES (Full Version)     */
-/* ========================================= */
 
-/* 1. تعديل كارت البروفايل (زيادة الطول) */
 .extended-card {
     padding-bottom: 35px !important;
     min-height: 540px;
-    /* طول مناسب لاستيعاب الإحصائيات */
     transition: all 0.3s ease;
 }
 
-/* 2. شريط المستوى (Level Bar) */
 .level-system-container {
     width: 100%;
     margin-bottom: 20px;
     margin-top: 20px;
-    /* مسافة من الاسم */
     position: relative;
     padding: 0 5px;
 }
@@ -24,13 +17,11 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    /* محاذاة عمودية أفضل */
     font-size: 13px;
     font-weight: 800;
     color: #64748b;
     margin-bottom: 8px;
 
-    /* 🔥 الإصلاح هنا: إبعاد النص عن الصندوق 🔥 */
     padding-right: 55px;
     padding-left: 5px;
 }
@@ -65,12 +56,10 @@
     box-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
 }
 
-/* 3. صندوق الهدايا العائم (الأساسي) */
 .gift-box-floating {
     position: absolute;
     right: 0px;
     top: -18px;
-    /* ضبط المكان بدقة */
     width: 45px;
     height: 45px;
     background: #fff;
@@ -79,22 +68,16 @@
     align-items: center;
     justify-content: center;
     border: 2px solid #e2e8f0;
-    /* لون حدود افتراضي */
     color: #94a3b8;
-    /* لون أيقونة افتراضي */
     font-size: 20px;
     z-index: 20;
     transition: all 0.3s ease;
 }
 
-/* حالة القفل (Locked State) */
 .gift-locked {
     filter: grayscale(100%);
     opacity: 0.8;
-    /* زيادة الوضوح قليلاً */
     cursor: pointer;
-    /* ✅ جعل المؤشر يدل على إمكانية الضغط */
-    /* pointer-events: none;  <-- ❌ احذف هذا السطر */
     box-shadow: none;
     transform: scale(0.9);
     transition: 0.2s;
@@ -102,10 +85,8 @@
 
 .gift-locked:hover {
     transform: scale(0.95);
-    /* تأثير بسيط عند المرور */
 }
 
-/* حالة الفتح (Unlocked State) */
 .gift-unlocked {
     border-color: #f59e0b !important;
     color: #d97706 !important;
@@ -116,12 +97,10 @@
     animation: floatGift 3s ease-in-out infinite, pulseReady 1s infinite alternate;
 }
 
-/* إخفاء القفل عند الفتح */
 .gift-unlocked .lock-overlay {
     display: none !important;
 }
 
-/* أيقونة القفل الصغيرة */
 .lock-overlay {
     position: absolute;
     bottom: -3px;
@@ -139,7 +118,6 @@
     height: 20px;
 }
 
-/* تأثير التوهج الخلفي */
 .gift-glow {
     position: absolute;
     width: 100%;
@@ -149,15 +127,12 @@
     animation: pulseGold 1.5s infinite;
     z-index: -1;
     display: none;
-    /* مخفي افتراضياً */
 }
 
-/* تشغيل التوهج فقط عند الفتح */
 .gift-unlocked .gift-glow {
     display: block;
 }
 
-/* 4. الإطار الذهبي (Gold Frame) */
 .gold-frame-ring {
     position: absolute;
     top: -6px;
@@ -169,10 +144,8 @@
     box-shadow: 0 0 20px rgba(251, 191, 36, 0.8), inset 0 0 15px rgba(251, 191, 36, 0.5);
     z-index: 5;
     pointer-events: none;
-    /* animation: rotateGold 10s linear infinite; */
 }
 
-/* 5. شبكة الإحصائيات المودرن (Stats Grid) */
 .stats-tri-grid {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
@@ -240,13 +213,10 @@
     font-weight: 700;
 }
 
-/* 6. نافذة المكافأة (Z-Index Fix) */
 #rewardModal {
     z-index: 2147483660 !important;
-    /* أعلى من البروفايل */
 }
 
-/* --- Animations --- */
 
 @keyframes floatGift {
 
@@ -282,11 +252,6 @@
     }
 }
 
-/* --- Golden Reward Card Styles --- */
-/* ========================================= */
-/* 🌟 REPLICA GOLD CARD (EXACT MATCH) 🌟    */
-/* ========================================= */
-
 .reward-card-container {
     display: flex;
     justify-content: center;
@@ -294,18 +259,13 @@
     margin-bottom: 20px;
 }
 
-/* 1. جسم الكارت (نفس أبعاد live-st-card) */
 .gold-replica-card {
     background: #ffffff;
     width: 100%;
     max-width: 170px;
-    /* نفس العرض */
     min-height: 190px;
-    /* نفس الطول */
     border-radius: 18px;
-    /* نفس الانحناء */
     padding: 15px;
-    /* نفس الحشوة */
 
     display: flex;
     flex-direction: column;
@@ -313,14 +273,12 @@
     justify-content: center;
     position: relative;
 
-    /* اللمسة الذهبية */
     border: 2px solid #fbbf24;
     box-shadow: 0 10px 30px rgba(251, 191, 36, 0.25);
     overflow: visible !important;
     animation: popUpCard 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-/* 2. منطقة الأفاتار (نفس live-avatar-area) */
 .replica-avatar-area {
     position: relative;
     display: flex;
@@ -329,32 +287,26 @@
     margin-top: 5px;
 }
 
-/* 3. حلقة الأفاتار (نفس live-avatar-circle) */
 .replica-avatar-circle {
     width: 60px;
     height: 60px;
     border-radius: 50%;
     background: #f8fafc;
 
-    /* الحلقة سميكة وذهبية */
     border: 3.5px solid #d97706;
 
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 26px;
-    /* نفس حجم الأيقونة */
     color: #d97706;
-    /* لون ذهبي */
     z-index: 2;
 }
 
-/* 4. بادج "البطل" (نفس مكان live-badge-top) */
 .replica-badge-top {
     position: absolute;
     top: -12px;
     background: #0ea5e9;
-    /* نفس الأزرق */
     color: white;
     font-size: 10px;
     font-weight: 800;
@@ -365,7 +317,6 @@
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
-/* 5. النصوص (نفس st-name و st-id) */
 .gold-replica-card .st-name {
     font-size: 13px;
     font-weight: 900;
@@ -385,7 +336,6 @@
     font-family: 'Outfit', sans-serif;
 }
 
-/* 6. البادج السفلي (نفس live-badge-bottom) */
 .replica-badge-bottom {
     margin-top: 10px;
     padding: 4px 14px;
@@ -393,7 +343,6 @@
     font-size: 11px;
     font-weight: 800;
 
-    /* ألوان النجاح */
     background: #dcfce7;
     color: #166534;
     border: 1px solid #86efac;
@@ -401,7 +350,6 @@
     animation: pulseBonus 1.5s infinite;
 }
 
-/* 7. أنيميشن */
 @keyframes popUpCard {
     from {
         transform: scale(0.5);
@@ -428,7 +376,6 @@
     }
 }
 
-/* 8. تأثير اللمعان */
 .shine-effect {
     position: absolute;
     top: 0;
@@ -458,7 +405,6 @@
     }
 }
 
-/* أنيميشن نبض البونص */
 @keyframes pulseBonus {
     0% {
         transform: scale(1);
@@ -476,7 +422,6 @@
     }
 }
 
-/* لمعة خفيفة */
 .gold-edition-card::after {
     content: "";
     position: absolute;
@@ -495,7 +440,6 @@
     }
 }
 
-/* بادج البونص (+2 درجات) */
 .bonus-marks-badge {
     margin-top: 15px;
     background: #dcfce7;
@@ -509,7 +453,6 @@
     animation: pulseBonus 1.5s infinite;
 }
 
-/* أنيميشن ظهور الكارت */
 @keyframes popUpCard {
     from {
         transform: scale(0.5) translateY(50px);
@@ -522,7 +465,6 @@
     }
 }
 
-/* أنيميشن نبض البونص */
 @keyframes pulseBonus {
     0% {
         transform: scale(1);
@@ -540,7 +482,6 @@
     }
 }
 
-/* لمعة خفيفة تمر على الكارت */
 .gold-edition-card::after {
     content: "";
     position: absolute;
@@ -558,7 +499,6 @@
         transform: translateX(100%);
     }
 }
-/* --- تصميم عرض الدرجات فقط (Big Bonus Badge) --- */
 
 .bonus-only-container {
     display: flex;
