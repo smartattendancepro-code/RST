@@ -1268,27 +1268,37 @@ document.addEventListener('click', (e) => {
     });
 
     window.performStudentLogin = async () => {
+        // 0. تجهيز أدوات الترجمة (Fallback للدالة t)
+        const _t = (typeof t === 'function') ? t : (key, def) => def;
+
+        // 1. جلب البيانات من الواجهة
         const email = document.getElementById('studentLoginEmail').value.trim();
         const pass = document.getElementById('studentLoginPass').value;
+
+        // تحديد زر الدخول (سواء كان في التصميم القديم أو الجديد)
         const btn = document.querySelector('#loginSection .btn-modern-action') || document.querySelector('#loginSection .btn-main');
 
         let originalText = "Sign In";
         if (btn) {
             originalText = btn.innerHTML;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري التحقق...';
+            // تغيير النص مع الترجمة وأيقونة التحميل
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${_t('status_verifying', 'جاري التحقق...')}`;
             btn.disabled = true;
         }
 
+        // 2. التحقق المبدئي
         if (!email || !pass) {
-            showToast("⚠️ أدخل الإيميل والباسورد", 3000, "#f59e0b");
+            showToast(_t('msg_enter_creds', "⚠️ أدخل الإيميل والباسورد"), 3000, "#f59e0b");
             if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
             return;
         }
 
         try {
+            // 3. محاولة تسجيل الدخول
             const userCredential = await signInWithEmailAndPassword(auth, email, pass);
             const user = userCredential.user;
 
+            // 4. تحديث الواجهة فورياً (Visual Feedback)
             const pIcon = document.getElementById('profileIconImg');
             const pWrap = document.getElementById('profileIconWrapper');
             const pDot = document.getElementById('userStatusDot');
@@ -1297,15 +1307,19 @@ document.addEventListener('click', (e) => {
             if (pWrap) pWrap.style.background = "linear-gradient(135deg, #10b981, #059669)";
             if (pDot) { pDot.style.background = "#22c55e"; pDot.style.boxShadow = "0 0 10px #22c55e"; }
 
+            // 5. التحقق من تفعيل الإيميل
             await user.reload();
-
             if (!user.emailVerified) {
                 await signOut(auth);
-                alert("⛔ عذراً، لم يتم تفعيل الحساب! راجع بريدك الإلكتروني.");
+                // استخدام alert عشان اليوزر ينتبه، مع دعم الترجمة
+                alert(_t('msg_email_not_verified', "⛔ عذراً، لم يتم تفعيل الحساب! راجع بريدك الإلكتروني."));
+
+                // إعادة تعيين الزرار والخروج
                 if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
                 return;
             }
 
+            // 6. جلب بيانات الطالب من قاعدة البيانات (Logic القديم المهم)
             const userRef = doc(db, "user_registrations", user.uid);
             const userSnap = await getDoc(userRef);
 
@@ -1313,6 +1327,7 @@ document.addEventListener('click', (e) => {
                 const userData = userSnap.data();
                 const info = userData.registrationInfo || userData;
 
+                // تخزين البيانات في الكاش (عشان التطبيق يبقى سريع)
                 const profileCache = {
                     fullName: info.fullName,
                     email: info.email,
@@ -1320,26 +1335,78 @@ document.addEventListener('click', (e) => {
                     level: info.level,
                     gender: info.gender,
                     avatarClass: userData.avatarClass || info.avatarClass || "fa-user-graduate",
-                    status_message: userData.status_message || "", // حفظ الحالة
+                    status_message: userData.status_message || "",
                     uid: user.uid,
                     type: 'student'
                 };
                 localStorage.setItem('cached_profile_data', JSON.stringify(profileCache));
 
+                // ربط الجهاز (Device Binding Logic)
                 const currentDeviceId = getUniqueDeviceId();
                 if (!userData.bound_device_id) {
-                    await updateDoc(userRef, { bound_device_id: currentDeviceId, device_bind_date: serverTimestamp() });
+                    await updateDoc(userRef, {
+                        bound_device_id: currentDeviceId,
+                        device_bind_date: serverTimestamp()
+                    });
                 }
             }
 
-            showToast("🔓 تم تسجيل الدخول.. أهلاً بك", 3000, "#10b981");
+            // 7. إتمام الدخول بنجاح
+            showToast(_t('msg_login_success', "🔓 تم تسجيل الدخول.. أهلاً بك"), 3000, "#10b981");
+
             if (typeof closeAuthDrawer === 'function') closeAuthDrawer();
 
         } catch (error) {
-            console.error(error);
-            showToast(`❌ بيانات الدخول غير صحيحة`, 3000, "#ef4444");
+            console.error("Login Error:", error.code); // للمطورين
+
+            let msg = "";
+
+            // 8. التعامل الذكي مع الأخطاء (الجديد)
+            switch (error.code) {
+                // 🔥 الحالة المحددة للإيميل غير الموجود
+                case 'auth/user-not-found':
+                    msg = _t('error_user_not_found', "❌ هذا البريد الإلكتروني غير مسجل لدينا!");
+                    break;
+
+                case 'auth/wrong-password':
+                    msg = _t('error_wrong_pass', "❌ كلمة المرور غير صحيحة!");
+                    break;
+
+                // الخطأ العام من جوجل (بيشمل الاتنين اللي فوق أحياناً)
+                case 'auth/invalid-credential':
+                    msg = _t('error_invalid_cred', "❌ البريد الإلكتروني أو كلمة المرور غير صحيحة.");
+                    break;
+
+                case 'auth/invalid-email':
+                    msg = _t('error_invalid_email', "⚠️ صيغة البريد الإلكتروني غير سليمة!");
+                    break;
+
+                case 'auth/user-disabled':
+                    msg = _t('error_user_disabled', "⛔ تم تعطيل هذا الحساب من قبل الإدارة.");
+                    break;
+
+                case 'auth/too-many-requests':
+                    msg = _t('error_too_many', "⏳ محاولات كثيرة! تم إيقاف الدخول مؤقتاً.");
+                    break;
+
+                case 'auth/network-request-failed':
+                    msg = _t('error_network', "📡 فشل الاتصال! تأكد من الإنترنت.");
+                    break;
+
+                default:
+                    msg = _t('error_unknown', "❌ خطأ غير معروف") + ": " + error.code;
+            }
+
+            // عرض رسالة الخطأ وتشغيل صوت
+            showToast(msg, 5000, "#ef4444");
+            if (typeof playBeep === 'function') playBeep();
+
         } finally {
-            if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
+            // 9. إعادة زر الدخول لحالته الطبيعية
+            if (btn) {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
         }
     };
     window.joinSessionAction = async function () {

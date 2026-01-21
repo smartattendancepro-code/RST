@@ -385,6 +385,19 @@ export const i18n = {
         error_security_fail: "فشل التسجيل لأسباب أمنية",
         error_email_exists: "هذا البريد مسجل بالفعل!",
 
+        status_verifying: "جاري التحقق...",
+        msg_enter_creds: "⚠️ أدخل الإيميل والباسورد",
+        msg_email_not_verified: "⛔ عذراً، لم يتم تفعيل الحساب! راجع بريدك الإلكتروني.",
+        msg_login_success: "🔓 تم تسجيل الدخول.. أهلاً بك",
+        error_user_not_found: "❌ هذا البريد الإلكتروني غير مسجل لدينا!",
+        error_wrong_pass: "❌ كلمة المرور غير صحيحة!",
+        error_invalid_cred: "❌ البريد الإلكتروني أو كلمة المرور غير صحيحة.",
+        error_invalid_email: "⚠️ صيغة البريد الإلكتروني غير سليمة!",
+        error_user_disabled: "⛔ تم تعطيل هذا الحساب من قبل الإدارة.",
+        error_too_many: "⏳ محاولات كثيرة! تم إيقاف الدخول مؤقتاً.",
+        error_network: "📡 فشل الاتصال! تأكد من الإنترنت.",
+        error_unknown: "❌ خطأ غير معروف",
+
     },
 
     en: {
@@ -419,6 +432,19 @@ export const i18n = {
         modal_verify_warning: "Please verify your account via email before login.",
         error_security_fail: "Registration failed for security reasons",
         error_email_exists: "This email is already registered!",
+
+        status_verifying: "Verifying...",
+        msg_enter_creds: "⚠️ Please enter Email and Password",
+        msg_email_not_verified: "⛔ Account not verified! Please check your email.",
+        msg_login_success: "🔓 Login successful.. Welcome back",
+        error_user_not_found: "❌ This email is not registered!",
+        error_wrong_pass: "❌ Incorrect Password!",
+        error_invalid_cred: "❌ Invalid Email or Password.",
+        error_invalid_email: "⚠️ Invalid email format!",
+        error_user_disabled: "⛔ This account has been disabled by admin.",
+        error_too_many: "⏳ Too many attempts! Try again later.",
+        error_network: "📡 Network Error! Check internet connection.",
+        error_unknown: "❌ Unknown Error",
 
 
         refresh_btn: "Refresh",
