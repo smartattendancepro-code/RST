@@ -286,13 +286,16 @@ window.monitorMyParticipation = async function () {
 
         if (data.status === 'expelled') {
             console.log("🚨 Student EXPELLED.");
-
             const _t = (typeof t === 'function') ? t : (key, def) => def;
 
             sessionStorage.removeItem('TARGET_DOCTOR_UID');
 
+            // 🔥 خطوة مهمة: إخفاء شاشة اللايف فوراً عشان المودال يظهر براحته
             const liveScreen = document.getElementById('screenLiveSession');
-            if (liveScreen) liveScreen.style.display = 'none';
+            if (liveScreen) liveScreen.style.setProperty('display', 'none', 'important');
+
+            // إخفاء أي مودال تاني قد يكون مفتوح
+            document.querySelectorAll('.modal-overlay').forEach(el => el.style.display = 'none');
 
             const exTitle = document.getElementById('expelTitle');
             const exBody = document.getElementById('expelBody');
@@ -302,13 +305,13 @@ window.monitorMyParticipation = async function () {
 
             const exModal = document.getElementById('expulsionModal');
             if (exModal) {
-                exModal.style.display = 'flex';
+                exModal.style.display = 'flex'; // دلوقتي هيظهر لأننا ظبطنا الـ z-index
                 if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
             } else {
-                alert(_t('modal_expel_title', "⛔ تم استبعادك من الجلسة!"));
+                alert("⛔ تم استبعادك من الجلسة!");
                 location.reload();
             }
-            return; 
+            return;
         }
 
         if (data.status === 'on_break') {
@@ -3401,45 +3404,46 @@ document.addEventListener('click', (e) => {
 
 
     window.performFacultySignup = async function () {
+        const lang = localStorage.getItem('sys_lang') || 'ar';
+        const _t = (typeof t === 'function') ? t : (key, def) => def;
+
         const name = document.getElementById('facName').value.trim();
         const gender = document.getElementById('facGender').value;
         const role = document.getElementById('facRole').value;
-        const jobTitle = document.getElementById('facJobTitle').value.trim();
+        const jobTitle = document.getElementById('facJobTitle').value.trim(); 
         const email = document.getElementById('facEmail').value.trim();
         const emailConfirm = document.getElementById('facEmailConfirm').value.trim();
         const pass = document.getElementById('facPass').value;
         const passConfirm = document.getElementById('facPassConfirm').value;
         const masterKeyInput = document.getElementById('facMasterKey').value.trim();
 
-        if (!name || !gender || !subject || !email || !pass || !masterKeyInput) {
-            showToast("⚠️ Please fill all fields", 3000, "#f59e0b");
+        if (!name || !gender || !jobTitle || !email || !pass || !masterKeyInput) {
+            showToast(_t('msg_missing_data', "⚠️ Please fill all fields"), 3000, "#f59e0b");
             return;
         }
-        if (email !== emailConfirm) { showToast("❌ Emails do not match", 3000, "#ef4444"); return; }
-        if (pass !== passConfirm) { showToast("❌ Passwords do not match", 3000, "#ef4444"); return; }
+        if (email !== emailConfirm) { showToast(_t('error_email_match', "❌ Emails do not match"), 3000, "#ef4444"); return; }
+        if (pass !== passConfirm) { showToast(_t('error_pass_match', "❌ Passwords do not match"), 3000, "#ef4444"); return; }
+
+        const btn = document.querySelector('#facultySignupSection .glass-btn-submit');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Verifying Keys...';
+        btn.style.pointerEvents = 'none';
 
         try {
             const keysDoc = await getDoc(doc(db, "system_keys", "registration_keys"));
 
-            if (!keysDoc.exists()) {
-                showToast("🚫 System error: Keys not found", 4000, "#ef4444");
-                return;
-            }
-
-            const serverKeys = keysDoc.data();
             let isKeyValid = false;
-
-            if (role === "doctor" && masterKeyInput === serverKeys.doctor_key) {
-                isKeyValid = true;
-            } else if (role === "dean" && masterKeyInput === serverKeys.dean_key) {
-                isKeyValid = true;
+            if (keysDoc.exists()) {
+                const serverKeys = keysDoc.data();
+                if (role === "doctor" && masterKeyInput === serverKeys.doctor_key) isKeyValid = true;
+                else if (role === "dean" && masterKeyInput === serverKeys.dean_key) isKeyValid = true;
             }
 
             if (!isKeyValid) {
-                showToast("🚫 Invalid Authorization Code!", 4000, "#ef4444");
-                return;
+                throw new Error("INVALID_MASTER_KEY");
             }
 
+            btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up fa-bounce"></i> Creating Account...';
             const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
             const user = userCredential.user;
 
@@ -3449,23 +3453,102 @@ document.addEventListener('click', (e) => {
                 fullName: name,
                 gender: gender,
                 role: role,
-                jobTitle: jobTitle,
+                jobTitle: jobTitle, 
                 email: email,
                 isVerified: false,
                 registeredAt: serverTimestamp()
             });
 
-            const roleText = (role === "dean") ? "Dean" : "Faculty Member";
-
-            alert(`✅ Registered as ${roleText}!\n\n📧 A verification link has been sent to your email. Please verify your account before logging in.`);
+            
+            document.getElementById('facultyGateModal').style.display = 'none';
 
             if (typeof switchFacultyTab === 'function') switchFacultyTab('login');
 
+            document.getElementById('facLoginEmail').value = email;
+            document.getElementById('facPass').value = "";
+
+            const modalTitle = document.getElementById('successModalTitle');
+            const modalBody = document.getElementById('successModalBody');
+            const successModal = document.getElementById('signupSuccessModal');
+
+            let rawName = name.split(' ')[0];
+            const firstName = (typeof arabToEng === 'function') ? arabToEng(rawName) : rawName;
+
+            let roleDisplay = "";
+
+            if (lang === 'ar') {
+                if (role === 'dean') {
+                    roleDisplay = (gender === 'Female') ? "العميدة" : "العميد";
+                } else {
+                    roleDisplay = (gender === 'Female') ? "الدكتورة" : "الدكتور";
+                }
+            } else {
+                roleDisplay = (role === 'dean') ? "Dean" : "Dr.";
+            }
+
+            const welcomeMsg = (lang === 'ar')
+                ? `🎉 أهلاً بك يا ${roleDisplay} ${name.split(' ')[0]}!`
+                : `🎉 Welcome, ${roleDisplay} ${firstName}!`;
+
+            const txtPosition = _t('label_official_position', 'Official Position');
+            const txtLinkSent = _t('msg_verify_link_sent', 'Verification link sent to your email.');
+            const txtVerifyMsg = _t('msg_verify_before_login', 'Please verify via email before logging in.');
+
+            if (modalTitle) modalTitle.innerText = welcomeMsg;
+
+            if (modalBody) {
+                modalBody.innerHTML = `
+                <div style="background: #f0f9ff; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px dashed #bae6fd; text-align:center;">
+                    <div style="font-size:11px; font-weight: bold; color: #0284c7; margin-bottom:5px; text-transform: uppercase;">${txtPosition}</div>
+                    <div style="font-size: 18px; font-weight: 900; color: #0f172a; font-family: 'Outfit', sans-serif;">${jobTitle}</div>
+                </div>
+                <p style="font-size:14px; color:#334155; margin-bottom:8px;">📨 ${txtLinkSent}</p>
+                <div style="background:#fee2e2; color: #b91c1c; padding:10px; border-radius:8px; font-weight: bold; font-size: 12px; display:flex; align-items:center; gap:8px;">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>${txtVerifyMsg}</span>
+                </div>
+            `;
+            }
+
+            if (successModal) {
+                const modalBtn = successModal.querySelector('button');
+
+                if (!window.originalSuccessBtnOnClick) {
+                    window.originalSuccessBtnOnClick = modalBtn.onclick;
+                }
+
+                modalBtn.onclick = function () {
+                    successModal.style.display = 'none';
+                    document.getElementById('facultyGateModal').style.display = 'flex'; 
+                    switchFacultyTab('login'); 
+
+                    modalBtn.onclick = window.originalSuccessBtnOnClick;
+                };
+
+                successModal.style.display = 'flex';
+                if (typeof playSuccess === 'function') playSuccess();
+            }
+
         } catch (error) {
             console.error("Signup Error:", error);
-            let msg = "Error during registration";
-            if (error.code === 'auth/email-already-in-use') msg = "This email is already registered";
-            showToast("❌ " + msg, 3000, "#ef4444");
+
+            let msg = "❌ Error during registration";
+
+            switch (error.message) {
+                case "INVALID_MASTER_KEY":
+                    msg = _t('error_master_key', "🚫 Invalid Master Key!");
+                    break;
+                default:
+                    if (error.code === 'auth/email-already-in-use') msg = _t('error_email_exists', "⚠️ Email already registered!");
+                    if (error.code === 'permission-denied') msg = _t('error_db_permission', "⚠️ Database Permission Error!");
+                    if (error.code === 'auth/network-request-failed') msg = _t('error_network', "📡 Network Error.");
+            }
+
+            showToast(msg, 4000, "#ef4444");
+
+        } finally {
+            btn.innerHTML = originalText;
+            btn.style.pointerEvents = 'auto';
         }
     };
 
@@ -3655,14 +3738,28 @@ document.addEventListener('click', (e) => {
     window.updateStudentStatus = async function (docId, newStatus) {
         const user = auth.currentUser;
         if (!user) return;
-        if (newStatus === 'expelled' && !confirm("⚠️ هل أنت متأكد من طرد هذا الطالب؟")) return;
 
-        const studentRef = doc(db, "active_sessions", user.uid, "participants", docId);
+        const _t = (typeof t === 'function') ? t : (key, def) => def;
 
-        try {
-            await updateDoc(studentRef, { status: newStatus });
-        } catch (e) {
-            console.error("Error updating status:", e);
+        const executeUpdate = async () => {
+            const studentRef = doc(db, "active_sessions", user.uid, "participants", docId);
+            try {
+                await updateDoc(studentRef, { status: newStatus });
+                showToast(_t('msg_status_updated', "تم تحديث حالة الطالب."), 2000, "#10b981");
+            } catch (e) {
+                console.error("Error updating status:", e);
+                showToast(_t('msg_expel_error', "حدث خطأ أثناء الطرد"), 3000, "#ef4444");
+            }
+        };
+
+        if (newStatus === 'expelled') {
+            showModernConfirm(
+                _t('confirm_expel_title', "طرد الطالب 🚫"),
+                _t('confirm_expel_body', "هل أنت متأكد من استبعاد هذا الطالب من الجلسة نهائياً؟<br>لن يتمكن من الدخول مرة أخرى."),
+                executeUpdate
+            );
+        } else {
+            executeUpdate();
         }
     };
 
@@ -5284,13 +5381,21 @@ window.closeAuthDrawer = function () {
 };
 window.showSmartWelcome = function (name) {
     const today = new Date().toLocaleDateString('en-GB');
+
     if (localStorage.getItem('last_welcome_date') !== today) {
         const modal = document.getElementById('dailyWelcomeModal');
         const nameSpan = document.getElementById('welcomeUserName');
+
         if (modal && nameSpan) {
-            nameSpan.innerText = name.split(' ')[0];
+            let rawFirstName = name.split(' ')[0];
+
+            let englishName = (typeof arabToEng === 'function') ? arabToEng(rawFirstName) : rawFirstName;
+
+            nameSpan.innerText = englishName;
+
             modal.style.display = 'flex';
             modal.style.opacity = '1';
+
             localStorage.setItem('last_welcome_date', today);
         }
     }

@@ -401,6 +401,19 @@ export const i18n = {
         modal_expel_title: "⛔ تم استبعادك!",
         modal_expel_body: "قام المحاضر بطردك من الجلسة.<br>لا يمكنك العودة مرة أخرى.",
 
+        confirm_expel_title: "طرد الطالب 🚫",
+        confirm_expel_body: "هل أنت متأكد من استبعاد هذا الطالب من الجلسة نهائياً؟<br>لن يتمكن من الدخول مرة أخرى.",
+        msg_status_updated: "تم تحديث حالة الطالب بنجاح.",
+        msg_expel_error: "حدث خطأ أثناء محاولة الطرد.",
+
+        label_official_position: "المسمى الوظيفي",
+        msg_verify_link_sent: "تم إرسال رابط التفعيل إلى بريدك الإلكتروني.",
+        msg_verify_before_login: "يرجى تفعيل الحساب من الإيميل قبل تسجيل الدخول.",
+        error_master_key: "🚫 كود التصريح (Master Key) غير صحيح!",
+        error_db_permission: "⚠️ خطأ في صلاحيات قاعدة البيانات (تأكد من القواعد)",
+        welcome_dean: "مرحباً، عميد",
+        welcome_doctor: "مرحباً، د.",
+
     },
 
     en: {
@@ -422,6 +435,11 @@ export const i18n = {
         enter_lecture_btn: "Enter Lecture",
         session_active_btn: "Session Active (Tap to Resume)",
         start_new_session_btn: "Start New Lecture",
+
+        confirm_expel_title: "Expel Student 🚫",
+        confirm_expel_body: "Are you sure you want to expel this student?<br>They will not be able to rejoin this session.",
+        msg_status_updated: "Student status updated successfully.",
+        msg_expel_error: "An error occurred during expulsion.",
 
         modal_expel_title: "⛔ You have been expelled!",
         modal_expel_body: "The instructor has removed you from this session.<br>You cannot rejoin.",
@@ -451,6 +469,14 @@ export const i18n = {
         error_too_many: "⏳ Too many attempts! Try again later.",
         error_network: "📡 Network Error! Check internet connection.",
         error_unknown: "❌ Unknown Error",
+
+        label_official_position: "Official Position",
+        msg_verify_link_sent: "Verification link sent to your email.",
+        msg_verify_before_login: "Please verify via email before logging in.",
+        error_master_key: "🚫 Invalid Master Key! Authorization Failed.",
+        error_db_permission: "⚠️ Database Permission Error! (Check Rules)",
+        welcome_dean: "Welcome, Dean",
+        welcome_doctor: "Welcome, Dr.",
 
 
         refresh_btn: "Refresh",
