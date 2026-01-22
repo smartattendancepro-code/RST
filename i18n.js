@@ -857,7 +857,7 @@ export const i18n = {
 };
 
 export function t(key) {
-    const lang = localStorage.getItem('sys_lang') || 'en';
+    const lang = localStorage.getItem('sys_lang') || 'ar';
     return i18n[lang][key] || key;
 }
 
@@ -923,17 +923,16 @@ export function changeLanguage(lang) {
 }
 
 export function toggleSystemLanguage() {
-    const current = localStorage.getItem('sys_lang') || 'en';
+    const current = localStorage.getItem('sys_lang') || 'ar';
     const next = current === 'ar' ? 'en' : 'ar';
     changeLanguage(next);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    const saved = localStorage.getItem('sys_lang') || 'en';
+    const saved = localStorage.getItem('sys_lang') || 'ar';
     changeLanguage(saved);
 });
 
 window.changeLanguage = changeLanguage;
 window.toggleSystemLanguage = toggleSystemLanguage;
-
 window.t = t;
