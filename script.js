@@ -55,7 +55,7 @@ const db = window.db;
 const auth = window.auth;
 
 document.addEventListener('DOMContentLoaded', () => {
-    const saved = localStorage.getItem('sys_lang') || 'ar';
+    const saved = localStorage.getItem('sys_lang') || 'en';
     changeLanguage(saved);
 });
 window.subjectsData = JSON.parse(localStorage.getItem('subjectsData_v4')) || {
@@ -5714,5 +5714,6 @@ window.handleIdSubmit = async function () {
 
     switchScreen('screenDataEntry');
 };
+
 
 window.html5QrCode = null;
