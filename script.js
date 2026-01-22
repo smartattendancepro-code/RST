@@ -198,7 +198,7 @@ window.monitorMyParticipation = async function () {
 
     const setButtonToEnterMode = () => {
         if (!mainBtn) return;
-        const lang = localStorage.getItem('sys_lang') || 'ar';
+        const saved = localStorage.getItem('sys_lang') || 'en';
         const enterText = (lang === 'ar') ? "دخول المحاضرة" : "Enter Lecture";
 
         mainBtn.innerHTML = `${enterText} <i class="fa-solid fa-door-open fa-beat-fade"></i>`;
@@ -216,7 +216,7 @@ window.monitorMyParticipation = async function () {
 
     const resetButtonToDefault = () => {
         if (!mainBtn) return;
-        const lang = localStorage.getItem('sys_lang') || 'ar';
+        const saved = localStorage.getItem('sys_lang') || 'en';
         mainBtn.innerHTML = (lang === 'ar') ? `تسجيل الحضور <i class="fa-solid fa-fingerprint"></i>` : `Register Attendance <i class="fa-solid fa-fingerprint"></i>`;
 
         mainBtn.style.background = "";
@@ -350,7 +350,7 @@ window.monitorMyParticipation = async function () {
 
 window.performStudentSignup = async function () {
     // 0. تجهيز أدوات الترجمة (Fallback آمن)
-    const lang = localStorage.getItem('sys_lang') || 'ar';
+    const saved = localStorage.getItem('sys_lang') || 'en';
     const _t = (typeof t === 'function') ? t : (key, def) => def;
 
     // 1. تجميع البيانات من المدخلات
@@ -1029,7 +1029,7 @@ document.addEventListener('click', (e) => {
 
         if (!hasResults) {
             const opt = document.createElement('option');
-            const lang = localStorage.getItem('sys_lang') || 'ar';
+            const saved = localStorage.getItem('sys_lang') || 'en';
             opt.text = (lang === 'ar') ? "لا توجد نتائج" : "No results found";
             opt.disabled = true;
             select.appendChild(opt);
@@ -1298,7 +1298,7 @@ document.addEventListener('click', (e) => {
             }
         });
 
-        const savedLang = localStorage.getItem('sys_lang') || 'ar';
+        const saved = localStorage.getItem('sys_lang') || 'en';
         if (typeof changeLanguage === 'function') {
             changeLanguage(savedLang);
             document.querySelectorAll('.active-lang-text-pro').forEach(span => {
@@ -3404,7 +3404,7 @@ document.addEventListener('click', (e) => {
 
 
     window.performFacultySignup = async function () {
-        const lang = localStorage.getItem('sys_lang') || 'ar';
+        const saved = localStorage.getItem('sys_lang') || 'en';
         const _t = (typeof t === 'function') ? t : (key, def) => def;
 
         const name = document.getElementById('facName').value.trim();
@@ -3919,7 +3919,7 @@ document.addEventListener('click', (e) => {
         }
 
         // 6. تحديث اللغة (كما في الكود القديم)
-        const savedLang = localStorage.getItem('sys_lang') || 'ar';
+        const saved = localStorage.getItem('sys_lang') || 'en';
         if (typeof changeLanguage === 'function') {
             changeLanguage(savedLang);
         }
@@ -4096,7 +4096,7 @@ document.addEventListener('click', (e) => {
     };
     window.toggleSystemLanguage = async function () {
         const user = auth.currentUser;
-        const currentLang = localStorage.getItem('sys_lang') || 'ar';
+        const currentLang = localStorage.getItem('sys_lang') || 'en';
         const newLang = (currentLang === 'ar') ? 'en' : 'ar';
 
         changeLanguage(newLang);
@@ -4173,7 +4173,7 @@ document.addEventListener('click', (e) => {
 
     window.resetMainButtonUI = function () {
         const btn = document.getElementById('mainActionBtn');
-        const lang = localStorage.getItem('sys_lang') || 'ar';
+        const lang = localStorage.getItem('sys_lang') || 'en';
         const isAr = (lang === 'ar');
 
         if (!btn) return;
@@ -4239,7 +4239,7 @@ document.addEventListener('click', (e) => {
         input.value = val;
 
         // جلب النصوص من القاموس بناءً على اللغة الحالية
-        const lang = localStorage.getItem('sys_lang') || 'ar';
+        const lang = localStorage.getItem('sys_lang') || 'en';
         const dict = i18n[lang];
 
         const texts = [
@@ -5717,3 +5717,4 @@ window.handleIdSubmit = async function () {
 
 
 window.html5QrCode = null;
+
