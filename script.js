@@ -1,3 +1,4 @@
+import { MASTER_HALLS, MASTER_SUBJECTS } from './config.js';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import {
     getFirestore,
@@ -58,10 +59,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const saved = localStorage.getItem('sys_lang') || 'ar';
     changeLanguage(saved);
 });
-window.subjectsData = JSON.parse(localStorage.getItem('subjectsData_v4')) || {
-    "first_year": ["اساسيات تمريض 1 نظري", "اساسيات تمريض 1 عملي", "تقييم صحى نظرى", "مصطلحات طبية"],
-    "second_year": ["تمريض بالغين 1 نظرى", "باثولوجى", "علم الأدوية"]
-};
+
+
 
 window.currentDoctorName = "";
 window.currentDoctorSubject = "";
@@ -500,6 +499,21 @@ document.addEventListener('click', (e) => {
 
     const STUDENT_DB_URL = "https://script.google.com/macros/s/AKfycbxi2Itb_GW4OXkP6ki5PmzN1O8GFY70XoQyYiWKUdKYHxhXL7YGMFfA2tXcXAWbC_ez/exec";
 
+    let hallsList = MASTER_HALLS;
+
+    let subjectsData = MASTER_SUBJECTS;
+    window.subjectsData = MASTER_SUBJECTS;
+    localStorage.removeItem('subjectsData_v4');
+
+    const ARCHIVE_SUBJECTS = {
+        "1": MASTER_SUBJECTS["first_year"],
+        "2": MASTER_SUBJECTS["second_year"],
+        "3": MASTER_SUBJECTS["third_year"],
+        "4": MASTER_SUBJECTS["fourth_year"]
+    };
+
+    const SEARCH_DB = ARCHIVE_SUBJECTS;
+
     const CONFIG = {
         gps: {
             targetLat: 30.43841622978127,
@@ -530,15 +544,6 @@ document.addEventListener('click', (e) => {
 
     fetch(`${STUDENT_DB_URL}?action=getDB`).then(r => r.json()).then(d => { if (!d.error) { studentsDB = d; localStorage.setItem(LOCAL_STORAGE_DB_KEY, JSON.stringify(d)); } }).catch(e => console.log("DB Fetch Error - Using Cache"));
 
-    let defaultSubjects = {
-        "first_year": ["اساسيات تمريض 1 نظري", "اساسيات تمريض 1 عملي", "تمريض بالغين 1 نظرى", "تمريض بالغين 1 عملى", "اناتومى نظرى", "اناتومى عملى", "تقييم صحى نظرى", "تقييم صحى عملى", "مصطلحات طبية", "فسيولوجى", "تكنولوجيا المعلومات"],
-        "second_year": ["تمريض بالغين 1 نظرى", "تمريض بالغين 1 عملى", "تمريض حالات حرجة 1 نظرى", "تمريض حالات حرجة 1 عملى", "امراض باطنة", "باثولوجى", "علم الأدوية", "الكتابة التقنية"]
-    };
-    let subjectsData = JSON.parse(localStorage.getItem('subjectsData_v4')) || defaultSubjects;
-
-    let defaultHalls = ["037", "038", "039", "019", "025", "123", "124", "127", "131", "132", "133", "134", "231", "335", "121", "118", "E334", "E335", "E336", "E337", "E344", "E345", "E346", "E347", "E240", "E241", "E242", "E245", "E231", "E230", "E243", "E233", "E222", "E234"];
-    let hallsList = JSON.parse(localStorage.getItem('hallsList_v4')) || defaultHalls;
-
     const ADMIN_AUTH_TOKEN = "secure_admin_session_token_v99";
 
     const DATA_ENTRY_TIMEOUT_SEC = 20;
@@ -554,7 +559,6 @@ document.addEventListener('click', (e) => {
     let userIP = "Unknown";
     let geo_watch_id = null;
     let countdownInterval;
-    let html5QrCode;
     let sessionEndTime = 0;
     let processIsActive = false;
 
@@ -1461,26 +1465,6 @@ document.addEventListener('click', (e) => {
                 throw new Error("❌ كلمة المرور غير صحيحة");
             }
 
-            let isFaceDisabled = false;
-            try {
-                const settingsRef = doc(db, "settings", "control_panel");
-                const settingsSnap = await getDoc(settingsRef);
-                if (settingsSnap.exists()) {
-                    const sData = settingsSnap.data();
-                    if (sData.isQuickMode && sData.quickModeFlags && sData.quickModeFlags.disableFace) {
-                        isFaceDisabled = true;
-                    }
-                }
-            } catch (err) { console.log("Settings check skipped."); }
-
-            if (!isFaceDisabled && window.faceSystem && window.faceSystem.handleJoinRequest) {
-                console.log("📸 تحويل إلى نظام بصمة الوجه...");
-                await window.faceSystem.handleJoinRequest(user, targetDrUID, passInput);
-                btn.innerHTML = originalText;
-                btn.style.pointerEvents = 'auto';
-                return;
-            }
-
             console.log("⚡ دخول مباشر...");
 
             const gpsData = await getSilentLocationData();
@@ -2059,35 +2043,9 @@ document.addEventListener('click', (e) => {
         }
     }
 
-    function checkAllConditions() {
-        const isQuick = sessionStorage.getItem('is_quick_mode_active') === 'true';
-        const disableQR = sessionStorage.getItem('qm_disable_qr') === 'true';
-
-        const passInput = document.getElementById('sessionPass');
-        if (isQuick && disableQR && passInput && passInput.value === '') {
-            passInput.value = "SKIPPED_QR";
-        }
-
-        const year = document.getElementById('yearSelect')?.value;
-        const group = document.getElementById('groupSelect')?.value;
-        const sub = document.getElementById('subjectSelect')?.value;
-        const hall = document.getElementById('hallSelect')?.value;
-        const qrPass = document.getElementById('sessionPass')?.value;
-
-        const btn = document.getElementById('submitBtn');
-
-        if (btn) {
-            if (year && group && sub && hall && qrPass) {
-                btn.disabled = false;
-                btn.style.opacity = "1";
-                btn.style.cursor = "pointer";
-            } else {
-                btn.disabled = true;
-                btn.style.opacity = "0.6";
-                btn.style.cursor = "not-allowed";
-            }
-        }
-    }
+    window.checkAllConditions = function () {
+        return;
+    };
 
     async function stopCameraSafely() { if (html5QrCode && html5QrCode.isScanning) { try { await html5QrCode.stop(); } catch (e) { } } document.getElementById('qr-reader').style.display = 'none'; releaseWakeLock(); }
     function retryCamera() { document.getElementById('cameraErrorModal').style.display = 'none'; proceedToCamera(); }
@@ -2638,12 +2596,10 @@ document.addEventListener('click', (e) => {
             const file = e.target.files[0];
             if (!file) return;
 
-            const selectedLevel = document.getElementById('uploadLevelSelect').value;
             const statusDiv = document.getElementById('uploadStatus');
+            const batchID = `BATCH_OFFICIAL_${Date.now()}`;
 
-            const batchID = `BATCH_L${selectedLevel}_${Date.now()}`;
-
-            statusDiv.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري التحليل والتصنيف...';
+            statusDiv.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري قراءة البيانات الرسمية...';
 
             try {
                 const rows = await readXlsxFile(file);
@@ -2654,13 +2610,14 @@ document.addEventListener('click', (e) => {
                     return;
                 }
 
-                statusDiv.innerHTML = `<i class="fa-solid fa-server"></i> جاري رفع ${data.length} طالب للفرقة ${selectedLevel}...`;
+                statusDiv.innerHTML = `<i class="fa-solid fa-server"></i> جاري تحديث بيانات ${data.length} طالب...`;
 
                 const batchSize = 450;
                 let chunks = [];
                 for (let i = 0; i < data.length; i += batchSize) chunks.push(data.slice(i, i + batchSize));
 
                 let totalUploaded = 0;
+                let levelsCount = { "1": 0, "2": 0, "3": 0, "4": 0 };
 
                 for (const chunk of chunks) {
                     const batch = writeBatch(db);
@@ -2668,17 +2625,21 @@ document.addEventListener('click', (e) => {
                     chunk.forEach(row => {
                         let studentId = row[0];
                         let studentName = row[1];
+                        let officialLevel = row[2];
 
-                        if (studentId && studentName) {
+                        if (studentId && studentName && officialLevel) {
                             studentId = String(studentId).trim();
                             studentName = String(studentName).trim();
+                            officialLevel = String(officialLevel).trim();
+
+                            if (levelsCount[officialLevel] !== undefined) levelsCount[officialLevel]++;
 
                             const docRef = doc(db, "students", studentId);
 
                             batch.set(docRef, {
                                 name: studentName,
                                 id: studentId,
-                                academic_level: selectedLevel,
+                                academic_level: officialLevel,
                                 upload_batch_id: batchID,
                                 created_at: Timestamp.now()
                             }, { merge: true });
@@ -2687,26 +2648,30 @@ document.addEventListener('click', (e) => {
 
                     await batch.commit();
                     totalUploaded += chunk.length;
-                    statusDiv.innerText = `تم معالجة ${totalUploaded} طالب...`;
+                    statusDiv.innerText = `تم حفظ ${totalUploaded} طالب...`;
                 }
 
                 await addDoc(collection(db, "upload_history"), {
                     batch_id: batchID,
-                    level: selectedLevel,
                     filename: file.name,
                     count: totalUploaded,
                     timestamp: Timestamp.now(),
-                    admin_name: "Admin"
+                    method: "Excel_Official_Level"
                 });
 
-                statusDiv.innerHTML = `<span style="color: #10b981;">✅ تم بنجاح! تم حفظ وتصنيف ${totalUploaded} طالب.</span>`;
+                statusDiv.innerHTML = `
+                    <div style="color: #10b981; font-weight:bold;">✅ تم التحديث بنجاح!</div>
+                    <div style="font-size:12px; color:#334155; margin-top:5px;">
+                        تم تصنيف الطلاب حسب الملف:<br>
+                        سنة أولى: ${levelsCount["1"]} | سنة ثانية: ${levelsCount["2"]}
+                    </div>
+                `;
                 playSuccess();
                 fileInputSmart.value = '';
 
             } catch (error) {
                 console.error("Upload Error:", error);
-                statusDiv.innerText = "❌ حدث خطأ غير متوقع.";
-                alert(error.message);
+                statusDiv.innerText = "❌ تأكد أن الملف يحتوي على 3 أعمدة (كود، اسم، فرقة)";
             }
         });
     }
@@ -3058,14 +3023,8 @@ document.addEventListener('click', (e) => {
             return;
         }
 
-        if (window.faceSystem && window.faceSystem.handleJoinRequest) {
+        window.submitToGoogle(pass);
 
-            window.faceSystem.handleJoinRequest(auth.currentUser, targetDrUID, pass);
-
-        } else {
-            console.error("❌ Fatal Error: face-system.js is missing or not loaded.");
-            showToast("❌ خطأ تقني: نظام التحقق غير جاهز. تأكد من الإنترنت وأعد التحميل.", 5000, "#ef4444");
-        }
     };
 
     window.closeStudentPassModal = function () {
@@ -4702,13 +4661,6 @@ window.playClick = function () {
 window.playBeep = function () {
 };
 
-const ARCHIVE_SUBJECTS = {
-    "1": ["اساسيات تمريض 1 نظري", "اساسيات تمريض 1 عملي", "تمريض بالغين 1 نظرى", "تمريض بالغين 1 عملى", "اناتومى نظرى", "اناتومى عملى", "تقييم صحى نظرى", "تقييم صحى عملى", "مصطلحات طبية", "فسيولوجى", "تكنولوجيا المعلومات"],
-    "2": ["تمريض بالغين 1 نظرى", "تمريض بالغين 1 عملى", "تمريض حالات حرجة 1 نظرى", "تمريض حالات حرجة 1 عملى", "امراض باطنة", "باثولوجى", "علم الأدوية", "الكتابة التقنية"],
-    "3": [],
-    "4": []
-};
-
 window.updateArchiveSubjects = function () {
     const level = document.getElementById('archiveLevelSelect').value;
     const dataList = document.getElementById('subjectsList');
@@ -4735,13 +4687,6 @@ window.toggleDateLabel = function () {
         label.innerText = "تاريخ المحاضرة:";
     }
     if (typeof playClick === 'function') playClick();
-};
-
-const SEARCH_DB = {
-    "1": ["اساسيات تمريض 1 نظري", "اساسيات تمريض 1 عملي", "تمريض بالغين 1 نظرى", "تمريض بالغين 1 عملى", "اناتومى نظرى", "اناتومى عملى", "تقييم صحى نظرى", "تقييم صحى عملى", "مصطلحات طبية", "فسيولوجى", "تكنولوجيا المعلومات"],
-    "2": ["تمريض بالغين 1 نظرى", "تمريض بالغين 1 عملى", "تمريض حالات حرجة 1 نظرى", "تمريض حالات حرجة 1 عملى", "امراض باطنة", "باثولوجى", "علم الأدوية", "الكتابة التقنية"],
-    "3": [],
-    "4": []
 };
 
 function normalizeText(text) {

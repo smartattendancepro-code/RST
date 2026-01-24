@@ -1,4 +1,5 @@
 
+import { MASTER_HALLS, MASTER_SUBJECTS } from './config.js';
 import {
     doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs,
     onSnapshot, serverTimestamp, increment, writeBatch, orderBy, limit,
@@ -49,27 +50,14 @@ window.toggleSessionState = function () {
     const modal = document.getElementById('customTimeModal');
     if (modal) {
         modal.style.display = 'flex';
-
         document.body.style.overflow = 'hidden';
 
-        const fullSubjectsConfig = {
-            "1": ["اساسيات تمريض 1 نظري", "اساسيات تمريض 1 عملي", "تمريض بالغين 1 نظرى", "تمريض بالغين 1 عملى", "اناتومى نظرى", "اناتومى عملى", "تقييم صحى نظرى", "تقييم صحى عملى", "مصطلحات طبية", "فسيولوجى", "تكنولوجيا المعلومات"],
-            "2": ["تمريض بالغين 1 نظرى", "تمريض بالغين 1 عملى", "تمريض حالات حرجة 1 نظرى", "تمريض حالات حرجة 1 عملى", "امراض باطنة", "باثولوجى", "علم الأدوية", "الكتابة التقنية"],
-            "3": []
-        };
-
         let subjectsArray = [];
-        Object.values(fullSubjectsConfig).forEach(yearList => subjectsArray.push(...yearList));
+        if (typeof MASTER_SUBJECTS !== 'undefined') {
+            Object.values(MASTER_SUBJECTS).forEach(yearList => subjectsArray.push(...yearList));
+        }
 
-        let hallsArray = [
-            "037", "038", "039", "019", "025",
-            "123", "124", "127", "131", "132", "133", "134",
-            "231", "335", "121", "118",
-            "E334", "E335", "E336", "E337",
-            "E344", "E345", "E346", "E347",
-            "E240", "E241", "E242", "E245",
-            "E231", "E230", "E243", "E233", "E222", "E234"
-        ];
+        let hallsArray = (typeof MASTER_HALLS !== 'undefined') ? MASTER_HALLS : [];
 
         renderCustomList('subjectList', subjectsArray, 'finalSubjectValue');
         renderCustomList('hallList', hallsArray, 'finalHallValue');

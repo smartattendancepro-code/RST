@@ -29,7 +29,7 @@ window.generateDeanAnalytics = async function () {
         ]);
 
         let totalAttendance = 0;
-        let subjectsCount = {}; 
+        let subjectsCount = {};
         let daysCount = { "Saturday": 0, "Sunday": 0, "Monday": 0, "Tuesday": 0, "Wednesday": 0, "Thursday": 0, "Friday": 0 };
         const arDays = { "Saturday": "السبت", "Sunday": "الأحد", "Monday": "الاثنين", "Tuesday": "الثلاثاء", "Wednesday": "الأربعاء", "Thursday": "الخميس", "Friday": "الجمعة" };
 
@@ -49,7 +49,7 @@ window.generateDeanAnalytics = async function () {
             }
         });
 
-        let doctorRatings = {}; 
+        let doctorRatings = {};
 
         feedbackSnap.forEach(doc => {
             const d = doc.data();
@@ -197,16 +197,14 @@ window.exportDashboard = async function (type) {
 window.exportAttendanceSheet = async function (subjectName) {
     if (typeof playClick === 'function') playClick();
 
-    let subjectsConfig = JSON.parse(localStorage.getItem('subjectsData_v4')) || {
-        "first_year": ["اساسيات تمريض 1 نظري", "اساسيات تمريض 1 عملي", "تقييم صحى نظرى", "مصطلحات طبية"],
-        "second_year": ["تمريض بالغين 1 نظرى", "باثولوجى", "علم الأدوية"]
-    };
+    const allSubjects = window.subjectsData || {};
 
-    let TARGET_LEVEL = "1";
-    if (subjectsConfig["first_year"]?.includes(subjectName)) TARGET_LEVEL = "1";
-    else if (subjectsConfig["second_year"]?.includes(subjectName)) TARGET_LEVEL = "2";
-    else if (subjectsConfig["third_year"]?.includes(subjectName)) TARGET_LEVEL = "3";
-    else if (subjectsConfig["fourth_year"]?.includes(subjectName)) TARGET_LEVEL = "4";
+    let TARGET_LEVEL = "1"; 
+
+    if (allSubjects["first_year"]?.includes(subjectName)) TARGET_LEVEL = "1";
+    else if (allSubjects["second_year"]?.includes(subjectName)) TARGET_LEVEL = "2";
+    else if (allSubjects["third_year"]?.includes(subjectName)) TARGET_LEVEL = "3";
+    else if (allSubjects["fourth_year"]?.includes(subjectName)) TARGET_LEVEL = "4";
 
     showToast(`⏳ جاري استخراج شيت (حضور + انضباط + تفاصيل) للفرقة ${TARGET_LEVEL}...`, 15000, "#3b82f6");
 
@@ -240,7 +238,7 @@ window.exportAttendanceSheet = async function (subjectName) {
             const attendanceRecord = attendeesMap[s.id];
 
             if (attendanceRecord) {
-                let rowStyle = "background-color: #ecfdf5; color: #065f46;"; 
+                let rowStyle = "background-color: #ecfdf5; color: #065f46;";
                 let statusText = "✅ حاضر";
                 let notesText = "منضبط";
 
@@ -262,8 +260,8 @@ window.exportAttendanceSheet = async function (subjectName) {
                     notes: notesText,
                     time: attendanceRecord.time,
                     group: attendanceRecord.group,
-                    doctor: attendanceRecord.finalDoc,   
-                    sessions: attendanceRecord.finalCount, 
+                    doctor: attendanceRecord.finalDoc,
+                    sessions: attendanceRecord.finalCount,
                     rowColor: `style='${rowStyle}'`,
                     isPresent: true
                 });
@@ -297,8 +295,8 @@ window.exportAttendanceSheet = async function (subjectName) {
                 notes: intruder.finalStatus,
                 time: intruder.time,
                 group: intruder.group,
-                doctor: intruder.finalDoc,     
-                sessions: intruder.finalCount, 
+                doctor: intruder.finalDoc,
+                sessions: intruder.finalCount,
                 rowColor: "style='background-color: #fef08a; color: #854d0e; font-weight:bold;'", // أصفر
                 isPresent: true
             });
