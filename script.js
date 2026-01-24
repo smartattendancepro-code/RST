@@ -1482,7 +1482,11 @@ document.addEventListener('click', (e) => {
                     sessionDocID: targetDrUID,
                     gpsLat: gpsData.lat || 0,
                     gpsLng: gpsData.lng || 0,
-                    deviceFingerprint: deviceFingerprint
+                    deviceFingerprint: deviceFingerprint,
+                    
+                    codeInput: sessionData.sessionCode
+
+
                 })
             });
 
