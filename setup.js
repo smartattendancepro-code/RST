@@ -40,7 +40,7 @@ const auth = getAuth(app);
 
 window.db = db;
 window.auth = auth;
-window.changeLanguage = changeLanguage; // بنحتاجها كتير
+window.changeLanguage = changeLanguage; 
 
 console.log("🚀 Step 1 Complete: Firebase Config Loaded");
 

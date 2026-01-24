@@ -6,13 +6,15 @@
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title data-i18n="app_title">نظام كشف الحضور - كلية التمريض</title>
+    <meta name="apple-mobile-web-app-title" content="ProAttend">
+
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0ea5e9">
     <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="icon.png">
-    <link rel="icon" href="icon.png" type="image/png">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="icon" href="icon-192.png" type="image/png">
 
     <link
         href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Outfit:wght@500;700;900&family=Reem+Kufi:wght@700&display=swap"
@@ -34,11 +36,6 @@
 </head>
 
 <body>
-    <div id="pullToRefresh" class="ptr-container">
-        <div class="ptr-box">
-            <i id="ptrIcon" class="fa-solid fa-arrow-down"></i>
-        </div>
-    </div>
     <div id="topToast"></div>
     <div id="verificationSuccessModal" class="modal-overlay" style="z-index: 999999;">
         <div class="modal-box">
@@ -639,8 +636,7 @@
                             <div class="makani-input-wrapper">
                                 <i class="fa-solid fa-location-crosshairs search-icon-main"></i>
                                 <input type="text" id="makaniInput" data-i18n-placeholder="makani_placeholder"
-                                    placeholder="ابحث عن مادة، دكتور، أو كود زميل..."
-                                    onkeyup="if(event.key === 'Enter') startSmartSearch()">
+                                    placeholder="ابحث..." onkeyup="if(event.key === 'Enter') startSmartSearch()">
                                 <button onclick="startSmartSearch()" id="btnMakani">
                                     <i class="fa-solid fa-magnifying-glass"></i>
                                 </button>
@@ -665,7 +661,7 @@
                             <div
                                 style="display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;">
                                 <i id="sessionIcon" class="fa-solid fa-lock"></i>
-                                <span id="sessionText" data-i18n="checking_status">جاري فحص الحالة...</span>
+                                <span id="sessionText">Checking status...</span>
                             </div>
                         </button>
                         <div class="admin-controls-grid">
@@ -2718,7 +2714,6 @@
     onclick="this.style.display='none'">
     <div id="zoomedAvatarContainer" class="zoomed-img-box"></div>
 </div>
-<script type="module" src="notifications.js"></script>
 
 <style>
     .halo-container-v2 {
@@ -3022,7 +3017,6 @@
         </button>
     </div>
 </div>
-<!-- Verification Alert Modal -->
 <div id="verificationModal" class="modal-overlay">
     <div class="modal-box" style="text-align: center; padding: 25px;">
         <div
@@ -3045,7 +3039,6 @@
         </button>
     </div>
 </div>
-<!-- Expulsion Modal -->
 <div id="expulsionModal" class="modal-overlay" style="z-index: 2147483650 !important;">
     <div class="modal-box" style="text-align: center; padding: 30px; border-top: 5px solid #ef4444;">
 
@@ -3068,6 +3061,9 @@
             مغادرة القاعة <i class="fa-solid fa-arrow-right-from-bracket"></i>
         </button>
     </div>
+</div>
+<div class="floating-refresh-btn" onclick="if(navigator.vibrate) navigator.vibrate(50); location.reload();">
+    <i class="fa-solid fa-rotate-right"></i>
 </div>
 </body>
 

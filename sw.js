@@ -1,28 +1,32 @@
-const CACHE_NAME = '7odorak-safe-v2'; // قمت بتحديث الإصدار لـ v2 لإجبار التحديث
+// 1. تحديث اسم الكاش ليتماشى مع الاسم الجديد
+const CACHE_NAME = 'proattend-v1'; 
+
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './style.css',
   './script.js',
-  './manifest.json'
-  // تأكد أن ملف icon.png موجود بجانب هذه الملفات
+  './manifest.json',
+  // 2. ضروري نضيف الأيقونات الجديدة للكاش عشان تظهر والنت قاطع
+  './icon-192.png', 
+  './icon-512.png'
 ];
 
 // ==========================================
-// 1. تثبيت الـ Service Worker (للكاشينج)
+// تثبيت الـ Service Worker
 // ==========================================
 self.addEventListener('install', (event) => {
-  self.skipWaiting(); // تفعيل التحديث فوراً
+  self.skipWaiting(); 
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('✅ Service Worker: Caching essential assets...');
+      console.log('✅ ProAttend: Caching assets...');
       return cache.addAll(ASSETS_TO_CACHE);
     })
   );
 });
 
 // ==========================================
-// 2. تنظيف الكاش القديم عند التحديث
+// تنظيف الكاش القديم (بيمسح أي كاش قديم زي 7odorak)
 // ==========================================
 self.addEventListener('activate', (event) => {
   event.waitUntil(
@@ -31,32 +35,23 @@ self.addEventListener('activate', (event) => {
         keys.filter(key => key !== CACHE_NAME)
           .map(key => caches.delete(key))
       );
-    }).then(() => self.clients.claim()) // السيطرة على الصفحات المفتوحة فوراً
+    }).then(() => self.clients.claim())
   );
 });
 
 // ==========================================
-// 3. التعامل مع الطلبات (الجزء الجراحي المعدل) 💉
+// التعامل مع الطلبات (Network First Strategy)
 // ==========================================
 self.addEventListener('fetch', (event) => {
+  // تجاهل طلبات الـ POST (إرسال البيانات) وطلبات فايربيس
+  if (event.request.method !== 'GET') return;
+  if (event.request.url.includes('firestore.googleapis.com') || 
+      event.request.url.startsWith('chrome-extension')) return;
 
-  // 🛡️ [فلتر الأمان]: تجاهل أي طلب ليس GET (مثل POST للدخول أو إرسال البيانات)
-  // هذا السطر هو الذي يحل مشكلة (Request method 'POST' is unsupported)
-  if (event.request.method !== 'GET') {
-    return;
-  }
-
-  // تجاهل طلبات Firebase و Chrome Extensions لتجنب التعارض
-  if (event.request.url.includes('firestore.googleapis.com') ||
-    event.request.url.startsWith('chrome-extension')) {
-    return;
-  }
-
-  // استراتيجية: الشبكة أولاً، ثم الكاش (Network First, falling back to cache)
   event.respondWith(
     fetch(event.request)
       .then((networkResponse) => {
-        // إذا نجح الإنترنت وجاءت استجابة سليمة، قم بتحديث الكاش
+        // لو النت شغال، حدث الكاش بالنسخة الجديدة
         if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
@@ -66,19 +61,14 @@ self.addEventListener('fetch', (event) => {
         return networkResponse;
       })
       .catch(() => {
-        // إذا انقطع الإنترنت، ابحث في الكاش
+        // لو النت قاطع، هات من الكاش
         return caches.match(event.request);
       })
   );
 });
 
-// ==========================================
-// 4. استقبال الإشعارات في الخلفية
-// ==========================================
 self.addEventListener('push', (event) => {
   let data = {};
-
-  // محاولة قراءة البيانات بأمان
   if (event.data) {
     try {
       data = event.data.json();
@@ -87,11 +77,12 @@ self.addEventListener('push', (event) => {
     }
   }
 
-  const title = data.notification?.title || data.title || 'نظام كشف الحضور';
+  const title = data.notification?.title || data.title || 'ProAttend';
   const options = {
-    body: data.notification?.body || data.body || 'لديك تنبيه جديد',
-    icon: './icon.png', // تأكد من وجود الصورة
-    badge: './icon.png',
+    body: data.notification?.body || data.body || 'لديك تنبيه جديد من النظام',
+    // 3. تحديث مسار الأيقونة للأيقونة الجديدة عشان تظهر في الإشعار
+    icon: './icon-192.png', 
+    badge: './icon-192.png',
     vibrate: [100, 50, 100],
     data: {
       url: data.data?.url || './index.html'
@@ -103,24 +94,14 @@ self.addEventListener('push', (event) => {
   );
 });
 
-// ==========================================
-// 5. التعامل مع الضغط على الإشعار
-// ==========================================
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // لو الموقع مفتوح، ركز عليه
       for (const client of clientList) {
-        if (client.url && 'focus' in client) {
-          return client.focus();
-        }
+        if (client.url && 'focus' in client) return client.focus();
       }
-      // لو مش مفتوح، افتحه
-      if (clients.openWindow) {
-        return clients.openWindow(event.notification.data.url || './');
-      }
+      if (clients.openWindow) return clients.openWindow(event.notification.data.url || './');
     })
   );
 });

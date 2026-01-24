@@ -290,7 +290,9 @@ async function finalizeJoiningProcess() {
                 sessionDocID: storedSessionData.uid,
                 gpsLat: gpsData.lat || 0,
                 gpsLng: gpsData.lng || 0,
-                deviceFingerprint: deviceID
+                deviceFingerprint: deviceID,
+
+                codeInput: storedSessionData.info.sessionCode
             })
         });
 

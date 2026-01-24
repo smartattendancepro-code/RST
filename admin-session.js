@@ -8,6 +8,27 @@ import { i18n } from './i18n.js';
 const db = window.db;
 const auth = window.auth;
 
+window.verifyAdminRole = async function () {
+    const user = auth.currentUser;
+    if (!user) return false;
+
+    try {
+        const docRef = doc(db, "faculty_members", user.uid);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.role === 'dean' || data.role === 'doctor') {
+                console.log("✅ Identity Verified: " + data.role);
+                return true;
+            }
+        }
+    } catch (e) {
+        console.error("Role Verification Failed:", e);
+    }
+    return false;
+};
+
 let sessionInterval = null;
 let unsubscribeLiveSnapshot = null;
 let deanRadarUnsubscribe = null;
@@ -306,7 +327,11 @@ window.triggerSessionEndOptions = function () {
 
 window.listenToSessionState = function () {
     const user = auth.currentUser;
-    if (!user) return;
+
+    if (!user) {
+        console.log("⚠️ No user found, skipping session listener.");
+        return;
+    }
 
     const globalSettingsRef = doc(db, "settings", "control_panel");
     onSnapshot(globalSettingsRef, (docSnap) => {
@@ -318,11 +343,9 @@ window.listenToSessionState = function () {
                 sessionStorage.setItem('qm_disable_gps', data.quickModeFlags.disableGPS);
                 sessionStorage.setItem('qm_disable_qr', data.quickModeFlags.disableQR);
 
-                // ✅ التصحيح: استخدام window والتحقق من وجود الدالة
                 if (typeof window.applyQuickModeVisuals === 'function') {
                     window.applyQuickModeVisuals();
                 }
-
                 if (typeof window.handleQuickModeUI === 'function') {
                     window.handleQuickModeUI(true);
                 }
@@ -330,36 +353,65 @@ window.listenToSessionState = function () {
             } else {
                 sessionStorage.setItem('is_quick_mode_active', 'false');
 
-                // ✅ التصحيح هنا أيضاً
                 if (typeof window.removeQuickModeVisuals === 'function') {
                     window.removeQuickModeVisuals();
                 }
-
                 if (typeof window.handleQuickModeUI === 'function') {
                     window.handleQuickModeUI(false);
                 }
             }
         }
+    }, (error) => {
+        console.warn("Global Settings Listener Warning:", error.message);
     });
-
     const doctorSessionRef = doc(db, "active_sessions", user.uid);
 
     if (window.unsubscribeSessionListener) {
         window.unsubscribeSessionListener();
+        window.unsubscribeSessionListener = null;
     }
 
-    window.unsubscribeSessionListener = onSnapshot(doctorSessionRef, (docSnap) => {
-        if (!docSnap.exists() || !docSnap.data().isActive) {
-            handleSessionTimer(false, null, 0);
-            updateSessionButtonUI(false);
-        } else {
-            const data = docSnap.data();
-            handleSessionTimer(true, data.startTime, data.duration);
-            updateSessionButtonUI(true);
+    window.unsubscribeSessionListener = onSnapshot(doctorSessionRef,
+        (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                const isActive = data.isActive === true;
+
+                if (isActive) {
+                    if (typeof updateSessionButtonUI === 'function') updateSessionButtonUI(true);
+                    if (typeof handleSessionTimer === 'function') handleSessionTimer(true, data.startTime, data.duration);
+
+                    if (document.getElementById('liveDocName')) document.getElementById('liveDocName').innerText = data.doctorName || "Professor";
+                    if (document.getElementById('liveSubjectTag')) document.getElementById('liveSubjectTag').innerText = data.allowedSubject || "";
+                    if (document.getElementById('liveHallTag')) document.getElementById('liveHallTag').innerHTML = `<i class="fa-solid fa-building-columns"></i> ${data.hall || ""}`;
+                    if (document.getElementById('liveGroupTag')) document.getElementById('liveGroupTag').innerText = `GROUPS: ${(data.targetGroups || []).join(', ')}`;
+                    if (document.getElementById('liveSessionCodeDisplay')) document.getElementById('liveSessionCodeDisplay').innerText = data.sessionCode || "------";
+
+                    const avatarLink = document.getElementById('liveDocAvatar');
+                    if (avatarLink && data.doctorAvatar) {
+                        avatarLink.innerHTML = `<i class="fa-solid ${data.doctorAvatar}"></i>`;
+                    }
+
+                } else {
+                    if (typeof updateSessionButtonUI === 'function') updateSessionButtonUI(false);
+                    if (typeof handleSessionTimer === 'function') handleSessionTimer(false, null, 0);
+                }
+            } else {
+                if (typeof updateSessionButtonUI === 'function') updateSessionButtonUI(false);
+                if (typeof handleSessionTimer === 'function') handleSessionTimer(false, null, 0);
+            }
+        },
+        (error) => {
+            console.error("Session Listener Error:", error);
+
+            if (error.code === 'permission-denied') {
+                console.log("🔄 Permission sync issue. Retrying in 2s...");
+                setTimeout(() => {
+                    if (auth.currentUser) window.listenToSessionState();
+                }, 2000);
+            }
         }
-    }, (error) => {
-        console.log("Session status check...");
-    });
+    );
 };
 
 
@@ -370,26 +422,39 @@ function updateSessionButtonUI(isOpen) {
 
     if (!btn) return;
 
+    const t = window.t || ((k) => k);
+    const lang = localStorage.getItem('sys_lang') || 'ar';
+
     btn.style.display = 'flex';
 
     if (isOpen) {
         btn.classList.add('session-open');
-        btn.style.background = "#dcfce7"; // أخضر فاتح
+        btn.style.background = "#dcfce7";
         btn.style.color = "#166534";
         btn.style.border = "2px solid #22c55e";
 
         if (icon) icon.className = "fa-solid fa-tower-broadcast fa-fade";
-        if (txt) txt.innerText = "جلستك نشطة (اضغط للمتابعة)";
+
+        if (txt) {
+            const fallbackText = (lang === 'ar') ? "جلستك نشطة (اضغط للمتابعة)" : "Session Active (Tap to Resume)";
+            txt.innerText = t('session_active_btn') || fallbackText;
+        }
 
     } else {
         btn.classList.remove('session-open');
-        btn.style.background = "#f1f5f9"; // رمادي
+        btn.style.background = "#f1f5f9";
         btn.style.color = "#334155";
         btn.style.border = "2px solid #cbd5e1";
 
         if (icon) icon.className = "fa-solid fa-play";
-        if (txt) txt.innerText = "بدء محاضرة جديدة";
+
+        if (txt) {
+            const fallbackText = (lang === 'ar') ? "بدء محاضرة جديدة" : "Start New Lecture";
+            txt.innerText = t('start_new_session_btn') || fallbackText;
+        }
     }
+
+    window.lastSessionState = isOpen;
 }
 
 
@@ -468,7 +533,6 @@ window.handleSessionTimer = function (isActive, startTime, duration) {
 
                     if (currentScreen === 'screenDataEntry' && !window.isJoiningProcessActive) {
 
-                        // 🔥 التعديل هنا: استخدام window والتحقق من وجود الدالة
                         if (typeof window.resetApplicationState === 'function') {
                             window.resetApplicationState();
                         }
@@ -760,13 +824,15 @@ window.startLiveSnapshotListener = function () {
             const avatarLink = document.getElementById('liveDocAvatar');
             if (avatarLink) {
                 avatarLink.innerHTML = `<i class="fa-solid ${data.doctorAvatar || 'fa-user-doctor'}"></i>`;
-                avatarLink.onclick = () => openPublicProfile(targetRoomUID, true);
-                avatarLink.style.cursor = "pointer";
+                // ✅ ألغينا الـ onclick
+                avatarLink.onclick = null;
+                // ✅ الماوس شكله عادي مش يد
+                avatarLink.style.cursor = "default";
             }
             const nameLink = document.getElementById('liveDocName');
             if (nameLink) {
-                nameLink.onclick = () => openPublicProfile(targetRoomUID, true);
-                nameLink.style.cursor = "pointer";
+                nameLink.onclick = null;
+                nameLink.style.cursor = "default";
             }
 
             if (document.getElementById('liveSessionCodeDisplay')) {

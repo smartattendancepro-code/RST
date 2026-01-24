@@ -413,6 +413,19 @@ export const i18n = {
         error_db_permission: "⚠️ خطأ في صلاحيات قاعدة البيانات (تأكد من القواعد)",
         welcome_dean: "مرحباً، عميد",
         welcome_doctor: "مرحباً، د.",
+        session_active_btn: "جلستك نشطة (اضغط للمتابعة)",
+        start_new_session_btn: "بدء محاضرة جديدة",
+
+        toast_session_closed_manual: "🔒 عذراً، تم إغلاق باب التسجيل من قبل المحاضر",
+        toast_session_timer_ended: "⏰ انتهى الوقت المخصص لدخول القاعة!",
+
+        radar_title: "نتائج رادار الكلية",
+        radar_attending_now: "يحضر الآن:",
+        radar_current_location: "الموقع الحالي",
+        radar_hall: "القاعة:",
+        radar_close: "إغلاق",
+
+
 
     },
 
@@ -420,11 +433,25 @@ export const i18n = {
         dir: "ltr",
         font: "'Outfit', sans-serif",
 
+        session_active_btn: "Session Active (Tap to Resume)",
+        start_new_session_btn: "Start New Lecture",
+
         app_title: "Attendance System - Nursing",
         college_name: "Al-Ryada University - Faculty of Nursing",
         sys_title: "Attendance System",
         welcome_subtitle: "Welcome! Please join the current session below.",
         admin_badge_text: "Admin Mode Active",
+
+        radar_title: "College Radar Results",
+        radar_attending_now: "Attending now:",
+        radar_current_location: "Current Location",
+        radar_hall: "HALL:",
+        radar_close: "Close",
+
+
+
+        toast_session_closed_manual: "🔒 Sorry, registration closed by the lecturer.",
+        toast_session_timer_ended: "⏰ Time is up! Entrance period has ended.",
 
         search_no_results_custom: "This lecture has not started or created yet",
         student_found: "Student",
@@ -857,7 +884,7 @@ export const i18n = {
 };
 
 export function t(key) {
-    const lang = localStorage.getItem('sys_lang') || 'ar';
+    const lang = localStorage.getItem('sys_lang') || 'en';
     return i18n[lang][key] || key;
 }
 
@@ -923,13 +950,13 @@ export function changeLanguage(lang) {
 }
 
 export function toggleSystemLanguage() {
-    const current = localStorage.getItem('sys_lang') || 'ar';
+    const current = localStorage.getItem('sys_lang') || 'en';
     const next = current === 'ar' ? 'en' : 'ar';
     changeLanguage(next);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    const saved = localStorage.getItem('sys_lang') || 'ar';
+    const saved = localStorage.getItem('sys_lang') || 'en';
     changeLanguage(saved);
 });
 
