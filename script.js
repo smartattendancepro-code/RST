@@ -3387,32 +3387,36 @@ document.addEventListener('click', (e) => {
                 throw new Error(result.error || "Registration Failed");
             }
 
+            // ============================================================
+            // 📧 الخطوة 2: إرسال رابط التفعيل (التصحيح لنظام Modular v9)
+            // ============================================================
             try {
                 console.log("Backend approved. Starting email verification process...");
 
-                if (typeof auth === 'undefined') {
-                    throw new Error("Authentication system (auth) is not loaded.");
-                }
+                // 1. تسجيل الدخول اللحظي (بالطريقة الجديدة)
+                // نمرر متغير auth كأول معامل للدالة
+                const userCredential = await signInWithEmailAndPassword(auth, email, pass);
 
-                const authInstance = auth;
-
-                const userCredential = await authInstance.signInWithEmailAndPassword(email, pass);
-
+                // 2. إعدادات رابط العودة
                 const actionCodeSettings = {
-                    url: window.location.href, 
+                    url: window.location.href,
                     handleCodeInApp: true
                 };
 
-                await userCredential.user.sendEmailVerification(actionCodeSettings);
+                // 3. إرسال الرابط (بالطريقة الجديدة)
+                // نمرر المستخدم (userCredential.user) كأول معامل
+                await sendEmailVerification(userCredential.user, actionCodeSettings);
+
                 console.log("✅ Verification email sent successfully!");
 
-                await authInstance.signOut();
+                // 4. تسجيل الخروج (بالطريقة الجديدة)
+                await signOut(auth);
 
             } catch (emailError) {
                 console.error("⚠️ Warning: Account created but email failed to send:", emailError);
-                showToast("Account created, but verification email failed. Contact Admin.", 5000, "#f59e0b");
+                // رسالة توضيحية للمستخدم
+                showToast("تم إنشاء الحساب، ولكن حدثت مشكلة في إرسال الإيميل.", 5000, "#f59e0b");
             }
-
 
             document.getElementById('facultyGateModal').style.display = 'none';
 
@@ -3482,7 +3486,7 @@ document.addEventListener('click', (e) => {
             }
 
         } catch (error) {
-       
+
             console.error("Signup Error:", error);
 
             let msg = "❌ Error during registration";
