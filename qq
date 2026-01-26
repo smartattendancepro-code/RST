@@ -1,0 +1,389 @@
+// ========================================================
+// 🦅 نظام المصيدة المصفح (Bulletproof Backend) - V6.0
+// ========================================================
+
+const express = require('express');
+const admin = require('firebase-admin');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+
+// 1. تهيئة الاتصال بفايربيس
+let serviceAccount;
+try {
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+        serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    } else {
+        serviceAccount = require('./serviceAccountKey.json');
+    }
+} catch (error) {
+    console.error("❌ Service Account Error - Check Env Vars", error);
+}
+
+if (!admin.apps.length) {
+    admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+    });
+}
+
+const db = admin.firestore();
+const app = express();
+
+app.use(cors({ origin: true }));
+app.use(bodyParser.json());
+
+// 📍 إعدادات المنطقة
+const COLLEGE_COORDS = { lat: 30.438416, lng: 30.836735 };
+const MAX_DISTANCE_KM = 0.500;
+
+// Middleware
+const verifyToken = async (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: "Missing Token" });
+    }
+    try {
+        const idToken = authHeader.split('Bearer ')[1];
+        req.user = await admin.auth().verifyIdToken(idToken);
+        next();
+    } catch (error) {
+        return res.status(403).json({ error: "Invalid Token" });
+    }
+};
+
+const verifyStaffRole = async (req, res, next) => {
+    try {
+        const doc = await db.collection('faculty_members').doc(req.user.uid).get();
+        if (!doc.exists) return res.status(403).json({ error: "Staff Only" });
+        next();
+    } catch (error) { res.status(500).json({ error: "Role Error" }); }
+};
+
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    if (!lat1 || !lon1 || !lat2 || !lon2) return 9999; // حماية من القيم الفارغة
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+app.get('/', (req, res) => {
+    res.status(200).send("🦅 Nursing System Backend is Running (Bulletproof V6)");
+});
+
+// ========================================================
+// 🦅 المصيدة (Join Session) - النسخة المدرعة V7.0 (Armored)
+// ========================================================
+app.post('/joinSessionSecure', verifyToken, async (req, res) => {
+    try {
+        const studentUID = req.user.uid;
+        
+        // 1️⃣ استقبال وتنظيف المدخلات
+        const sessionDocID = req.body.sessionDocID;
+        const gpsLat = parseFloat(req.body.gpsLat) || 0;
+        const gpsLng = parseFloat(req.body.gpsLng) || 0;
+        const deviceFingerprint = req.body.deviceFingerprint || "UNKNOWN_DEVICE";
+        const providedCode = req.body.codeInput; // الكود الذي كتبه الطالب
+
+        // فحص وجود ID الجلسة
+        if (!sessionDocID) {
+            return res.status(400).json({ error: "Missing Session ID" });
+        }
+
+        console.log(`🛡️ Securing Join Request: ${studentUID} -> Session: ${sessionDocID}`);
+
+        // 2️⃣ الخطوة الحاسمة: جلب بيانات الجلسة وفحص حالتها
+        const sessionRef = db.collection('active_sessions').doc(sessionDocID);
+        const sessionSnap = await sessionRef.get();
+
+        if (!sessionSnap.exists) {
+            return res.status(404).json({ error: "⛔ الجلسة غير موجودة أو تم حذفها." });
+        }
+
+        const sessionData = sessionSnap.data();
+
+        // أ. هل الجلسة نشطة والباب مفتوح؟
+        if (!sessionData.isActive || !sessionData.isDoorOpen) {
+            return res.status(403).json({ error: "🔒 عذراً، باب التسجيل مغلق حالياً." });
+        }
+
+        // ب. هل كود الجلسة (PIN) صحيح؟ (حماية ضد التخمين)
+        // نتجاهل الفحص فقط إذا كان الكود في وضع "مفتوح تماماً" (------)
+        if (sessionData.sessionCode && sessionData.sessionCode !== "------" && sessionData.sessionCode !== "PAUSED") {
+             // مقارنة الكود المرسل بالكود المسجل في الداتابيز (كنص)
+             if (!providedCode || String(providedCode).trim() !== String(sessionData.sessionCode).trim()) {
+                 return res.status(403).json({ error: "❌ كود الجلسة غير صحيح أو قد تغير." });
+             }
+        }
+
+        // 3️⃣ تحليل الموقع الجغرافي
+        // استخدام دالة حساب المسافة الموجودة في ملفك
+        let currentDist = calculateDistance(gpsLat, gpsLng, COLLEGE_COORDS.lat, COLLEGE_COORDS.lng);
+        // التحقق من النطاق (يستخدم الثابت العام المعرف في ملفك)
+        let isLocationValid = (currentDist <= MAX_DISTANCE_KM);
+
+        // 4️⃣ تحليل بصمة الجهاز (Device Fingerprint)
+        const sensitiveRef = db.collection('user_registrations').doc(studentUID).collection('sensitive_info').doc('main');
+        const sensitiveSnap = await sensitiveRef.get();
+        
+        let isDeviceMatch = true; 
+        let deviceStatus = "UNKNOWN";
+
+        if (sensitiveSnap.exists) {
+            const savedData = sensitiveSnap.data();
+            const savedFP = savedData.bound_device_id;
+
+            // إذا كان هناك بصمة محفوظة وليست مجهولة
+            if (savedFP && savedFP !== "UNKNOWN_DEVICE") {
+                if (savedFP === deviceFingerprint) {
+                    deviceStatus = "MATCHED";
+                } else {
+                    isDeviceMatch = false; // 🚨 جهاز مختلف
+                    deviceStatus = "MISMATCH";
+                }
+            }
+        } else {
+            // تسجيل الجهاز لأول مرة (Trust on First Use)
+            await sensitiveRef.set({
+                bound_device_id: deviceFingerprint,
+                bound_at: admin.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+            deviceStatus = "NEW_BINDING";
+        }
+
+        // 5️⃣ جلب بيانات الطالب (للتسجيل في قائمة الحضور)
+        const studentRef = db.collection('user_registrations').doc(studentUID);
+        const studentSnap = await studentRef.get();
+        
+        // حماية ضد الحسابات غير الموجودة
+        if (!studentSnap.exists) {
+             return res.status(404).json({ error: "بيانات الطالب غير موجودة." });
+        }
+
+        const sData = studentSnap.data();
+        const info = sData.registrationInfo || {};
+
+        // 6️⃣ إعداد تقرير المصيدة (Trap Report)
+        const trapReport = {
+            is_in_range: isLocationValid,
+            is_device_match: isDeviceMatch,
+            distance_km: currentDist.toFixed(3),
+            device_status: deviceStatus,
+            device_id_used: deviceFingerprint,
+            timestamp: admin.firestore.FieldValue.serverTimestamp()
+        };
+
+        // 7️⃣ التسجيل النهائي في الحضور (Write Operation)
+        await sessionRef.collection('participants').doc(studentUID).set({
+            id: info.studentID || "UNKNOWN",
+            name: info.fullName || "Student",
+            uid: studentUID,
+            level: info.level || "-",
+            group: info.group || "-",
+            status: "active", // حالة الطالب داخل الجلسة
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            trap_report: trapReport,
+            avatarClass: sData.avatarClass || "fa-user",
+            // قيم افتراضية هامة لمنع أخطاء الواجهة
+            isUnruly: false, 
+            isUniformViolation: false,
+            segment_count: 1
+        });
+
+        // زيادة عداد الحضور التراكمي للطالب
+        await studentRef.update({
+            attendanceCount: admin.firestore.FieldValue.increment(1)
+        });
+
+        // طباعة للتتبع في السيرفر
+        console.log(`✅ Success: ${info.fullName} joined session. Dist: ${currentDist.toFixed(3)}km`);
+
+        // الرد بالنجاح
+        res.status(200).json({ success: true, message: "تم تسجيل الحضور بنجاح ✅" });
+
+    } catch (error) {
+        console.error("🔥 CRITICAL SERVER ERROR (Join):", error);
+        // إرجاع رسالة خطأ واضحة للفرونت إند بدلاً من التعليق
+        res.status(500).json({ error: "Server Error: " + error.message });
+    }
+});
+
+// ========================================================
+// 👨‍🏫 تسجيل الدكاترة (Secure Faculty Registration)
+// ========================================================
+app.post('/api/registerFaculty', async (req, res) => {
+    try {
+        const { email, password, fullName, gender, role, jobTitle, masterKey } = req.body;
+
+        // 1. الباك إند يقرأ المفاتيح الحقيقية (بصلاحية Admin SDK التي تتجاهل القواعد)
+        const keysDoc = await db.collection("system_keys").doc("registration_keys").get();
+        if (!keysDoc.exists) return res.status(500).json({ error: "System keys not setup" });
+        
+        const serverKeys = keysDoc.data();
+
+        // 2. المقارنة تتم هنا في السيرفر (في الخفاء)
+        let isValid = false;
+        if (role === 'dean' && masterKey === serverKeys.dean_key) isValid = true;
+        if (role === 'doctor' && masterKey === serverKeys.doctor_key) isValid = true;
+
+        if (!isValid) {
+            // لو غلط، نرجع رفض من غير ما نقوله الكود الصح إيه
+            return res.status(403).json({ error: "❌ المفتاح السري (Master Key) غير صحيح!" });
+        }
+
+        // 3. لو صح، ننشئ الحساب
+        const userRecord = await admin.auth().createUser({
+            email,
+            password,
+            displayName: fullName,
+            emailVerified: false 
+        });
+
+        // 4. ننشئ بيانات الدكتور في الداتابيز
+        await db.collection("faculty_members").doc(userRecord.uid).set({
+            fullName,
+            gender,
+            role,
+            jobTitle,
+            email,
+            isVerified: true, // ✅ تم تفعيله لأن المفتاح كان صحيحاً
+            registeredAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        res.status(200).json({ success: true, message: "تم تسجيل حساب الدكتور بنجاح" });
+
+    } catch (error) {
+        console.error("Faculty Reg Error:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ========================================================
+// 📝 تسجيل الحسابات (نظام محصن - V2.0)
+// ========================================================
+app.post('/api/registerStudent', async (req, res) => {
+    
+    // 1️⃣ متغير التتبع: نحفظ فيه كود المستخدم لو تم إنشاؤه عشان نمسحه لو حصل خطأ
+    let createdUserUID = null; 
+
+    try {
+        const { email, password, fullName, studentID, level, gender, group, deviceFingerprint } = req.body;
+
+        // 2️⃣ تنظيف وفحص البيانات
+        if (!studentID || !email || !password || !fullName) {
+            return res.status(400).json({ error: "بيانات ناقصة" });
+        }
+        
+        // إزالة أي مسافات زائدة قد تسبب مشاكل في البحث
+        const cleanID = studentID.toString().trim();
+        const cleanEmail = email.toString().trim();
+
+        // 3️⃣ فحص أولي: هل الكود الجامعي موجود مسبقاً؟
+        const idCheck = await db.collection("taken_student_ids").doc(cleanID).get();
+        if (idCheck.exists) {
+            return res.status(409).json({ error: "هذا الكود الجامعي مسجل بالفعل!" });
+        }
+
+        // 4️⃣ إنشاء الحساب في Firebase Authentication
+        // دي الخطوة الحرجة لأنها بتسمع في سيرفرات جوجل
+        const userRecord = await admin.auth().createUser({
+            email: cleanEmail,
+            password: password,
+            displayName: fullName,
+            emailVerified: false
+        });
+
+        // ✅ حفظنا الـ UID في المتغير عشان لو حصلت مصيبة تحت نمسحه
+        createdUserUID = userRecord.uid;
+
+        // 5️⃣ تجهيز الكتابة في قاعدة البيانات (Firestore Batch)
+        const batch = db.batch();
+
+        // أ. حجز الكود الجامعي (لمنع التكرار مستقبلاً)
+        batch.set(db.collection("taken_student_ids").doc(cleanID), {
+            saved_email: cleanEmail,
+            saved_name: fullName,
+            saved_uid: createdUserUID,
+            timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        // ب. إنشاء ملف الطالب
+        batch.set(db.collection("user_registrations").doc(createdUserUID), {
+            registrationInfo: { 
+                fullName, 
+                studentID: cleanID, 
+                level, 
+                gender, 
+                group: group || "عام" 
+            },
+            role: "student",
+            attendanceCount: 0,
+            avatarClass: "fa-user-graduate",
+            status: "pending_verification",
+            accountCreated: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        // ج. البيانات الحساسة (بصمة الجهاز)
+        const safeFP = deviceFingerprint || "UNKNOWN_DEVICE";
+        batch.set(db.collection("user_registrations").doc(createdUserUID).collection("sensitive_info").doc("main"), {
+            email: cleanEmail,
+            bound_device_id: safeFP,
+            created_via: "Secure_Backend"
+        });
+
+        // 6️⃣ التنفيذ الفعلي (Commit)
+        // لو السطر ده فشل (نت قطع، داتابيز وقعت)، الكود هيروح للـ catch
+        await batch.commit();
+
+        // لو وصلنا هنا، يبقى كله تمام. ننسى الـ UID عشان منمسحوش
+        createdUserUID = null; 
+
+        res.status(200).json({ success: true, uid: userRecord.uid });
+
+    } catch (error) {
+        console.error("❌ Registration Failed:", error);
+
+        // ========================================================
+        // 🚨 ROLLBACK LOGIC (خطة الإنقاذ)
+        // ========================================================
+        
+        // لو المتغير ده فيه قيمة، معناه إننا عملنا إيميل بس معرفناش نسجل بياناته في الداتابيز
+        if (createdUserUID) {
+            console.log(`⚠️ Rolling back... Deleting orphaned user: ${createdUserUID}`);
+            try {
+                // امسح الحساب فوراً من Auth عشان الطالب يقدر يسجل تاني
+                await admin.auth().deleteUser(createdUserUID);
+                console.log("✅ Rollback Successful: Orphaned account deleted.");
+            } catch (rollbackError) {
+                // دي نادرة جداً، بس لازم نسجلها عشان الأدمن يشوفها
+                console.error("💀 CRITICAL: Rollback failed! Manually check UID:", createdUserUID);
+            }
+        }
+
+        // التعامل مع الأخطاء المعروفة وإرسال رد مفهوم للفرونت إند
+        if (error.code === 'auth/email-already-in-use') {
+            return res.status(409).json({ error: "البريد الإلكتروني مستخدم بالفعل" });
+        }
+        if (error.code === 'auth/invalid-email') {
+            return res.status(400).json({ error: "صيغة البريد الإلكتروني غير صحيحة" });
+        }
+        if (error.code === 'auth/weak-password') {
+            return res.status(400).json({ error: "كلمة المرور ضعيفة جداً" });
+        }
+
+        res.status(500).json({ error: "فشل التسجيل: " + error.message });
+    }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🛡️ Server Running Port ${PORT}`));
+
+module.exports = app;
+
+
+
+
+

@@ -16,7 +16,7 @@ import { i18n, t, changeLanguage, toggleSystemLanguage } from './i18n.js';
 console.log = function () { };
 console.warn = function () { };
 
-const BACKEND_URL = "https://nursing-backend-eta.vercel.app";
+const BACKEND_URL = "nursing-backend-rej8.vercel.app";
 window.BACKEND_URL = BACKEND_URL;
 
 const firebaseConfig = {

@@ -33,21 +33,6 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { i18n, t, changeLanguage, toggleSystemLanguage } from './i18n.js';
 
-window.arabToEng = function (text) {
-    if (!text) return "";
-    const map = {
-        'أ': 'A', 'إ': 'E', 'آ': 'A', 'ا': 'A', 'ب': 'B', 'ت': 'T', 'ث': 'Th',
-        'ج': 'J', 'ح': 'H', 'خ': 'Kh', 'د': 'D', 'ذ': 'Dh', 'ر': 'R', 'ز': 'Z',
-        'س': 'S', 'ش': 'Sh', 'ص': 'S', 'ض': 'D', 'ط': 'T', 'ظ': 'Z', 'ع': 'A',
-        'غ': 'Gh', 'ف': 'F', 'ق': 'Q', 'ك': 'K', 'ل': 'L', 'م': 'M', 'ن': 'N',
-        'ه': 'H', 'و': 'W', 'ي': 'Y', 'ى': 'A', 'ة': 'h', 'ئ': 'E', 'ؤ': 'O'
-    };
-    let res = text.split('').map(char => map[char] || char).join('');
-    return res.length > 1 ? res.charAt(0).toUpperCase() + res.slice(1).toLowerCase() : res;
-};
-
-console.log = function () { };
-console.warn = function () { };
 
 window.isJoiningProcessActive = false;
 window.isProcessingClick = false;
@@ -64,124 +49,142 @@ document.addEventListener('DOMContentLoaded', () => {
 
 window.currentDoctorName = "";
 window.currentDoctorSubject = "";
-onAuthStateChanged(auth, async (user) => {
-    const studentDrawer = document.getElementById('studentAuthDrawer');
-    const facultyModal = document.getElementById('facultyGateModal');
-    const profileWrapper = document.getElementById('profileIconWrapper');
-    const profileIcon = document.getElementById('profileIconImg');
-    const statusDot = document.getElementById('userStatusDot');
+const _0xCore = [
+    'getElementById', 'studentAuthDrawer', 'facultyGateModal', 'profileIconWrapper', 'profileIconImg', 'userStatusDot',
+    'active', 'style', 'display', 'none', 'uid', 'warn', '⚠️ Security Module not loaded yet.', 'reload',
+    'emailVerified', 'classList', 'remove', 'faculty_members', 'exists', 'data', 'fullName', 'jobTitle', 'subject',
+    'profFacName', 'innerText', 'role', 'dean', 'SUPER_ADMIN_ACTIVE', 'ADMIN_ACTIVE', 'secure_admin_session_token_v99',
+    'setItem', 'avatarClass', 'fa-user-doctor', 'className', 'fa-solid ', 'background',
+    'linear-gradient(135deg, #0f172a, #1e293b)', 'boxShadow', '0 0 10px #0ea5e9, 0 0 20px rgba(14, 165, 233, 0.5)',
+    'removeItem', 'user_registrations', 'registrationInfo', 'Student', 'checkForPendingSurveys', 'fa-user-graduate',
+    'linear-gradient(135deg, #10b981, #059669)', '#22c55e', '0 0 10px #22c55e, 0 0 20px rgba(34, 197, 94, 0.5)',
+    'preferredLanguage', '.active-lang-text-pro', 'forEach', 'ar', 'EN', 'عربي', 'log', 'Language Synced: ',
+    'toUpperCase', 'error', 'Auth Guard Error:', 'clear', 'fa-envelope-circle-check',
+    'linear-gradient(135deg, #f59e0b, #d97706)', '#f59e0b', 'fa-user-astronaut', 'rgba(15, 23, 42, 0.8)', '#94a3b8',
+    'initSecurityWatchdog', 'currentDoctorName', 'currentDoctorJobTitle', 'currentDoctorSubject', 'listenToSessionState',
+    'monitorMyParticipation', 'showSmartWelcome', 'changeLanguage', 'querySelectorAll', 'studentStatusListener',
+    'updateUIForMode'
+];
 
-    if (user) {
-        if (typeof window.initSecurityWatchdog === 'function') {
-            window.initSecurityWatchdog(user.uid, db);
+const _0x = function (index) {
+    return _0xCore[index];
+};
+
+onAuthStateChanged(auth, async (_0xUser) => {
+    const _0xSD = document[_0x(0)](_0x(1));
+    const _0xFM = document[_0x(0)](_0x(2));
+    const _0xPW = document[_0x(0)](_0x(3));
+    const _0xPI = document[_0x(0)](_0x(4));
+    const _0xStat = document[_0x(0)](_0x(5));
+
+    if (_0xUser) {
+        if (typeof window[_0x(66)] === 'function') {
+            window[_0x(66)](_0xUser[_0x(10)], db);
         } else {
-            console.warn("⚠️ Security Module not loaded yet.");
+            console[_0x(11)](_0x(12));
         }
-        await user.reload();
+        await _0xUser[_0x(13)]();
 
-        if (user.emailVerified) {
-            if (studentDrawer) {
-                studentDrawer.classList.remove('active');
-                setTimeout(() => studentDrawer.style.display = 'none', 300);
+        if (_0xUser[_0x(14)]) {
+            if (_0xSD) {
+                _0xSD[_0x(15)][_0x(16)](_0x(6));
+                setTimeout(() => _0xSD[_0x(7)][_0x(8)] = _0x(9), 300);
             }
-            if (facultyModal) facultyModal.style.display = 'none';
+            if (_0xFM) _0xFM[_0x(7)][_0x(8)] = _0x(9);
 
             try {
-                const facRef = doc(db, "faculty_members", user.uid);
-                const facSnap = await getDoc(facRef);
+                const _0xRef = doc(db, _0x(17), _0xUser[_0x(10)]);
+                const _0xSnap = await getDoc(_0xRef);
+                let _0xData = null;
 
-                let finalUserData = null;
+                if (_0xSnap[_0x(18)]()) {
+                    _0xData = _0xSnap[_0x(19)]();
 
-                if (facSnap.exists()) {
-                    finalUserData = facSnap.data();
+                    window[_0x(67)] = _0xData[_0x(20)];
+                    window[_0x(68)] = _0xData[_0x(21)] || _0xData[_0x(22)];
+                    window[_0x(69)] = "";
 
-                    window.currentDoctorName = finalUserData.fullName;
-                    window.currentDoctorJobTitle = finalUserData.jobTitle || finalUserData.subject;
-                    window.currentDoctorSubject = "";
+                    if (document[_0x(0)](_0x(23)))
+                        document[_0x(0)](_0x(23))[_0x(24)] = window[_0x(67)];
 
-                    if (document.getElementById('profFacName'))
-                        document.getElementById('profFacName').innerText = window.currentDoctorName;
-
-                    const roleToken = (finalUserData.role === "dean") ? "SUPER_ADMIN_ACTIVE" : "ADMIN_ACTIVE";
-                    sessionStorage.setItem("secure_admin_session_token_v99", roleToken);
+                    const _0xRole = (_0xData[_0x(25)] === _0x(26)) ? _0x(27) : _0x(28);
+                    sessionStorage[_0x(30)](_0x(29), _0xRole);
 
                     if (typeof listenToSessionState === 'function') listenToSessionState();
 
-                    const savedAvatar = finalUserData.avatarClass || "fa-user-doctor";
-                    if (profileIcon) profileIcon.className = `fa-solid ${savedAvatar}`;
+                    const _0xAvatar = _0xData[_0x(31)] || _0x(32);
+                    if (_0xPI) _0xPI[_0x(33)] = _0x(34) + _0xAvatar;
 
-                    if (profileWrapper) profileWrapper.style.background = "linear-gradient(135deg, #0f172a, #1e293b)";
-                    if (statusDot) {
-                        statusDot.style.background = "#0ea5e9";
-                        statusDot.style.boxShadow = "0 0 10px #0ea5e9, 0 0 20px rgba(14, 165, 233, 0.5)";
+                    if (_0xPW) _0xPW[_0x(7)][_0x(35)] = _0x(36);
+                    if (_0xStat) {
+                        _0xStat[_0x(7)][_0x(35)] = '#0ea5e9';
+                        _0xStat[_0x(7)][_0x(37)] = _0x(38);
                     }
 
                 } else {
-                    sessionStorage.removeItem("secure_admin_session_token_v99");
+                    sessionStorage[_0x(39)](_0x(29));
 
-                    const studentDoc = await getDoc(doc(db, "user_registrations", user.uid));
-                    if (studentDoc.exists()) {
-                        finalUserData = studentDoc.data();
-                        const fullName = finalUserData.registrationInfo?.fullName || finalUserData.fullName || "Student";
+                    const _0xStuDoc = await getDoc(doc(db, _0x(40), _0xUser[_0x(10)]));
+                    if (_0xStuDoc[_0x(18)]()) {
+                        _0xData = _0xStuDoc[_0x(19)]();
+                        const _0xName = _0xData[_0x(41)]?.[_0x(20)] || _0xData[_0x(20)] || _0x(42);
 
                         if (typeof listenToSessionState === 'function') listenToSessionState();
-
                         if (typeof monitorMyParticipation === 'function') monitorMyParticipation();
+                        if (typeof window[_0x(72)] === 'function') window[_0x(72)](_0xName);
 
-                        if (typeof window.showSmartWelcome === 'function') window.showSmartWelcome(fullName);
-
-                        if (typeof window.checkForPendingSurveys === 'function') {
-                            setTimeout(window.checkForPendingSurveys, 2500);
+                        if (typeof window[_0x(43)] === 'function') {
+                            setTimeout(window[_0x(43)], 2500);
                         }
 
-                        const savedAvatar = finalUserData.avatarClass || finalUserData.registrationInfo?.avatarClass || "fa-user-graduate";
-                        if (profileIcon) profileIcon.className = `fa-solid ${savedAvatar}`;
+                        const _0xAvatar = _0xData[_0x(31)] || _0xData[_0x(41)]?.[_0x(31)] || _0x(44);
+                        if (_0xPI) _0xPI[_0x(33)] = _0x(34) + _0xAvatar;
 
-                        if (profileWrapper) profileWrapper.style.background = "linear-gradient(135deg, #10b981, #059669)";
-                        if (statusDot) {
-                            statusDot.style.background = "#22c55e";
-                            statusDot.style.boxShadow = "0 0 10px #22c55e, 0 0 20px rgba(34, 197, 94, 0.5)";
+                        if (_0xPW) _0xPW[_0x(7)][_0x(35)] = _0x(45);
+                        if (_0xStat) {
+                            _0xStat[_0x(7)][_0x(35)] = _0x(46);
+                            _0xStat[_0x(7)][_0x(37)] = _0x(47);
                         }
                     }
                 }
 
-                if (finalUserData && finalUserData.preferredLanguage) {
-                    const serverLang = finalUserData.preferredLanguage;
+                if (_0xData && _0xData[_0x(48)]) {
+                    const _0xLang = _0xData[_0x(48)];
 
-                    if (typeof changeLanguage === 'function') changeLanguage(serverLang);
+                    if (typeof changeLanguage === 'function') changeLanguage(_0xLang);
 
-                    document.querySelectorAll('.active-lang-text-pro').forEach(span => {
-                        span.innerText = (serverLang === 'ar') ? 'EN' : 'عربي';
+                    document[_0x(74)](_0x(49))[_0x(50)](_0xS => {
+                        _0xS[_0x(24)] = (_0xLang === _0x(51)) ? _0x(52) : _0x(53);
                     });
 
-                    console.log(`Language Synced: ${serverLang.toUpperCase()}`);
+                    console[_0x(54)](_0x(55) + _0xLang[_0x(56)]());
                 }
 
             } catch (e) {
-                console.error("Auth Guard Error:", e);
+                console[_0x(57)](_0x(58), e);
             }
         } else {
-            sessionStorage.clear();
-            if (profileIcon) profileIcon.className = "fa-solid fa-envelope-circle-check";
-            if (profileWrapper) profileWrapper.style.background = "linear-gradient(135deg, #f59e0b, #d97706)";
-            if (statusDot) statusDot.style.background = "#f59e0b";
+            sessionStorage[_0x(59)]();
+            if (_0xPI) _0xPI[_0x(33)] = _0x(34) + _0x(60);
+            if (_0xPW) _0xPW[_0x(7)][_0x(35)] = _0x(61);
+            if (_0xStat) _0xStat[_0x(7)][_0x(35)] = _0x(62);
         }
 
     } else {
-        sessionStorage.clear();
-        window.currentDoctorName = "";
-        window.currentDoctorSubject = "";
+        sessionStorage[_0x(59)]();
+        window[_0x(67)] = "";
+        window[_0x(69)] = "";
 
-        if (window.studentStatusListener) {
-            window.studentStatusListener();
-            window.studentStatusListener = null;
+        if (window[_0x(75)]) {
+            window[_0x(75)]();
+            window[_0x(75)] = null;
         }
 
-        if (profileIcon) profileIcon.className = "fa-solid fa-user-astronaut";
-        if (profileWrapper) profileWrapper.style.background = "rgba(15, 23, 42, 0.8)";
-        if (statusDot) {
-            statusDot.style.background = "#94a3b8";
-            statusDot.style.boxShadow = "none";
+        if (_0xPI) _0xPI[_0x(33)] = _0x(34) + _0x(63);
+        if (_0xPW) _0xPW[_0x(7)][_0x(35)] = _0x(64);
+        if (_0xStat) {
+            _0xStat[_0x(7)][_0x(35)] = _0x(65);
+            _0xStat[_0x(7)][_0x(37)] = _0x(9);
         }
     }
 
@@ -381,7 +384,7 @@ window.performStudentSignup = async function () {
         const deviceID = getUniqueDeviceId();
         console.log("📤 Sending request to Backend...");
 
-        const response = await fetch(`${BACKEND_URL}/api/registerStudent`, {
+        const response = await fetch(`https://nursing-backend-rej8.vercel.app/api/registerStudent`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -573,30 +576,6 @@ document.addEventListener('click', (e) => {
     window.addEventListener('appinstalled', () => { if (installBox) installBox.style.display = 'none'; deferredPrompt = null; showToast("شكراً لتثبيت التطبيق! 🚀", 4000, "#10b981"); });
     function triggerAppInstall() { if (deferredPrompt) { deferredPrompt.prompt(); deferredPrompt.userChoice.then((choiceResult) => { if (choiceResult.outcome === 'accepted') { if (installBox) installBox.style.display = 'none'; } deferredPrompt = null; }); } }
 
-
-    function safeClick(element, callback) {
-        if (isProcessingClick) return;
-        if (element && (element.disabled || element.classList.contains('disabled') || element.classList.contains('locked'))) return;
-        isProcessingClick = true;
-        if (element) { element.style.pointerEvents = 'none'; element.style.opacity = '0.7'; }
-        if (typeof callback === 'function') callback();
-        setTimeout(() => {
-            isProcessingClick = false;
-            if (element) { element.style.pointerEvents = 'auto'; element.style.opacity = '1'; }
-        }, 600);
-    }
-
-    function getUniqueDeviceId() {
-        let deviceId = localStorage.getItem(DEVICE_ID_KEY);
-        if (!deviceId) {
-            deviceId = 'DEV-' + Math.random().toString(36).substr(2, 9).toUpperCase() + '-' + Date.now().toString(36).toUpperCase();
-            localStorage.setItem(DEVICE_ID_KEY, deviceId);
-        }
-        return deviceId;
-    }
-
-    function generateSessionKey() { return 'KEY-' + Math.random().toString(36).substr(2, 12).toUpperCase(); }
-
     function openDataEntryMenu() { document.getElementById('dataEntryModal').style.display = 'flex'; }
 
     function showTopToast(msg) {
@@ -658,10 +637,8 @@ document.addEventListener('click', (e) => {
     }
 
     fetch('https://api.ipify.org?format=json').then(r => r.json()).then(d => userIP = d.ip).catch(e => userIP = "Hidden IP");
-    function playClick() { document.getElementById('clickSound').play().catch(e => { }); if (navigator.vibrate) navigator.vibrate(10); }
     function playSuccess() { document.getElementById('successSound').play().catch(e => { }); if (navigator.vibrate) navigator.vibrate([50, 50, 50]); }
     function playBeep() { document.getElementById('beepSound').play().catch(e => { }); }
-    function convertArabicToEnglish(s) { return s.replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)); }
     async function requestWakeLock() { try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (err) { } }
     function releaseWakeLock() { if (wakeLock !== null) { wakeLock.release().then(() => { wakeLock = null; }); } }
 
@@ -955,15 +932,6 @@ document.addEventListener('click', (e) => {
         let dist = getDistanceFromLatLonInKm(userLat, userLng, CONFIG.gps.targetLat, CONFIG.gps.targetLong);
         if (dist > CONFIG.gps.allowedDistanceKm) { showError("🚫 أنت خارج نطاق الكلية. يرجى التواجد في المكان الصحيح.", false); return; }
         onSuccess();
-    }
-
-    function normalizeArabic(text) {
-        if (!text) return "";
-        return text.toString()
-            .replace(/[أإآ]/g, 'ا')
-            .replace(/ة/g, 'ه')
-            .replace(/ى/g, 'ي')
-            .toLowerCase();
     }
 
     window.filterModalSubjects = function () {
@@ -1471,7 +1439,7 @@ document.addEventListener('click', (e) => {
             const deviceFingerprint = localStorage.getItem("unique_device_id_v3");
             const idToken = await user.getIdToken();
 
-            const response = await fetch('https://nursing-backend-eta.vercel.app/joinSessionSecure', {
+            const response = await fetch('https://nursing-backend-rej8.vercel.app/joinSessionSecure', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1483,7 +1451,7 @@ document.addEventListener('click', (e) => {
                     gpsLat: gpsData.lat || 0,
                     gpsLng: gpsData.lng || 0,
                     deviceFingerprint: deviceFingerprint,
-                    
+
                     codeInput: sessionData.sessionCode
 
 
@@ -1854,7 +1822,6 @@ document.addEventListener('click', (e) => {
     function addKey(num) { playClick(); const i = document.getElementById('uniID'); if (i.value.length < 10) i.value += num; }
     function backspaceKey() { playClick(); const i = document.getElementById('uniID'); i.value = i.value.slice(0, -1); }
     function clearKey() { playClick(); document.getElementById('uniID').value = ''; }
-    function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) { var R = 6371; var dLat = (lat2 - lat1) * (Math.PI / 180); var dLon = (lon2 - lon1) * (Math.PI / 180); var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2); return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))); }
 
     async function goBackToWelcome() {
         playClick();
@@ -2576,7 +2543,6 @@ document.addEventListener('click', (e) => {
         );
     }
 
-    function isMobileDevice() { const ua = navigator.userAgent.toLowerCase(); const isTargetMobile = /android|iphone|ipod/i.test(ua); const isExcluded = /windows|macintosh|ipad|tablet|x11|kindle/i.test(ua); return (isTargetMobile && !isExcluded); }
     function showToast(message, duration = 3000, bgColor = '#334155') { const toast = document.getElementById('toastNotification'); toast.style.backgroundColor = bgColor; toast.innerText = message; toast.style.display = 'block'; setTimeout(() => { toast.style.display = 'none'; }, duration); }
 
     document.addEventListener('contextmenu', function (e) { e.preventDefault(); showToast('إجراء محظور لأسباب أمنية.', 2000, '#ef4444'); });
@@ -3381,43 +3347,71 @@ document.addEventListener('click', (e) => {
             showToast(_t('msg_missing_data', "⚠️ Please fill all fields"), 3000, "#f59e0b");
             return;
         }
-        if (email !== emailConfirm) { showToast(_t('error_email_match', "❌ Emails do not match"), 3000, "#ef4444"); return; }
-        if (pass !== passConfirm) { showToast(_t('error_pass_match', "❌ Passwords do not match"), 3000, "#ef4444"); return; }
+        if (email !== emailConfirm) {
+            showToast(_t('error_email_match', "❌ Emails do not match"), 3000, "#ef4444");
+            return;
+        }
+        if (pass !== passConfirm) {
+            showToast(_t('error_pass_match', "❌ Passwords do not match"), 3000, "#ef4444");
+            return;
+        }
 
         const btn = document.querySelector('#facultySignupSection .glass-btn-submit');
         const originalText = btn.innerHTML;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Verifying Keys...';
+
+        btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up fa-bounce"></i> Processing...';
         btn.style.pointerEvents = 'none';
 
         try {
-            const keysDoc = await getDoc(doc(db, "system_keys", "registration_keys"));
+            const BACKEND_BASE_URL = "https://nursing-backend-rej8.vercel.app";
 
-            let isKeyValid = false;
-            if (keysDoc.exists()) {
-                const serverKeys = keysDoc.data();
-                if (role === "doctor" && masterKeyInput === serverKeys.doctor_key) isKeyValid = true;
-                else if (role === "dean" && masterKeyInput === serverKeys.dean_key) isKeyValid = true;
-            }
-
-            if (!isKeyValid) {
-                throw new Error("INVALID_MASTER_KEY");
-            }
-
-            btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up fa-bounce"></i> Creating Account...';
-            const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-            const user = userCredential.user;
-
-            await sendEmailVerification(user);
-
-            await setDoc(doc(db, "faculty_members", user.uid), {
-                fullName: name,
-                gender: gender,
-                role: role,
-                jobTitle: jobTitle,
-                email: email,
-                isVerified: false,
-                registeredAt: serverTimestamp()
+            const response = await fetch(`${BACKEND_BASE_URL}/api/registerFaculty`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    email: email,
+                    password: pass,
+                    fullName: name,
+                    gender: gender,
+                    role: role,
+                    jobTitle: jobTitle,
+                    masterKey: masterKeyInput
+                })
             });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || "Registration Failed");
+            }
+
+            try {
+                console.log("Backend approved. Starting email verification process...");
+
+                if (typeof auth === 'undefined') {
+                    throw new Error("Authentication system (auth) is not loaded.");
+                }
+
+                const authInstance = auth;
+
+                const userCredential = await authInstance.signInWithEmailAndPassword(email, pass);
+
+                const actionCodeSettings = {
+                    url: window.location.href, 
+                    handleCodeInApp: true
+                };
+
+                await userCredential.user.sendEmailVerification(actionCodeSettings);
+                console.log("✅ Verification email sent successfully!");
+
+                await authInstance.signOut();
+
+            } catch (emailError) {
+                console.error("⚠️ Warning: Account created but email failed to send:", emailError);
+                showToast("Account created, but verification email failed. Contact Admin.", 5000, "#f59e0b");
+            }
 
 
             document.getElementById('facultyGateModal').style.display = 'none';
@@ -3435,7 +3429,6 @@ document.addEventListener('click', (e) => {
             const firstName = (typeof arabToEng === 'function') ? arabToEng(rawName) : rawName;
 
             let roleDisplay = "";
-
             if (lang === 'ar') {
                 if (role === 'dean') {
                     roleDisplay = (gender === 'Female') ? "العميدة" : "العميد";
@@ -3481,7 +3474,6 @@ document.addEventListener('click', (e) => {
                     successModal.style.display = 'none';
                     document.getElementById('facultyGateModal').style.display = 'flex';
                     switchFacultyTab('login');
-
                     modalBtn.onclick = window.originalSuccessBtnOnClick;
                 };
 
@@ -3490,18 +3482,20 @@ document.addEventListener('click', (e) => {
             }
 
         } catch (error) {
+       
             console.error("Signup Error:", error);
 
             let msg = "❌ Error during registration";
+            let errMsg = error.message || "";
 
-            switch (error.message) {
-                case "INVALID_MASTER_KEY":
-                    msg = _t('error_master_key', "🚫 Invalid Master Key!");
-                    break;
-                default:
-                    if (error.code === 'auth/email-already-in-use') msg = _t('error_email_exists', "⚠️ Email already registered!");
-                    if (error.code === 'permission-denied') msg = _t('error_db_permission', "⚠️ Database Permission Error!");
-                    if (error.code === 'auth/network-request-failed') msg = _t('error_network', "📡 Network Error.");
+            if (errMsg.includes("Master Key")) {
+                msg = _t('error_master_key', "🚫 Invalid Master Key!");
+            } else if (errMsg.includes("email-already-in-use")) {
+                msg = _t('error_email_exists', "⚠️ Email already registered!");
+            } else if (errMsg.includes("Failed to fetch")) {
+                msg = _t('error_network', "📡 Server connection failed. Check Backend.");
+            } else {
+                msg = "⚠️ " + errMsg;
             }
 
             showToast(msg, 4000, "#ef4444");
@@ -3513,45 +3507,67 @@ document.addEventListener('click', (e) => {
     };
 
     window.performFacultyLogin = async function () {
-        const email = document.getElementById('facLoginEmail').value.trim();
-        const pass = document.getElementById('facLoginPass').value;
 
+        const _t = (key, defaultText) => {
+            const lang = localStorage.getItem('sys_lang') || 'en';
+            if (window.i18n && window.i18n[lang] && window.i18n[lang][key]) {
+                return window.i18n[lang][key];
+            }
+            return defaultText;
+        };
+
+        const emailField = document.getElementById('facLoginEmail');
+        const passField = document.getElementById('facLoginPass');
         const btn = document.querySelector('#facultyLoginSection .glass-btn-submit');
         const facultyModal = document.getElementById('facultyGateModal');
 
+        const email = emailField.value.trim();
+        const pass = passField.value;
+
         if (!email || !pass) {
-            showToast("⚠️ Please enter email and password", 3000, "#f59e0b");
+            if (typeof playBeep === 'function') playBeep();
+            showToast(_t('msg_enter_creds', "⚠️ Please enter email and password"), 3000, "#f59e0b");
+            if (!email) emailField.focus(); else passField.focus();
             return;
         }
 
-        let originalText = "SIGN IN";
+        let originalText = _t('btn_signin', "SIGN IN");
         if (btn) {
             originalText = btn.innerHTML;
-            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Verifying...';
-            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> ${_t('status_verifying', "Verifying...")}`;
+            btn.style.pointerEvents = 'none';
+            btn.style.opacity = '0.7';
         }
 
         try {
-            const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+            const userCredential = await signInWithEmailAndPassword(window.auth, email, pass);
             const user = userCredential.user;
-
-            const pIcon = document.getElementById('profileIconImg');
-            const pWrap = document.getElementById('profileIconWrapper');
-            const pDot = document.getElementById('userStatusDot');
-
-            if (pIcon) pIcon.className = "fa-solid fa-user-doctor fa-bounce";
-            if (pWrap) pWrap.style.background = "linear-gradient(135deg, #0f172a, #1e293b)";
-            if (pDot) {
-                pDot.style.background = "#0ea5e9";
-                pDot.style.boxShadow = "0 0 10px #0ea5e9";
-            }
 
             await user.reload();
 
             if (!user.emailVerified) {
-                showToast("!Please verify your email first 📧", 5000, "#f59e0b");
-                await signOut(auth);
-                if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
+                console.warn("⛔ Account not verified. Attempting auto-resend...");
+
+                let msg = _t('login_verify_required', "⚠️ Sorry Doctor, you must verify your email first.");
+
+                try {
+                    await sendEmailVerification(user);
+                    msg += `<br>📧 <b>${_t('login_new_link_sent', "A new verification link has been sent.")}</b>`;
+                } catch (resendError) {
+                    if (resendError.code === 'auth/too-many-requests') {
+                        msg += `<br>${_t('login_link_already_sent', "Link already sent, please check your inbox.")}`;
+                    }
+                }
+
+                showToast(msg, 6000, "#ef4444");
+
+                await signOut(window.auth);
+
+                if (btn) {
+                    btn.innerHTML = originalText;
+                    btn.style.pointerEvents = 'auto';
+                    btn.style.opacity = '1';
+                }
                 return;
             }
 
@@ -3565,7 +3581,7 @@ document.addEventListener('click', (e) => {
                     fullName: userData.fullName,
                     email: userData.email,
                     role: userData.role,
-                    jobTitle: userData.jobTitle || userData.subject || "Not Assigned",
+                    jobTitle: userData.jobTitle || userData.subject || "Faculty Member",
                     avatarClass: userData.avatarClass || "fa-user-doctor",
                     uid: user.uid,
                     type: 'faculty'
@@ -3574,31 +3590,68 @@ document.addEventListener('click', (e) => {
 
                 if (userData.role === "dean") {
                     sessionStorage.setItem("secure_admin_session_token_v99", "SUPER_ADMIN_ACTIVE");
-                    showToast("👑 Welcome, Dean " + userData.fullName, 4000, "#7c3aed");
+                    showToast(`${_t('welcome_dean', "👑 Welcome, Dean")} ${userData.fullName}`, 4000, "#7c3aed");
                 } else {
                     sessionStorage.setItem("secure_admin_session_token_v99", "ADMIN_ACTIVE");
-                    showToast("👨‍🏫 Welcome, Dr. " + userData.fullName, 3000, "#10b981");
+                    showToast(`${_t('welcome_doctor', "👨‍🏫 Welcome, Dr.")} ${userData.fullName}`, 3000, "#10b981");
+                }
+
+                const pIcon = document.getElementById('profileIconImg');
+                const pWrap = document.getElementById('profileIconWrapper');
+                const pDot = document.getElementById('userStatusDot');
+
+                if (pIcon) pIcon.className = "fa-solid fa-user-doctor fa-bounce";
+                if (pWrap) pWrap.style.background = "linear-gradient(135deg, #0f172a, #1e293b)";
+                if (pDot) {
+                    pDot.style.background = "#0ea5e9";
+                    pDot.style.boxShadow = "0 0 10px #0ea5e9";
                 }
 
                 if (facultyModal) facultyModal.style.display = 'none';
                 if (typeof updateUIForMode === 'function') updateUIForMode();
+                if (typeof playSuccess === 'function') playSuccess();
 
             } else {
-                showToast("🚫 Access Denied: This portal is for Faculty only", 5000, "#ef4444");
-                await signOut(auth);
+                console.error("⛔ Security Alert: User authenticated but has no faculty record.");
+                showToast(_t('login_access_denied', "🚫 Access Denied: Account not found in faculty records."), 5000, "#ef4444");
+
+                await signOut(window.auth);
                 sessionStorage.removeItem("secure_admin_session_token_v99");
+
                 if (typeof updateUIForMode === 'function') updateUIForMode();
             }
 
         } catch (error) {
             console.error("Login Error:", error);
-            let errorMsg = "❌ Invalid email or password";
-            if (error.code === 'auth/user-not-found') errorMsg = "❌ Account not found";
-            if (error.code === 'auth/wrong-password') errorMsg = "❌ Incorrect password";
-            showToast(errorMsg, 3000, "#ef4444");
+            if (typeof playBeep === 'function') playBeep();
+
+            let errorMsg = _t('error_unknown', "❌ An unknown error occurred");
+
+            switch (error.code) {
+                case 'auth/user-not-found':
+                case 'auth/invalid-email':
+                    errorMsg = _t('error_user_not_found', "❌ Email not registered.");
+                    break;
+                case 'auth/wrong-password':
+                    errorMsg = _t('error_wrong_password', "❌ Incorrect password.");
+                    break;
+                case 'auth/too-many-requests':
+                    errorMsg = _t('error_too_many', "⏳ Too many attempts! Account paused temporarily.");
+                    break;
+                case 'auth/network-request-failed':
+                    errorMsg = _t('error_network', "📡 Network error! Check your connection.");
+                    break;
+                default:
+                    errorMsg = "❌ " + error.message;
+            }
+
+            showToast(errorMsg, 4000, "#ef4444");
+
         } finally {
             if (btn) {
                 btn.innerHTML = originalText;
+                btn.style.pointerEvents = 'auto';
+                btn.style.opacity = '1';
                 btn.disabled = false;
             }
         }
@@ -3691,9 +3744,7 @@ document.addEventListener('click', (e) => {
             console.error("Sync Error:", e);
         }
     };
-    function generateSessionCode() {
-        return Math.floor(1000 + Math.random() * 9000).toString();
-    }
+
 
     window.updateStudentStatus = async function (docId, newStatus) {
         const user = auth.currentUser;
@@ -4465,10 +4516,6 @@ if ('serviceWorker' in navigator) {
     });
 }
 
-function playClick() {
-    if (navigator.vibrate) navigator.vibrate(10);
-}
-
 window.openUploadHistory = async function () {
     playClick();
 
@@ -4641,30 +4688,8 @@ if (confirmBtn) {
     };
 }
 
-if (typeof showToast === 'undefined') {
-    window.showToast = function (message, duration = 3000, bgColor = '#334155') {
-        const toast = document.getElementById('toastNotification');
-        if (toast) {
-            toast.style.backgroundColor = bgColor;
-            toast.innerText = message;
-            toast.style.display = 'block';
-            setTimeout(() => { toast.style.display = 'none'; }, duration);
-        } else {
-            console.log("تنبيه: " + message);
-        }
-    };
-}
-
-window.playSuccess = function () {
-    console.log("تمت العملية بنجاح ✅");
-};
-
 window.playClick = function () {
 };
-
-window.playBeep = function () {
-};
-
 window.updateArchiveSubjects = function () {
     const level = document.getElementById('archiveLevelSelect').value;
     const dataList = document.getElementById('subjectsList');
@@ -4861,21 +4886,6 @@ window.playClick = function () {
     console.log("Audio skipped to prevent crash.");
 };
 
-window.playSuccess = function () {
-    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-};
-
-window.playBeep = function () {
-};
-
-function normalizeArabic(text) {
-    if (!text) return "";
-    return text.toString()
-        .replace(/[أإآ]/g, 'ا')
-        .replace(/ة/g, 'ه')
-        .replace(/ى/g, 'ي')
-        .toLowerCase();
-}
 
 window.filterModalSubjects = function () {
     const input = document.getElementById('subjectSearchInput');
@@ -5606,32 +5616,6 @@ window.removeGroupFromSession = async function (groupName) {
         });
     } catch (e) { console.error(e); }
 };
-function smartNormalize(text) {
-    if (!text) return "";
-    return text.toString()
-        .replace(/[أإآ]/g, 'ا')
-        .replace(/ة/g, 'ه')
-        .replace(/ى/g, 'ي')
-        .replace(/ت/g, 'ت')
-        .trim()
-        .toLowerCase();
-}
-function transliterateArabicToEnglish(text) {
-    const map = {
-        'أ': 'A', 'إ': 'E', 'آ': 'A', 'ا': 'A', 'ب': 'B', 'ت': 'T', 'ث': 'Th',
-        'ج': 'J', 'ح': 'H', 'خ': 'Kh', 'د': 'D', 'ذ': 'Dh', 'ر': 'R', 'ز': 'Z',
-        'س': 'S', 'ش': 'Sh', 'ص': 'S', 'ض': 'D', 'ط': 'T', 'ظ': 'Z', 'ع': 'A',
-        'غ': 'Gh', 'ف': 'F', 'ق': 'Q', 'ك': 'K', 'ل': 'L', 'م': 'M', 'ن': 'N',
-        'ه': 'H', 'و': 'W', 'ي': 'Y', 'ى': 'A', 'ة': 'h', 'ئ': 'E', 'ؤ': 'O'
-    };
-
-    let res = text.split('').map(char => map[char] || char).join('');
-
-    if (res.length > 1) {
-        return res.charAt(0).toUpperCase() + res.slice(1).toLowerCase();
-    }
-    return res;
-}
 
 window.adjustDoorLimit = function (amount) {
     const input = document.getElementById('doorMaxLimitInput');
