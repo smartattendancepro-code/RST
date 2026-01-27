@@ -160,100 +160,160 @@ window.confirmSessionStart = async function () {
 
 
 window.closeSessionImmediately = function () {
-    const confirmBtn = document.getElementById('btnConfirmYes');
-    const confirmIcon = document.querySelector('.confirm-icon-animate i');
+
+    const confirmBtn = document.getElementById('btnConfirmYes') || document.querySelector('.swal2-confirm');
     const lang = localStorage.getItem('sys_lang') || 'ar';
+
+    const title = (lang === 'ar') ? "إنهاء الجلسة وحفظ الغياب" : "End Session";
+    const msg = (lang === 'ar') ? "سيتم إغلاق البوابة وحفظ السجلات نهائياً." : "Session will be closed and records saved.";
 
     if (confirmBtn) confirmBtn.innerText = (lang === 'ar') ? "تأكيد وحفظ ✅" : "Confirm & Save ✅";
 
-    showModernConfirm(
-        (lang === 'ar') ? "إنهاء الجلسة وحفظ الغياب" : "End Session",
-        (lang === 'ar') ? "سيتم إغلاق البوابة وحفظ السجلات." : "Session will be closed and saved.",
-        async function () {
-            const user = auth.currentUser;
-            try {
-                const sessionRef = doc(db, "active_sessions", user.uid);
-                const sessionSnap = await getDoc(sessionRef);
+    showModernConfirm(title, msg, async function () {
+        const user = auth.currentUser;
+        if (!user) return;
 
-                if (!sessionSnap.exists()) {
-                    showToast("No session found", 3000, "#ef4444");
-                    return;
-                }
+        const actionBtn = document.getElementById('btnConfirmYes') || document.querySelector('.confirm-btn-yes');
+        if (actionBtn) {
+            actionBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> ' + ((lang === 'ar') ? "جاري المعالجة..." : "Processing...");
+            actionBtn.style.pointerEvents = 'none'; // منع الضغط المتكرر
+            actionBtn.style.opacity = '0.7';
+        }
 
-                const settings = sessionSnap.data();
+        try {
+        
+            if (window.unsubscribeLiveSnapshot) {
+                console.log("🔕 Muting Live Listener...");
+                window.unsubscribeLiveSnapshot();
+                window.unsubscribeLiveSnapshot = null;
+            }
+            if (window.deanRadarUnsubscribe) {
+                window.deanRadarUnsubscribe();
+                window.deanRadarUnsubscribe = null;
+            }
 
-                const now = new Date();
-                const d = String(now.getDate()).padStart(2, '0');
-                const m = String(now.getMonth() + 1).padStart(2, '0');
-                const y = now.getFullYear();
-                const fixedDateStr = `${d}/${m}/${y}`;
+            const sessionRef = doc(db, "active_sessions", user.uid);
+            const sessionSnap = await getDoc(sessionRef);
 
-                const batch = writeBatch(db);
-                const partsRef = collection(db, "active_sessions", user.uid, "participants");
-                const partsSnap = await getDocs(partsRef);
-                let count = 0;
+            if (!sessionSnap.exists()) {
+                showToast("No session found", 3000, "#ef4444");
+                return;
+            }
 
-                const currentDocName = settings.doctorName || "Doctor";
+            const settings = sessionSnap.data();
 
-                partsSnap.forEach(docSnap => {
-                    const p = docSnap.data();
-                    if (p.status === "active") {
-                        const safeSubject = (settings.allowedSubject || "General").replace(/\//g, '-');
-                        const recID = `${p.id}_${fixedDateStr.replace(/\//g, '-')}_${safeSubject}`;
-                        const attRef = doc(db, "attendance", recID);
+            const now = new Date();
+            const d = String(now.getDate()).padStart(2, '0');
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const y = now.getFullYear();
+            const fixedDateStr = `${d}/${m}/${y}`;
+            const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
-                        batch.set(attRef, {
-                            id: p.id,
-                            name: p.name,
-                            subject: settings.allowedSubject,
-                            hall: settings.hall,
-                            group: p.group || "General",
-                            date: fixedDateStr,
-                            time_str: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-                            timestamp: serverTimestamp(),
-                            status: "ATTENDED",
-                            doctorUID: user.uid,
-                            doctorName: currentDocName,
-                            feedback_status: "pending",
-                            feedback_rating: 0
-                        });
+            const partsRef = collection(db, "active_sessions", user.uid, "participants");
+            const partsSnap = await getDocs(partsRef);
 
-                        const cleanSubKey = settings.allowedSubject.trim().replace(/\s+/g, '_').replace(/[^\w\u0600-\u06FF]/g, '');
-                        const studentStatsRef = doc(db, "student_stats", p.uid);
-                        batch.set(studentStatsRef, {
-                            [`attended.${cleanSubKey}`]: increment(1),
-                            group: p.group || "General"
-                        }, { merge: true });
+            let processedCount = 0;
+            const currentDocName = settings.doctorName || "Doctor";
 
-                        count++;
-                    }
-                    batch.delete(docSnap.ref);
-                });
+            const BATCH_LIMIT = 450;
+            let currentBatch = writeBatch(db);
+            let opCounter = 0;
+            const commitPromises = [];
 
-                if (settings.targetGroups && settings.targetGroups.length > 0) {
-                    const cleanSubKey = settings.allowedSubject.trim().replace(/\s+/g, '_').replace(/[^\w\u0600-\u06FF]/g, '');
-                    settings.targetGroups.forEach(groupName => {
-                        if (!groupName) return;
-                        const groupRef = doc(db, "groups_stats", groupName);
-                        batch.set(groupRef, {
-                            [`subjects.${cleanSubKey}`]: increment(1),
-                            last_updated: serverTimestamp()
-                        }, { merge: true });
+            const pushBatch = () => {
+                commitPromises.push(currentBatch.commit());
+                currentBatch = writeBatch(db);
+                opCounter = 0;
+            };
+
+            partsSnap.forEach(docSnap => {
+                const p = docSnap.data();
+
+                if (p.status === "active") {
+                    const safeSubject = (settings.allowedSubject || "General").replace(/\//g, '-');
+                    const recID = `${p.id}_${fixedDateStr.replace(/\//g, '-')}_${safeSubject}`;
+                    const attRef = doc(db, "attendance", recID);
+
+                    currentBatch.set(attRef, {
+                        id: p.id,
+                        name: p.name,
+                        subject: settings.allowedSubject,
+                        hall: settings.hall,
+                        group: p.group || "General",
+                        date: fixedDateStr,
+                        time_str: timeStr,
+                        timestamp: serverTimestamp(),
+                        status: "ATTENDED",
+
+                        segments_attended: p.segment_count || 1,
+
+                        doctorUID: user.uid,
+                        doctorName: currentDocName,
+                        feedback_status: "pending",
+                        feedback_rating: 0
                     });
+                    opCounter++;
+
+                    const cleanSubKey = settings.allowedSubject.trim().replace(/\s+/g, '_').replace(/[^\w\u0600-\u06FF]/g, '');
+                    const studentStatsRef = doc(db, "student_stats", p.uid);
+                    currentBatch.set(studentStatsRef, {
+                        [`attended.${cleanSubKey}`]: increment(1),
+                        group: p.group || "General"
+                    }, { merge: true });
+                    opCounter++;
+
+                    processedCount++;
                 }
 
-                batch.update(sessionRef, { isActive: false, isDoorOpen: false });
-                await batch.commit();
+                currentBatch.delete(docSnap.ref);
+                opCounter++;
 
-                showToast(`✅ تم الحفظ (${count} طالب)`, 4000, "#10b981");
-                setTimeout(() => location.reload(), 2000);
+                if (opCounter >= BATCH_LIMIT) {
+                    pushBatch();
+                }
+            });
 
-            } catch (e) {
-                console.error("Save Error:", e);
-                showToast("خطأ في الحفظ: " + e.message, 4000, "#ef4444");
+            if (settings.targetGroups && settings.targetGroups.length > 0) {
+                const cleanSubKey = settings.allowedSubject.trim().replace(/\s+/g, '_').replace(/[^\w\u0600-\u06FF]/g, '');
+
+                settings.targetGroups.forEach(groupName => {
+                    if (!groupName) return;
+                    const groupRef = doc(db, "groups_stats", groupName);
+
+                    currentBatch.set(groupRef, {
+                        [`subjects.${cleanSubKey}`]: increment(1),
+                        last_updated: serverTimestamp()
+                    }, { merge: true });
+                    opCounter++;
+
+                    if (opCounter >= BATCH_LIMIT) pushBatch();
+                });
+            }
+
+            currentBatch.update(sessionRef, { isActive: false, isDoorOpen: false });
+            opCounter++;
+
+            if (opCounter > 0) {
+                commitPromises.push(currentBatch.commit());
+            }
+
+            await Promise.all(commitPromises);
+
+            showToast(`✅ تم الحفظ (${processedCount} طالب)`, 4000, "#10b981");
+
+            setTimeout(() => location.reload(), 1500);
+
+        } catch (e) {
+            console.error("Save Error:", e);
+            showToast("خطأ في الحفظ: " + e.message, 4000, "#ef4444");
+
+            if (actionBtn) {
+                actionBtn.innerHTML = (lang === 'ar') ? "إعادة المحاولة" : "Retry";
+                actionBtn.style.pointerEvents = 'auto';
+                actionBtn.style.opacity = '1';
             }
         }
-    );
+    });
 };
 
 

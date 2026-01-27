@@ -440,6 +440,10 @@ export const i18n = {
         radar_hall: "القاعة:",
         radar_close: "إغلاق",
 
+        modal_expel_title: "⛔ تم استبعادك!",
+        modal_expel_body: "قام المحاضر بإخراجك من الجلسة.<br>لا يمكنك العودة مرة أخرى.",
+        btn_leave_hall: "مغادرة القاعة ➜",
+
 
 
     },
@@ -447,6 +451,10 @@ export const i18n = {
     en: {
         dir: "ltr",
         font: "'Outfit', sans-serif",
+
+        modal_expel_title: "⛔ You have been Expelled!",
+        modal_expel_body: "The instructor has removed you from this session.<br>You cannot rejoin.",
+        btn_leave_hall: "Leave Hall ➜",
 
         session_active_btn: "Session Active (Tap to Resume)",
         start_new_session_btn: "Start New Lecture",

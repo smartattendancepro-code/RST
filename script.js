@@ -210,53 +210,66 @@ window.monitorMyParticipation = async function () {
         mainBtn.style.border = "1px solid #10b981";
 
         mainBtn.onclick = function () {
-            if (typeof playClick === 'function') playClick();
-            switchScreen('screenLiveSession');
-            if (typeof startLiveSnapshotListener === 'function') startLiveSnapshotListener();
+            if (typeof window.playClick === 'function') window.playClick();
+            if (typeof window.switchScreen === 'function') window.switchScreen('screenLiveSession');
+            if (typeof window.startLiveSnapshotListener === 'function') window.startLiveSnapshotListener();
         };
     };
 
     const resetButtonToDefault = () => {
         if (!mainBtn) return;
         const lang = localStorage.getItem('sys_lang') || 'ar';
-        mainBtn.innerHTML = (lang === 'ar') ? `تسجيل الحضور <i class="fa-solid fa-fingerprint"></i>` : `Register Attendance <i class="fa-solid fa-fingerprint"></i>`;
+        const regText = (lang === 'ar') ? "تسجيل الحضور" : "Register Attendance";
+
+        mainBtn.innerHTML = `${regText} <i class="fa-solid fa-fingerprint"></i>`;
 
         mainBtn.style.background = "";
         mainBtn.style.boxShadow = "";
         mainBtn.style.border = "";
 
-        mainBtn.onclick = () => startProcess(false);
+        mainBtn.onclick = () => {
+            if (typeof window.forceOpenPinScreen === 'function') {
+                window.forceOpenPinScreen();
+            } else if (typeof window.startProcess === 'function') {
+                window.startProcess(false);
+            }
+        };
     };
 
-    let targetDoctorUID = sessionStorage.getItem('TARGET_DOCTOR_UID');
+    let targetDoctorUID = localStorage.getItem('TARGET_DOCTOR_UID');
 
     if (!targetDoctorUID) {
         try {
+            if (mainBtn) {
+                mainBtn.innerHTML = `<i class="fa-solid fa-arrows-rotate fa-spin"></i> جاري المزامنة...`;
+                mainBtn.style.opacity = "0.7";
+                mainBtn.style.pointerEvents = "none";
+            }
+
+            console.log("🔍 Cache cleared, searching server for active session...");
+
             const activeSessionsQ = query(collection(db, "active_sessions"), where("isActive", "==", true));
             const sessionsSnap = await getDocs(activeSessionsQ);
 
             const checkPromises = sessionsSnap.docs.map(async (sessionDoc) => {
-                const docID = sessionDoc.id;
-                const studentRef = doc(db, "active_sessions", docID, "participants", user.uid);
+                const studentRef = doc(db, "active_sessions", sessionDoc.id, "participants", user.uid);
                 const studentSnap = await getDoc(studentRef);
-
-                if (studentSnap.exists() && studentSnap.data().status === 'active') {
-                    return docID;
-                }
-                return null;
+                return (studentSnap.exists() && studentSnap.data().status === 'active') ? sessionDoc.id : null;
             });
 
             const results = await Promise.all(checkPromises);
-            const foundDoctorID = results.find(id => id !== null);
+            targetDoctorUID = results.find(id => id !== null);
 
-            if (foundDoctorID) {
-                targetDoctorUID = foundDoctorID;
-                sessionStorage.setItem('TARGET_DOCTOR_UID', targetDoctorUID);
-                console.log("🔄 Session Recovered for Doctor:", targetDoctorUID);
+            if (targetDoctorUID) {
+                localStorage.setItem('TARGET_DOCTOR_UID', targetDoctorUID);
+                console.log("✅ Session restored from Server!");
+            } else {
+                resetButtonToDefault();
             }
 
         } catch (e) {
-            console.error("Auto-Recovery Error:", e);
+            console.error("Server Recovery Error:", e);
+            resetButtonToDefault();
         }
     }
 
@@ -278,8 +291,8 @@ window.monitorMyParticipation = async function () {
 
             const currentScreen = document.querySelector('.section.active')?.id;
             if (currentScreen === 'screenLiveSession') {
-                showToast("⚠️ تم إغلاق الجلسة أو إخراجك منها", 4000, "#f59e0b");
-                if (typeof goHome === 'function') goHome();
+                if (typeof window.showToast === 'function') window.showToast("⚠️ تم إغلاق الجلسة أو إخراجك منها", 4000, "#f59e0b");
+                if (typeof window.goHome === 'function') window.goHome();
             }
             return;
         }
@@ -287,49 +300,81 @@ window.monitorMyParticipation = async function () {
         const data = docSnap.data();
 
         if (data.status === 'expelled') {
-            console.log("🚨 Student EXPELLED.");
+            console.log("🚨 Student EXPELLED. Terminating connection...");
+
             const _t = (typeof t === 'function') ? t : (key, def) => def;
 
+            if (window.studentStatusListener) {
+                window.studentStatusListener(); 
+                window.studentStatusListener = null;
+            }
+
             sessionStorage.removeItem('TARGET_DOCTOR_UID');
+            localStorage.removeItem('TARGET_DOCTOR_UID');
+
+            resetButtonToDefault();
 
             const liveScreen = document.getElementById('screenLiveSession');
-            if (liveScreen) liveScreen.style.setProperty('display', 'none', 'important');
+            if (liveScreen) {
+                liveScreen.style.setProperty('display', 'none', 'important');
+                liveScreen.classList.remove('active');
+            }
 
-            document.querySelectorAll('.modal-overlay').forEach(el => el.style.display = 'none');
+            if (typeof window.goHome === 'function') window.goHome();
 
+            const exModal = document.getElementById('expulsionModal');
             const exTitle = document.getElementById('expelTitle');
             const exBody = document.getElementById('expelBody');
 
-            if (exTitle) exTitle.innerText = _t('modal_expel_title', "⛔ تم استبعادك!");
-            if (exBody) exBody.innerHTML = _t('modal_expel_body', "قام المحاضر بطردك من الجلسة.<br>لا يمكنك العودة مرة أخرى.");
+            if (exTitle) exTitle.innerText = _t('modal_expel_title', "⛔ You have been expelled!");
+            if (exBody) exBody.innerHTML = _t('modal_expel_body', "The instructor has removed you from this session.<br>You cannot rejoin.");
 
-            const exModal = document.getElementById('expulsionModal');
             if (exModal) {
-                exModal.style.display = 'flex';
+                exModal.style.setProperty('display', 'flex', 'important'); 
+
+                const leaveBtn = exModal.querySelector('button') || exModal.querySelector('.btn-danger');
+                if (leaveBtn) {
+                    leaveBtn.innerHTML = _t('btn_leave_hall', "Leave Hall ➜");
+                    leaveBtn.onclick = function () {
+                        exModal.style.display = 'none';
+                        window.location.reload(); 
+                    };
+                }
+
                 if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
             } else {
-                alert("⛔ تم استبعادك من الجلسة!");
-                location.reload();
+                alert(_t('modal_expel_title', "⛔ You have been expelled!"));
+                window.location.reload();
             }
             return;
         }
 
         if (data.status === 'on_break') {
-            console.log("☕ Break Time Triggered");
+            console.log("☕ Break Detected - Kicking to Home Screen");
 
             sessionStorage.removeItem('TARGET_DOCTOR_UID');
+
             resetButtonToDefault();
 
-            const currentScreen = document.querySelector('.section.active')?.id;
+            if (window.unsubscribeLiveSnapshot) {
+                window.unsubscribeLiveSnapshot();
+                window.unsubscribeLiveSnapshot = null;
+            }
 
-            if (currentScreen === 'screenLiveSession' || currentScreen === 'screenDataEntry') {
+            const liveScreen = document.getElementById('screenLiveSession');
+            if (liveScreen) {
+                liveScreen.style.display = 'none';
+                liveScreen.classList.remove('active');
+            }
 
-                if (typeof switchScreen === 'function') switchScreen('screenWelcome');
+            const welcomeScreen = document.getElementById('screenWelcome');
+            if (welcomeScreen) {
+                welcomeScreen.style.display = 'block';
+                welcomeScreen.classList.add('active');
+            }
 
-                const breakModal = document.getElementById('breakModal');
-                if (breakModal) breakModal.style.display = 'flex';
-
-                if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+            if (typeof window.showToast === 'function') {
+                window.showToast("⏸️ استراحة: يرجى تسجيل الدخول مجدداً عند الاستئناف", 4000, "#f59e0b");
             }
             return;
         }
@@ -339,15 +384,16 @@ window.monitorMyParticipation = async function () {
 
             const breakModal = document.getElementById('breakModal');
             if (breakModal) breakModal.style.display = 'none';
+
+            sessionStorage.setItem('TARGET_DOCTOR_UID', targetDoctorUID);
         }
 
     }, (error) => {
-        console.log("Monitor Error:", error);
+        console.log("Listener Error:", error);
         sessionStorage.removeItem('TARGET_DOCTOR_UID');
         resetButtonToDefault();
     });
 };
-
 window.performStudentSignup = async function () {
     const lang = localStorage.getItem('sys_lang') || 'ar';
     const _t = (typeof t === 'function') ? t : (key, def) => def;
@@ -1416,6 +1462,7 @@ document.addEventListener('click', (e) => {
         btn.style.pointerEvents = 'none';
 
         try {
+            // 1. التحقق من حالة الجلسة من قاعدة البيانات مباشرة
             const sessionRef = doc(db, "active_sessions", targetDrUID);
             const sessionSnap = await getDoc(sessionRef);
 
@@ -1429,16 +1476,19 @@ document.addEventListener('click', (e) => {
                 throw new Error("🔒 عذراً، الجلسة مغلقة حالياً.");
             }
 
+            // تحقق إضافي من كلمة المرور (اختياري لأن الباك إند يتحقق أيضاً)
             if (sessionData.sessionPassword && sessionData.sessionPassword !== "" && passInput !== sessionData.sessionPassword) {
                 throw new Error("❌ كلمة المرور غير صحيحة");
             }
 
-            console.log("⚡ دخول مباشر...");
+            console.log("⚡ جاري إرسال الطلب للمصيدة الأمنية...");
 
+            // 2. جلب إحداثيات الموقع وبصمة الجهاز
             const gpsData = await getSilentLocationData();
             const deviceFingerprint = localStorage.getItem("unique_device_id_v3");
             const idToken = await user.getIdToken();
 
+            // 3. الاتصال بالباك إند (المصيدة) لتسجيل الحضور بأمان
             const response = await fetch('https://nursing-backend-rej8.vercel.app/joinSessionSecure', {
                 method: 'POST',
                 headers: {
@@ -1451,23 +1501,23 @@ document.addEventListener('click', (e) => {
                     gpsLat: gpsData.lat || 0,
                     gpsLng: gpsData.lng || 0,
                     deviceFingerprint: deviceFingerprint,
-
                     codeInput: sessionData.sessionCode
-
-
                 })
             });
 
             const result = await response.json();
 
             if (response.ok && result.success) {
-
                 if (typeof playSuccess === 'function') playSuccess();
                 showToast(`✅ ${result.message}`, 3000, "#10b981");
 
+                // --- 🔄 تحديث التخزين لاستعادة الجلسة لاحقاً ---
+                // نستخدم localStorage لضمان بقاء الطالب في الجلسة حتى بعد الـ Refresh
+                localStorage.setItem('TARGET_DOCTOR_UID', targetDrUID);
                 sessionStorage.setItem('TARGET_DOCTOR_UID', targetDrUID);
                 sessionStorage.removeItem('TEMP_DR_UID');
 
+                // تحديث الكاش المحلي للبروفايل (للعرض فقط)
                 try {
                     let cached = localStorage.getItem('cached_profile_data');
                     if (cached) {
@@ -1477,8 +1527,9 @@ document.addEventListener('click', (e) => {
                             localStorage.setItem('cached_profile_data', JSON.stringify(cacheObj));
                         }
                     }
-                } catch (err) { }
+                } catch (err) { console.warn("Cache update skipped."); }
 
+                // تحديث واجهة المحاضرة الحية ببيانات الدكتور
                 if (document.getElementById('liveDocName')) document.getElementById('liveDocName').innerText = sessionData.doctorName || "Professor";
                 if (document.getElementById('liveSubjectTag')) document.getElementById('liveSubjectTag').innerText = sessionData.allowedSubject || "Subject";
                 const liveAvatar = document.getElementById('liveDocAvatar');
@@ -1486,23 +1537,10 @@ document.addEventListener('click', (e) => {
                     liveAvatar.innerHTML = `<i class="fa-solid ${sessionData.doctorAvatar}"></i>`;
                 }
 
-                try {
-                    const subjectName = sessionData.allowedSubject || "General";
-                    const cleanSubKey = subjectName.trim().replace(/\s+/g, '_').replace(/[^\w\u0600-\u06FF]/g, '');
+                // ❌ ملاحظة: تم حذف كود تحديث "student_stats" يدوياً من هنا
+                // لأن الباك إند يقوم بهذه المهمة الآن بصلاحيات الـ Admin لضمان عدم التزوير.
 
-                    const groupName = (sessionData.targetGroups && sessionData.targetGroups.length > 0) ? sessionData.targetGroups[0] : "General";
-
-                    const studentStatsRef = doc(db, "student_stats", user.uid);
-                    await setDoc(studentStatsRef, {
-                        [`attended.${cleanSubKey}`]: increment(1),
-                        group: groupName
-                    }, { merge: true });
-
-                    console.log("✅ Stats Updated Locally");
-                } catch (statsErr) {
-                    console.error("Stats Update Error:", statsErr);
-                }
-
+                // 4. الانتقال لشاشة المحاضرة
                 switchScreen('screenLiveSession');
                 if (typeof startLiveSnapshotListener === 'function') startLiveSnapshotListener();
 
@@ -4359,32 +4397,67 @@ document.addEventListener('click', (e) => {
     window.getSilentLocationData = async function () {
         const TARGET_LAT = 30.43841622978127;
         const TARGET_LNG = 30.836735200410153;
-        const ALLOWED_DIST_KM = 5.0;
+        const ALLOWED_DIST_KM = 0.5;
 
         return new Promise((resolve) => {
             if (!navigator.geolocation) {
-                resolve({ status: "failed_no_support", in_range: false, lat: 0, lng: 0 });
+                resolve({ status: "failed_no_support", in_range: false });
                 return;
             }
 
+            const options = {
+                enableHighAccuracy: true,
+                timeout: 5000,
+                maximumAge: 0
+            };
+
             navigator.geolocation.getCurrentPosition(
                 (pos) => {
-                    const lat = pos.coords.latitude;
-                    const lng = pos.coords.longitude;
-                    const dist = getDistanceFromLatLonInKm(lat, lng, TARGET_LAT, TARGET_LNG);
+                    const crd = pos.coords;
+
+                    let isSuspicious = false;
+                    let cheatReason = "";
+
+                    if (crd.altitude === null) {
+                        isSuspicious = true;
+                        cheatReason += "[No Altitude] ";
+                    }
+
+                    if (crd.accuracy <= 2) {
+                        isSuspicious = true;
+                        cheatReason += "[Too Perfect Accuracy] ";
+                    }
+
+                    if (crd.accuracy > 1500) {
+                        resolve({
+                            status: "failed_bad_accuracy",
+                            in_range: false,
+                            msg: `الدقة سيئة جداً (${Math.round(crd.accuracy)}م). شغل الـ GPS واخرج لمكان مفتوح.`
+                        });
+                        return;
+                    }
+
+                    const dist = getDistanceFromLatLonInKm(crd.latitude, crd.longitude, TARGET_LAT, TARGET_LNG);
+                    const inRange = (dist <= ALLOWED_DIST_KM);
 
                     resolve({
                         status: "success",
-                        in_range: (dist <= ALLOWED_DIST_KM),
-                        lat: lat,
-                        lng: lng,
-                        distance: dist.toFixed(3)
+                        in_range: inRange,
+                        lat: crd.latitude,
+                        lng: crd.longitude,
+                        accuracy: crd.accuracy,
+                        distance: dist.toFixed(3),
+
+                        is_suspicious: isSuspicious,
+                        cheat_reason: cheatReason.trim()
                     });
                 },
                 (err) => {
-                    resolve({ status: "failed_error", in_range: false, lat: 0, lng: 0, error: err.code });
+                    let msg = "فشل تحديد الموقع";
+                    if (err.code === 1) msg = "الوصول للموقع مرفوض";
+                    resolve({ status: "failed_error", in_range: false, error: msg });
                 },
-                { enableHighAccuracy: true, timeout: 3000, maximumAge: 10000 }
+                options
             );
         });
     };
@@ -5123,7 +5196,7 @@ window.confirmManualAdd = async function () {
     if (!window.tempManualStudentData) return;
 
     const student = window.tempManualStudentData;
-    const btn = document.querySelector('#manualConfirmStep .btn-confirm-green');
+    const btn = document.querySelector('#manualConfirmStep .btn-confirm-green'); // تأكد من كلاس الزر لديك
     const user = auth.currentUser;
 
     if (!user) {
@@ -5133,11 +5206,37 @@ window.confirmManualAdd = async function () {
 
     const originalText = btn ? btn.innerHTML : "تأكيد";
     if (btn) {
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري الإضافة...';
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري التحقق...';
         btn.style.pointerEvents = 'none';
     }
 
     try {
+
+
+        const participantsRef = collection(db, "active_sessions", user.uid, "participants");
+
+        const checkQuery = query(participantsRef, where("id", "==", String(student.code)));
+        const checkSnap = await getDocs(checkQuery);
+
+        const isAlreadyHere = checkSnap.docs.some(doc => {
+            const status = doc.data().status;
+            return status === 'active' || status === 'on_break';
+        });
+
+        if (isAlreadyHere) {
+            showToast(`⚠️ الطالب "${student.name}" موجود بالفعل في القاعة!`, 4000, "#f59e0b");
+            if (navigator.vibrate) navigator.vibrate([200, 100, 200]); // اهتزاز للتنبيه
+
+            if (btn) {
+                btn.innerHTML = originalText;
+                btn.style.pointerEvents = 'auto';
+            }
+            resetManualModal();
+            return;
+        }
+
+        if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري الإضافة...';
+
         const studentObj = {
             id: student.code,
             uid: student.uid,

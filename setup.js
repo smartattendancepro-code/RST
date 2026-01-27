@@ -40,7 +40,7 @@ const auth = getAuth(app);
 
 window.db = db;
 window.auth = auth;
-window.changeLanguage = changeLanguage; 
+window.changeLanguage = changeLanguage;
 
 console.log("🚀 Step 1 Complete: Firebase Config Loaded");
 
@@ -125,13 +125,28 @@ window.showError = function (msg, isPermanent = false) {
 window.performLogout = async function () {
     try {
         const deviceId = localStorage.getItem("unique_device_id_v3");
-        await signOut(window.auth); 
+        const currentLang = localStorage.getItem("sys_lang"); 
+
+        await signOut(window.auth);
+
         sessionStorage.clear();
         localStorage.clear();
+
         if (deviceId) {
             localStorage.setItem("unique_device_id_v3", deviceId);
         }
-        location.reload();
+        if (currentLang) {
+            localStorage.setItem("sys_lang", currentLang); 
+        }
+
+        if (typeof window.showToast === 'function') {
+            window.showToast("👋 تم تسجيل الخروج بنجاح", 2000, "#1e293b");
+        }
+
+        setTimeout(() => {
+            location.reload();
+        }, 500);
+
     } catch (error) {
         console.error("Logout Error:", error);
         location.reload();
