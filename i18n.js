@@ -226,7 +226,7 @@ export const i18n = {
 
         tools_request_title: "طلب معدات / أدوات",
         required_tool_label: "الأداة / الجهاز المطلوب",
-        tool_name_placeholder: "مثال: جهاز عرض، سماعات...",
+        tool_name_placeholder: "مثال، سماعات...",
         quantity_label: "الكمية",
         priority_label: "الأولوية",
         priority_normal: "عادي",
@@ -384,7 +384,7 @@ export const i18n = {
         formal_direction: "توجه نحو القاعة",
         doctor_prefix_en: "Dr.",
         enter_lecture_btn: "دخول المحاضرة",
-        session_active_btn: "جلستك نشطة (اضغط للمتابعة)",
+        session_active_btn: "جلستك نشطة ",
         start_new_session_btn: "بدء محاضرة جديدة",
 
         msg_missing_data: "⚠️ بيانات ناقصة! يرجى ملء كل الحقول",
@@ -428,7 +428,7 @@ export const i18n = {
         error_db_permission: "⚠️ خطأ في صلاحيات قاعدة البيانات (تأكد من القواعد)",
         welcome_dean: "مرحباً، عميد",
         welcome_doctor: "مرحباً، د.",
-        session_active_btn: "جلستك نشطة (اضغط للمتابعة)",
+        session_active_btn: "جلستك نشطة",
         start_new_session_btn: "بدء محاضرة جديدة",
 
         toast_session_closed_manual: "🔒 عذراً، تم إغلاق باب التسجيل من قبل المحاضر",
@@ -444,6 +444,44 @@ export const i18n = {
         modal_expel_body: "قام المحاضر بإخراجك من الجلسة.<br>لا يمكنك العودة مرة أخرى.",
         btn_leave_hall: "مغادرة القاعة ➜",
 
+        session_decisions_title: "قرارات الجلسة",
+        session_decisions_subtitle: "هل انتهت المحاضرة تماماً أم تريد أخذ استراحة؟",
+        btn_take_break: "استراحة واستئناف (Break)",
+        btn_end_session: "إنهاء وحفظ نهائي",
+        btn_cancel_close: "تراجع",
+
+        feedback_today_title: "تقييمات اليوم",
+        total_rated_students: "إجمالي الطلاب المقيمين",
+        loading_text: "جاري التحميل...",
+
+        "stat_attendance": "حضور محاضرة ",
+        "stat_absence": " غياب محاضرة",
+        "stat_discipline": "الانضباط",
+        "note_title": "تنويه:",
+        "beta_system_msg": "النظام تجريبي. الأرقام للمراجعة فقط ولا تُعتمد رسمياً حالياً.",
+        "academic_level_label": "المستوى الأكاديمي",
+        "gender_label": "النوع",
+        "university_id_label": "الكود الجامعي",
+        "official_email_label": "البريد الرسمي",
+        "device_warning_msg": "تنبيه: هذا الحساب مرتبط بجهازك بشكل دائم.",
+        "system_id_label": "معرف النظام",
+        "sign_out": "تسجيل الخروج",
+
+
+        start_new_session_btn: "بدء محاضرة جديدة",
+        feedback_btn: "التقييمات",
+
+        login_required_toast: "⚠️ يرجى تسجيل الدخول أولاً",
+        loading_text: "جاري التحميل...",
+        unknown_student: "طالب غير معروف",
+        level_label: "الفرقة",
+        you_have: "عليك",
+        notes_count: "ملاحظات",
+        status_excellent: "ممتاز (100%)",
+        status_new: "جديد",
+        connection_error: "خطأ في الاتصال",
+
+
 
 
     },
@@ -452,11 +490,46 @@ export const i18n = {
         dir: "ltr",
         font: "'Outfit', sans-serif",
 
+        login_required_toast: "⚠️ Please login first",
+        loading_text: "Loading...",
+        unknown_student: "Unknown Student",
+        level_label: "Level",
+        you_have: "You have",
+        notes_count: "notes",
+        status_excellent: "Excellent (100%)",
+        status_new: "New",
+        connection_error: "Connection Error",
+
+        "stat_attendance": "Attendance",
+        "stat_absence": "Absence",
+        "stat_discipline": "Discipline",
+        "note_title": "Note:",
+        "beta_system_msg": "Experimental system. Numbers are for review only and not official yet.",
+        "academic_level_label": "Level",
+        "gender_label": "Gender",
+        "university_id_label": "University ID",
+        "official_email_label": "Official Email",
+        "device_warning_msg": "Warning: This account is permanently linked to your device.",
+        "system_id_label": "System ID",
+        "sign_out": "Sign Out",
+
+        feedback_btn: "Feedback",
+        feedback_today_title: "Today's Ratings",
+        total_rated_students: "Total Rated Students",
+        loading_text: "Loading...",
+
+
+        session_decisions_title: "Session Decisions",
+        session_decisions_subtitle: "Has the lecture ended completely or do you want to take a break?",
+        btn_take_break: "Pause & Resume (Break)",
+        btn_end_session: "End & Save",
+        btn_cancel_close: "Cancel",
+
         modal_expel_title: "⛔ You have been Expelled!",
         modal_expel_body: "The instructor has removed you from this session.<br>You cannot rejoin.",
         btn_leave_hall: "Leave Hall ➜",
 
-        session_active_btn: "Session Active (Tap to Resume)",
+        session_active_btn: "Session Active",
         start_new_session_btn: "Start New Lecture",
 
         app_title: "Attendance System - Nursing",
@@ -496,8 +569,11 @@ export const i18n = {
         formal_direction: "Proceed to Hall",
         doctor_prefix_en: "Dr.",
         enter_lecture_btn: "Enter Lecture",
-        session_active_btn: "Session Active (Tap to Resume)",
+        session_active_btn: "Session Active ",
         start_new_session_btn: "Start New Lecture",
+
+        start_new_session_btn: "Start New Session",
+
 
         confirm_expel_title: "Expel Student 🚫",
         confirm_expel_body: "Are you sure you want to expel this student?<br>They will not be able to rejoin this session.",
@@ -764,7 +840,7 @@ export const i18n = {
 
         tools_request_title: "Equipment Request",
         required_tool_label: "Required Tool / Device",
-        tool_name_placeholder: "e.g., Projector, Speaker...",
+        tool_name_placeholder: "e.g., , ...",
         quantity_label: "Quantity",
         priority_label: "Priority",
         priority_normal: "Normal",

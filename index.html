@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html dir="rtl" lang="ar">
+<html dir="ltr" lang="en">
 
 <head>
     <meta charset="UTF-8">
@@ -688,7 +688,7 @@
                                 <i class="fa-solid fa-star sub-btn-icon"></i>
                                 <span id="badgeFeedbackCount" class="feedback-badge-static"
                                     style="display:none;">0</span>
-                                <span>التقييمات</span>
+                                <span data-i18n="feedback_btn">التقييمات</span>
                             </button>
                             <button onclick="openExamModal()" class="admin-sub-btn btn-exams">
                                 <i class="fa-solid fa-file-pen sub-btn-icon"></i>
@@ -941,7 +941,41 @@
                         </button>
 
                     </div>
+                    <div class="separator-line">نتائج الامتحانات</div>
+
+                    <div class="modern-card-action" style="border-color: #bfdbfe; background: #eff6ff;">
+                        <div class="card-label" style="color: #1e40af;">
+                            <i class="fa-solid fa-graduation-cap"></i> رفع نتائج (كويز / ميدتيرم)
+                        </div>
+
+                        <!-- إدخال اسم المادة -->
+                        <input type="text" id="examSubjectName" class="modern-input"
+                            placeholder="اسم المادة (مثال: تشريح)"
+                            style="background: white !important; color: #1e293b !important; margin-bottom: 10px; border: 1px solid #cbd5e1;">
+
+                        <!-- إدخال نوع الاختبار -->
+                        <div class="modern-select-wrapper" style="margin-bottom: 10px;">
+                            <select id="examTypeSelect" class="modern-select-input"
+                                style="background: white !important; color: #1e293b !important;">
+                                <option value="Quiz">Quiz (كويز)</option>
+                                <option value="Midterm">Midterm (ميدتيرم)</option>
+                                <option value="Final">Final (فاينل)</option>
+                            </select>
+                            <i class="fa-solid fa-chevron-down select-arrow" style="color: #1e293b;"></i>
+                        </div>
+
+                        <!-- زر الرفع -->
+                        <input type="file" id="examSheetInput" style="display: none;" accept=".xlsx, .xls" />
+                        <button onclick="triggerExamUpload()" class="btn-action-modern" style="background: #3b82f6;">
+                            رفع شيت الدرجات <i class="fa-solid fa-file-csv"></i>
+                        </button>
+
+                        <div id="examUploadStatus"
+                            style="font-size: 11px; text-align: center; margin-top: 8px; color: #1e40af; font-weight:bold; min-height: 15px;">
+                        </div>
+                    </div>
                 </div>
+
             </div>
             <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
@@ -1411,88 +1445,160 @@
             </div>
 
             <div id="studentProfileModal" class="profile-overlay">
-                <div class="pro-card">
+                <!-- كارت بتصميم عصري ونظيف -->
+                <div class="pro-card"
+                    style="padding: 0; max-width: 350px; border-radius: 24px; overflow: hidden; background: #fff; font-family: 'Cairo', sans-serif;">
 
-                    <div class="card-header-bg">
+                    <!-- 1. الهيدر الخلفي -->
+                    <div
+                        style="height: 110px; background: linear-gradient(135deg, #0ea5e9, #3b82f6); position: relative;">
                         <button
                             onclick="document.getElementById('infoBtn').style.display='flex'; document.getElementById('studentProfileModal').classList.remove('active'); setTimeout(()=>document.getElementById('studentProfileModal').style.display='none', 300);"
-                            class="btn-close-pro">
+                            style="position: absolute; top: 15px; right: 15px; background: rgba(255,255,255,0.2); border: none; width: 32px; height: 32px; border-radius: 50%; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(5px);">
                             <i class="fa-solid fa-xmark"></i>
                         </button>
                     </div>
 
-                    <div class="avatar-wrapper" onclick="openAvatarSelector()">
-                        <div id="currentAvatar" class="pro-avatar">
-                            <i class="fa-solid fa-user"></i>
+                    <!-- 2. الصورة والاسم -->
+                    <div style="text-align: center; margin-top: -55px; padding-bottom: 10px;">
+                        <div class="avatar-wrapper" onclick="openAvatarSelector()"
+                            style="margin: 0 auto; width: 100px; height: 100px; position: relative;">
+                            <div id="currentAvatar"
+                                style="width: 100%; height: 100%; border-radius: 50%; background: #fff; border: 4px solid #fff; display: flex; align-items: center; justify-content: center; font-size: 45px; color: #0ea5e9; box-shadow: 0 10px 20px rgba(0,0,0,0.1);">
+                                <i class="fa-solid fa-user"></i>
+                            </div>
+                            <div class="edit-badge"
+                                style="position: absolute; bottom: 5px; right: 0; background: #f8fafc; border: 2px solid #fff; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #64748b; box-shadow: 0 2px 5px rgba(0,0,0,0.1); cursor: pointer;">
+                                <i class="fa-solid fa-pen"></i>
+                            </div>
                         </div>
-                        <div class="edit-badge">
-                            <i class="fa-solid fa-pen"></i>
+
+                        <h2 id="profFullName"
+                            style="font-size: 18px; font-weight: 800; color: #1e293b; margin: 10px 0 2px 0;"
+                            data-i18n="loading_user">Loading...</h2>
+                        <p class="pro-role" style="font-size: 12px; color: #64748b; font-weight: 600; margin: 0;"
+                            data-i18n="student_role">Nursing Student</p>
+                    </div>
+
+                    <!-- 3. شريط الإحصائيات -->
+                    <div
+                        style="display: flex; justify-content: space-around; padding: 15px 20px; border-bottom: 1px solid #f1f5f9;">
+                        <div style="text-align: center;">
+                            <div style="color: #10b981; font-size: 18px; margin-bottom: 4px;"><i
+                                    class="fa-solid fa-calendar-check"></i></div>
+                            <div id="profAttendanceVal"
+                                style="font-size: 18px; font-weight: 800; color: #0f172a; line-height: 1;">--</div>
+                            <div style="font-size: 10px; color: #94a3b8; font-weight: bold; margin-top: 4px;"
+                                data-i18n="stat_attendance">Attendance</div>
+                        </div>
+                        <div style="width: 1px; background: #e2e8f0;"></div>
+                        <div style="text-align: center;">
+                            <div style="color: #ef4444; font-size: 18px; margin-bottom: 4px;"><i
+                                    class="fa-solid fa-calendar-xmark"></i></div>
+                            <div id="profAbsenceVal"
+                                style="font-size: 18px; font-weight: 800; color: #0f172a; line-height: 1;">--</div>
+                            <div style="font-size: 10px; color: #94a3b8; font-weight: bold; margin-top: 4px;"
+                                data-i18n="stat_absence">Absence</div>
+                        </div>
+                        <div style="width: 1px; background: #e2e8f0;"></div>
+                        <div style="text-align: center;">
+                            <div style="color: #3b82f6; font-size: 18px; margin-bottom: 4px;"><i
+                                    class="fa-solid fa-scale-balanced"></i></div>
+                            <div id="profDisciplineVal"
+                                style="font-size: 14px; font-weight: 800; color: #0f172a; line-height: 1.3;">--</div>
+                            <div style="font-size: 10px; color: #94a3b8; font-weight: bold; margin-top: 4px;"
+                                data-i18n="stat_discipline">Discipline</div>
                         </div>
                     </div>
 
-                    <h2 id="profFullName" class="pro-name" data-i18n="loading_user">جاري التحميل...</h2>
-                    <p class="pro-role" data-i18n="student_role">طالب تمريض</p>
+                    <!-- 4. تنويه النظام التجريبي -->
+                    <div
+                        style="background: #fff7ed; padding: 10px 20px; font-size: 10px; color: #c2410c; text-align: center; border-bottom: 1px solid #ffedd5; line-height: 1.5;">
+                        <i class="fa-solid fa-circle-info"></i> <b data-i18n="note_title">Note:</b> <span
+                            data-i18n="beta_system_msg">Experimental system. Numbers are for review only.</span>
+                    </div>
 
+                    <!-- 5. البيانات التفصيلية -->
+                    <div style="padding: 20px;">
 
-                    <div class="info-grid">
-                        <div class="info-card">
-                            <div class="info-icon-box bg-blue">
-                                <i class="fa-solid fa-layer-group"></i>
-                            </div>
-                            <div>
-                                <div class="info-label" data-i18n="academic_level_label">المستوى الأكاديمي</div>
-                                <div id="profLevel" class="info-value">--</div>
-                            </div>
-                        </div>
-
-                        <div class="info-card">
-                            <div class="info-icon-box bg-purple">
-                                <i class="fa-solid fa-venus-mars"></i>
-                            </div>
-                            <div>
-                                <div class="info-label" data-i18n="gender_label">النوع</div>
-                                <div id="profGender" class="info-value">--</div>
-                            </div>
-                        </div>
-
-                        <div class="info-card full-width">
-                            <div style="display:flex; align-items:center; gap:12px;">
-                                <div class="info-icon-box bg-green" style="margin:0;">
-                                    <i class="fa-solid fa-id-card"></i>
+                        <!-- المستوى والنوع -->
+                        <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                            <div
+                                style="flex: 1; background: #f8fafc; padding: 10px; border-radius: 12px; display: flex; align-items: center; gap: 10px;">
+                                <div
+                                    style="width: 35px; height: 35px; background: #e0f2fe; color: #0284c7; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px;">
+                                    <i class="fa-solid fa-layer-group"></i>
                                 </div>
                                 <div>
-                                    <div class="info-label" data-i18n="university_id_label">الكود الجامعي</div>
-                                    <div id="profStudentID" class="info-value en-font" style="letter-spacing:1px;">
-                                        --
+                                    <div style="font-size: 9px; color: #64748b;" data-i18n="academic_level_label">Level
+                                    </div>
+                                    <div id="profLevel" style="font-size: 12px; font-weight: 700; color: #1e293b;">--
                                     </div>
                                 </div>
                             </div>
-                            <i class="fa-solid fa-check-circle" style="color:#10b981;"></i>
-                        </div>
-
-                        <div class="info-card full-width"
-                            style="flex-direction: column; align-items: flex-start; gap: 5px;">
-                            <div class="info-label" data-i18n="official_email_label">البريد الرسمي</div>
-                            <div id="profEmail" class="info-value en-font"
-                                style="font-size: 13px; word-break: break-all;">--
+                            <div
+                                style="flex: 1; background: #f8fafc; padding: 10px; border-radius: 12px; display: flex; align-items: center; gap: 10px;">
+                                <div
+                                    style="width: 35px; height: 35px; background: #f3e8ff; color: #7c3aed; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px;">
+                                    <i class="fa-solid fa-venus-mars"></i>
+                                </div>
+                                <div>
+                                    <div style="font-size: 9px; color: #64748b;" data-i18n="gender_label">Gender</div>
+                                    <div id="profGender" style="font-size: 12px; font-weight: 700; color: #1e293b;">--
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="info-card full-width"
-                            style="background:transparent; border:none; padding:0; box-shadow:none;">
-                            <div class="info-label" style="width:100%; text-align:center; opacity:0.5;"
-                                data-i18n="system_id_label">معرف النظام</div>
-                            <div id="profUID" class="info-value en-font"
-                                style="width:100%; text-align:center; font-size:10px; color:#94a3b8; font-weight:400;">
-                                --</div>
+                        <!-- الكود والإيميل -->
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px dashed #e2e8f0;">
+                                <span style="font-size: 12px; color: #64748b;">
+                                    <i class="fa-solid fa-id-card" style="margin-right:5px;"></i> <span
+                                        data-i18n="university_id_label">University ID</span>
+                                </span>
+                                <span id="profStudentID" class="en-font"
+                                    style="font-size: 14px; font-weight: 700; color: #0f172a; letter-spacing: 1px;">--</span>
+                            </div>
+
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px dashed #e2e8f0;">
+                                <span style="font-size: 12px; color: #64748b;">
+                                    <i class="fa-solid fa-envelope" style="margin-right:5px;"></i> <span
+                                        data-i18n="official_email_label">Official Email</span>
+                                </span>
+                                <span id="profEmail" class="en-font"
+                                    style="font-size: 11px; font-weight: 600; color: #334155; max-width: 180px; overflow: hidden; text-overflow: ellipsis;">--</span>
+                            </div>
                         </div>
+
+                        <!-- 🔥🔥 (تحديث) بصمة الجهاز بشكل واضح 🔥🔥 -->
+                        <div
+                            style="margin-top: 15px; padding: 10px; background: #fef2f2; border-radius: 12px; border: 1px dashed #fca5a5; text-align: center;">
+
+                            <div
+                                style="display: flex; align-items: center; justify-content: center; gap: 6px; color: #b91c1c; font-size: 11px; font-weight: 700; margin-bottom: 5px;">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                                <span data-i18n="device_warning_msg">Warning: This account is permanently linked to your
+                                    device.</span>
+                            </div>
+
+                            <div
+                                style="display:flex; align-items:center; justify-content:center; gap:4px; font-size: 9px; color: #7f1d1d;">
+                                <span data-i18n="system_id_label">System ID:</span>
+                                <span id="profUID" class="en-font" style="opacity: 0.7;">--</span>
+                            </div>
+                        </div>
+
+                        <!-- زر الخروج -->
+                        <button onclick="performLogout()"
+                            style="margin-top: 20px; width: 100%; padding: 12px; background: #fee2e2; color: #ef4444; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s;">
+                            <span data-i18n="sign_out">Sign Out</span> <i
+                                class="fa-solid fa-arrow-right-from-bracket"></i>
+                        </button>
+
                     </div>
-
-                    <button onclick="performLogout()" class="btn-logout-pro">
-                        <span data-i18n="sign_out">تسجيل الخروج</span> <i
-                            class="fa-solid fa-arrow-right-from-bracket"></i>
-                    </button>
-
                 </div>
             </div>
             <div id="avatarSelectorModal" class="profile-overlay" style="z-index: 2147483647;">
@@ -1892,7 +1998,7 @@
                 <div style="margin-bottom: 15px;">
                     <label
                         style="display: block; font-size: 10px; color: #0ea5e9; font-weight: 800; margin-bottom: 3px; text-transform: uppercase;">
-                        Academic Subject
+                        Job Title
                     </label>
                     <span id="profFacSubject" style="font-size: 15px; font-weight: 600; color: white;">--</span>
                 </div>
@@ -2302,15 +2408,62 @@
         <div id="liveStudentsGrid" class="live-students-grid" style="width: 100%; padding: 10px;"></div>
     </div>
 
-    <div class="bottom-action-area"
-        style="width: 100%; background: #fff; padding: 20px 20px 35px 20px; border-top: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 10px; position: sticky; bottom: 0; z-index: 100;">
-        <button onclick="document.getElementById('manualAddModal').style.display='flex'" class="btn-end-session-eng"
-            style="background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);">
-            <i class="fa-solid fa-user-plus"></i> <span data-i18n="manual_add_btn">إضافة طالب يدوياً</span>
+    <!-- ✅ الكود الجديد: أزرار عائمة صغيرة -->
+    <style>
+        .live-fab-container {
+            position: fixed;
+            bottom: 25px;
+            left: 20px;
+            /* مكانها أسفل اليسار */
+            display: flex;
+            flex-direction: row;
+            /* الأزرار بجانب بعضها */
+            gap: 15px;
+            z-index: 2000;
+            pointer-events: auto;
+        }
+
+        .live-fab-btn {
+            width: 55px;
+            height: 55px;
+            border-radius: 50%;
+            border: none;
+            color: white;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+            cursor: pointer;
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border: 2px solid white;
+        }
+
+        .live-fab-btn:active {
+            transform: scale(0.9);
+        }
+
+        /* لون زر الإضافة (أخضر) */
+        .fab-add {
+            background: linear-gradient(135deg, #10b981, #059669);
+        }
+
+        /* لون زر الإنهاء (أحمر) */
+        .fab-end {
+            background: linear-gradient(135deg, #ef4444, #b91c1c);
+        }
+    </style>
+
+    <div class="live-fab-container">
+        <!-- زر إنهاء الجلسة -->
+        <button onclick="triggerSessionEndOptions()" class="live-fab-btn fab-end" title="إنهاء الجلسة">
+            <i class="fa-solid fa-power-off"></i>
         </button>
 
-        <button id="endSessionBtn" class="btn-end-session-eng" onclick="triggerSessionEndOptions()">
-            <i class="fa-solid fa-power-off"></i> <span data-i18n="end_session_btn">إنهاء الجلسة وحفظ الغياب</span>
+        <!-- زر إضافة طالب -->
+        <button onclick="document.getElementById('manualAddModal').style.display='flex'" class="live-fab-btn fab-add"
+            title="إضافة طالب">
+            <i class="fa-solid fa-user-plus"></i>
         </button>
     </div>
 </div>
@@ -2799,22 +2952,26 @@
             <div class="icon-box-large" style="background: #f0f9ff; color: #0ea5e9; margin: 0 auto 15px;">
                 <i class="fa-solid fa-pause-circle" style="font-size: 30px;"></i>
             </div>
-            <h3 style="color: #0f172a; margin: 0;">قرارات الجلسة</h3>
-            <p style="color: #64748b; font-size: 13px; margin-top: 5px;">هل انتهت المحاضرة تماماً أم تريد أخذ استراحة؟
+            <h3 style="color: #0f172a; margin: 0;" data-i18n="session_decisions_title">Session Decisions</h3>
+            <p style="color: #64748b; font-size: 13px; margin-top: 5px;" data-i18n="session_decisions_subtitle">
+                Has the lecture ended completely or do you want to take a break?
             </p>
         </div>
 
         <button onclick="performSessionPause()" class="btn-main"
-            style="background: linear-gradient(135deg, #f59e0b, #d97706); margin-bottom: 10px;">
-            <i class="fa-solid fa-mug-hot"></i> استراحة واستئناف (Break)
+            style="background: linear-gradient(135deg, #f59e0b, #d97706); margin-bottom: 10px;"
+            data-i18n="btn_take_break">
+            <i class="fa-solid fa-mug-hot"></i> Pause & Resume (Break)
         </button>
 
-        <button onclick="closeSessionImmediately()" class="btn-main" style="background: #ef4444; margin-bottom: 10px;">
-            <i class="fa-solid fa-floppy-disk"></i> إنهاء وحفظ نهائي
+        <button onclick="closeSessionImmediately()" class="btn-main" style="background: #ef4444; margin-bottom: 10px;"
+            data-i18n="btn_end_session">
+            <i class="fa-solid fa-floppy-disk"></i> End & Save
         </button>
 
-        <button onclick="document.getElementById('sessionActionModal').style.display='none'" class="btn-sheet-cancel">
-            تراجع <i class="fa-solid fa-xmark"></i>
+        <button onclick="document.getElementById('sessionActionModal').style.display='none'" class="btn-sheet-cancel"
+            data-i18n="btn_cancel_close">
+            Cancel <i class="fa-solid fa-xmark"></i>
         </button>
     </div>
 </div>
@@ -2974,7 +3131,8 @@
     <div class="modal-box">
         <div class="feedback-header">
             <div class="feedback-title">
-                <i class="fa-solid fa-star"></i> تقييمات اليوم
+                <i class="fa-solid fa-star"></i>
+                <span data-i18n="feedback_today_title">Today's Ratings</span>
             </div>
             <button onclick="document.getElementById('liveFeedbackModal').style.display='none'" class="btn-close-icon">
                 <i class="fa-solid fa-xmark"></i>
@@ -2987,12 +3145,15 @@
             </div>
 
             <div id="starsStatsContainer">
-                <div style="color:#94a3b8;"><i class="fa-solid fa-circle-notch fa-spin"></i> تحميل...</div>
+                <div style="color:#94a3b8;">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i>
+                    <span data-i18n="loading_text">Loading...</span>
+                </div>
             </div>
 
             <div class="total-box">
                 <div id="totalFeedbackVal" class="total-number">0</div>
-                <div class="total-label">إجمالي الطلاب المقيمين</div>
+                <div class="total-label" data-i18n="total_rated_students">Total Rated Students</div>
             </div>
         </div>
     </div>

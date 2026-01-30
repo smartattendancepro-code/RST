@@ -158,7 +158,6 @@ window.confirmSessionStart = async function () {
     }
 };
 
-
 window.closeSessionImmediately = function () {
 
     const confirmBtn = document.getElementById('btnConfirmYes') || document.querySelector('.swal2-confirm');
@@ -176,14 +175,13 @@ window.closeSessionImmediately = function () {
         const actionBtn = document.getElementById('btnConfirmYes') || document.querySelector('.confirm-btn-yes');
         if (actionBtn) {
             actionBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> ' + ((lang === 'ar') ? "جاري المعالجة..." : "Processing...");
-            actionBtn.style.pointerEvents = 'none'; // منع الضغط المتكرر
+            actionBtn.style.pointerEvents = 'none';
             actionBtn.style.opacity = '0.7';
         }
 
         try {
-        
+            // 1. إيقاف المستمعين
             if (window.unsubscribeLiveSnapshot) {
-                console.log("🔕 Muting Live Listener...");
                 window.unsubscribeLiveSnapshot();
                 window.unsubscribeLiveSnapshot = null;
             }
@@ -192,6 +190,7 @@ window.closeSessionImmediately = function () {
                 window.deanRadarUnsubscribe = null;
             }
 
+            // 2. جلب بيانات الجلسة
             const sessionRef = doc(db, "active_sessions", user.uid);
             const sessionSnap = await getDoc(sessionRef);
 
@@ -201,14 +200,19 @@ window.closeSessionImmediately = function () {
             }
 
             const settings = sessionSnap.data();
+            const targetGroups = (settings.targetGroups && settings.targetGroups.length > 0)
+                ? settings.targetGroups
+                : ["General"];
 
+            // 3. تجهيز التواريخ
             const now = new Date();
             const d = String(now.getDate()).padStart(2, '0');
             const m = String(now.getMonth() + 1).padStart(2, '0');
             const y = now.getFullYear();
             const fixedDateStr = `${d}/${m}/${y}`;
-            const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            const closeTimeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
+            // 4. جلب الطلاب
             const partsRef = collection(db, "active_sessions", user.uid, "participants");
             const partsSnap = await getDocs(partsRef);
 
@@ -226,87 +230,136 @@ window.closeSessionImmediately = function () {
                 opCounter = 0;
             };
 
+            // تنظيف اسم المادة للمفتاح الآمن
+            const rawSubject = settings.allowedSubject || "General";
+            const cleanSubKey = rawSubject.trim().replace(/\s+/g, '_').replace(/[^\w\u0600-\u06FF]/g, '');
+
+            // ============================================================
+            // المرحلة الأولى: معالجة الطلاب
+            // ============================================================
             partsSnap.forEach(docSnap => {
                 const p = docSnap.data();
 
-                if (p.status === "active") {
-                    const safeSubject = (settings.allowedSubject || "General").replace(/\//g, '-');
-                    const recID = `${p.id}_${fixedDateStr.replace(/\//g, '-')}_${safeSubject}`;
+                if (p.status === "active" || p.status === "on_break") {
+
+                    // 1. تسجيل وثيقة الحضور (Attendance Record)
+                    const recID = `${p.id}_${fixedDateStr.replace(/\//g, '-')}_${cleanSubKey}`;
                     const attRef = doc(db, "attendance", recID);
+
+                    let finalGroup = (p.group && p.group !== "General") ? p.group : targetGroups[0];
+                    let notesText = "منضبط";
+                    if (p.isUnruly) notesText = "غير منضبط - مشاغب";
+                    else if (p.isUniformViolation) notesText = "مخالفة زي";
 
                     currentBatch.set(attRef, {
                         id: p.id,
                         name: p.name,
-                        subject: settings.allowedSubject,
+                        subject: rawSubject,
                         hall: settings.hall,
-                        group: p.group || "General",
+                        group: finalGroup,
                         date: fixedDateStr,
-                        time_str: timeStr,
+                        time_str: p.time_str || closeTimeStr,
+                        segment_count: p.segment_count || 1,
+                        notes: notesText,
                         timestamp: serverTimestamp(),
                         status: "ATTENDED",
-
-                        segments_attended: p.segment_count || 1,
-
                         doctorUID: user.uid,
                         doctorName: currentDocName,
                         feedback_status: "pending",
-                        feedback_rating: 0
+                        feedback_rating: 0,
+                        isUnruly: p.isUnruly || false,
+                        isUniformViolation: p.isUniformViolation || false
                     });
                     opCounter++;
 
-                    const cleanSubKey = settings.allowedSubject.trim().replace(/\s+/g, '_').replace(/[^\w\u0600-\u06FF]/g, '');
-                    const studentStatsRef = doc(db, "student_stats", p.uid);
-                    currentBatch.set(studentStatsRef, {
-                        [`attended.${cleanSubKey}`]: increment(1),
-                        group: p.group || "General"
-                    }, { merge: true });
-                    opCounter++;
+                    // 2. تحديث إحصائيات الطالب (Student Stats)
+                    // 🔴🔴 هنا كان الخطأ وتم إصلاحه لضمان هيكلية Map صحيحة 🔴🔴
+                    const studentStatsRef = doc(db, "student_stats", p.uid || p.id);
 
+                    let statsUpdate = {
+                        group: finalGroup,
+                        studentID: p.id,
+                        last_updated: serverTimestamp(),
+                        // التصحيح: استخدام كائن متداخل بدلاً من المفتاح المركب
+                        attended: {
+                            [cleanSubKey]: increment(1)
+                        }
+                    };
+
+                    if (p.isUnruly) statsUpdate.cumulative_unruly = increment(1);
+                    if (p.isUniformViolation) statsUpdate.cumulative_uniform = increment(1);
+
+                    currentBatch.set(studentStatsRef, statsUpdate, { merge: true });
+                    opCounter++;
                     processedCount++;
                 }
 
+                // حذف من القاعة
                 currentBatch.delete(docSnap.ref);
                 opCounter++;
-
-                if (opCounter >= BATCH_LIMIT) {
-                    pushBatch();
-                }
+                if (opCounter >= BATCH_LIMIT) pushBatch();
             });
 
-            if (settings.targetGroups && settings.targetGroups.length > 0) {
-                const cleanSubKey = settings.allowedSubject.trim().replace(/\s+/g, '_').replace(/[^\w\u0600-\u06FF]/g, '');
-
-                settings.targetGroups.forEach(groupName => {
+            // ============================================================
+            // المرحلة الثانية: Legacy Stats (اختياري)
+            // ============================================================
+            if (targetGroups.length > 0) {
+                targetGroups.forEach(groupName => {
                     if (!groupName) return;
                     const groupRef = doc(db, "groups_stats", groupName);
-
+                    // هنا نستخدم صيغة النقطة لأننا نحدث حقلاً محدداً داخل وثيقة موجودة
                     currentBatch.set(groupRef, {
-                        [`subjects.${cleanSubKey}`]: increment(1),
+                        [`subjects.${cleanSubKey}.total_sessions_held`]: increment(1),
                         last_updated: serverTimestamp()
                     }, { merge: true });
                     opCounter++;
-
                     if (opCounter >= BATCH_LIMIT) pushBatch();
                 });
             }
 
+            // ============================================================
+            // 🚀 المرحلة الثالثة: تسجيل العداد (Course Counters) - بدون تكرار
+            // ============================================================
+
+            const safeDateID = fixedDateStr.replace(/\//g, '-'); // 29-01-2026
+
+            targetGroups.forEach(grp => {
+                // ID ثابت لمنع التكرار
+                const uniqueCounterID = `${safeDateID}_${cleanSubKey}_${grp}`;
+
+                const counterRef = doc(db, "course_counters", uniqueCounterID);
+
+                currentBatch.set(counterRef, {
+                    subject: rawSubject, // الاسم الأصلي
+                    targetGroups: [grp],
+                    date: fixedDateStr,
+                    timestamp: serverTimestamp(),
+                    doctorUID: user.uid,
+                    academic_year: y.toString()
+                });
+
+                opCounter++;
+                if (opCounter >= BATCH_LIMIT) pushBatch();
+            });
+
+            // ============================================================
+            // المرحلة الرابعة: الإغلاق
+            // ============================================================
+
             currentBatch.update(sessionRef, { isActive: false, isDoorOpen: false });
             opCounter++;
 
-            if (opCounter > 0) {
-                commitPromises.push(currentBatch.commit());
-            }
+            if (opCounter > 0) commitPromises.push(currentBatch.commit());
 
             await Promise.all(commitPromises);
 
-            showToast(`✅ تم الحفظ (${processedCount} طالب)`, 4000, "#10b981");
+            showToast(`✅ تم الحفظ وتحديث السجلات (${processedCount} طالب)`, 4000, "#10b981");
 
             setTimeout(() => location.reload(), 1500);
 
         } catch (e) {
             console.error("Save Error:", e);
             showToast("خطأ في الحفظ: " + e.message, 4000, "#ef4444");
-
             if (actionBtn) {
                 actionBtn.innerHTML = (lang === 'ar') ? "إعادة المحاولة" : "Retry";
                 actionBtn.style.pointerEvents = 'auto';
@@ -315,7 +368,6 @@ window.closeSessionImmediately = function () {
         }
     });
 };
-
 
 window.performSessionPause = async function () {
     const user = auth.currentUser;
@@ -468,10 +520,9 @@ function updateSessionButtonUI(isOpen) {
     const icon = document.getElementById('sessionIcon');
     const txt = document.getElementById('sessionText');
 
-    if (!btn) return;
+    const lang = localStorage.getItem('sys_lang') || 'en';
 
-    const t = window.t || ((k) => k);
-    const lang = localStorage.getItem('sys_lang') || 'ar';
+    if (!btn) return;
 
     btn.style.display = 'flex';
 
@@ -484,8 +535,8 @@ function updateSessionButtonUI(isOpen) {
         if (icon) icon.className = "fa-solid fa-tower-broadcast fa-fade";
 
         if (txt) {
-            const fallbackText = (lang === 'ar') ? "جلستك نشطة (اضغط للمتابعة)" : "Session Active (Tap to Resume)";
-            txt.innerText = t('session_active_btn') || fallbackText;
+            txt.setAttribute('data-i18n', 'session_active_btn');
+            txt.innerText = (lang === 'ar') ? "جلستك نشطة" : "Session Active";
         }
 
     } else {
@@ -497,8 +548,8 @@ function updateSessionButtonUI(isOpen) {
         if (icon) icon.className = "fa-solid fa-play";
 
         if (txt) {
-            const fallbackText = (lang === 'ar') ? "بدء محاضرة جديدة" : "Start New Lecture";
-            txt.innerText = t('start_new_session_btn') || fallbackText;
+            txt.setAttribute('data-i18n', 'start_new_session_btn');
+            txt.innerText = (lang === 'ar') ? "بدء محاضرة جديدة" : "Start New Session";
         }
     }
 
@@ -520,10 +571,18 @@ window.handleSessionTimer = function (isActive, startTime, duration) {
 
     if (!isActive) {
         if (isAdmin && btn) {
+            const lang = localStorage.getItem('sys_lang') || 'en';
+
             btn.classList.remove('session-open');
-            btn.style.background = "#fee2e2";
-            btn.style.color = "#991b1b";
-            if (txt) txt.innerText = "بدء محاضرة جديدة";
+            btn.style.background = "#f1f5f9";
+            btn.style.color = "#334155";
+            btn.style.border = "2px solid #cbd5e1";
+
+            if (txt) {
+                txt.setAttribute('data-i18n', 'start_new_session_btn');
+                txt.innerText = (lang === 'ar') ? "بدء محاضرة جديدة" : "Start New Session";
+            }
+
             if (icon) icon.className = "fa-solid fa-play";
         }
         if (floatTimer) floatTimer.style.display = 'none';

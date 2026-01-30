@@ -197,36 +197,74 @@ window.exportDashboard = async function (type) {
 window.exportAttendanceSheet = async function (subjectName) {
     if (typeof playClick === 'function') playClick();
 
-    const allSubjects = window.subjectsData || {};
+    const allSubjects = JSON.parse(localStorage.getItem('subjectsData_v4')) || window.subjectsData || {};
+    let TARGET_LEVEL = "1";
 
-    let TARGET_LEVEL = "1"; 
+    if (allSubjects["first_year"]?.includes(subjectName) || allSubjects["1"]?.includes(subjectName)) TARGET_LEVEL = "1";
+    else if (allSubjects["second_year"]?.includes(subjectName) || allSubjects["2"]?.includes(subjectName)) TARGET_LEVEL = "2";
+    else if (allSubjects["third_year"]?.includes(subjectName) || allSubjects["3"]?.includes(subjectName)) TARGET_LEVEL = "3";
+    else if (allSubjects["fourth_year"]?.includes(subjectName) || allSubjects["4"]?.includes(subjectName)) TARGET_LEVEL = "4";
 
-    if (allSubjects["first_year"]?.includes(subjectName)) TARGET_LEVEL = "1";
-    else if (allSubjects["second_year"]?.includes(subjectName)) TARGET_LEVEL = "2";
-    else if (allSubjects["third_year"]?.includes(subjectName)) TARGET_LEVEL = "3";
-    else if (allSubjects["fourth_year"]?.includes(subjectName)) TARGET_LEVEL = "4";
+    const levelNames = {
+        "1": "الفرقة الأولى",
+        "2": "الفرقة الثانية",
+        "3": "الفرقة الثالثة",
+        "4": "الفرقة الرابعة"
+    };
+    const displayLevelName = levelNames[TARGET_LEVEL] || `الفرقة ${TARGET_LEVEL}`;
 
-    showToast(`⏳ جاري استخراج شيت (حضور + انضباط + تفاصيل) للفرقة ${TARGET_LEVEL}...`, 15000, "#3b82f6");
+    if (!window.cachedReportData || window.cachedReportData.length === 0) {
+        alert("⚠️ لا توجد بيانات في التقرير الحالي. يرجى فتح السجل أولاً.");
+        return;
+    }
+
+    showToast(`⏳ جاري الاتصال بقاعدة البيانات لجلب السجل التراكمي للطلاب...`, 20000, "#0ea5e9");
 
     try {
-
         const attendees = window.cachedReportData.filter(s => s.subject === subjectName);
         const attendeesMap = {};
+        const studentIDs = [];
 
         attendees.forEach(a => {
-            let cleanNotes = "منضبط";
-            if (a.notes && a.notes !== "منضبط") cleanNotes = a.notes;
-
-            let sessionCounter = a.segment_count || 1;
-            let docName = a.doctorName || "غير محدد";
-
             attendeesMap[a.uniID] = {
                 ...a,
-                finalStatus: cleanNotes,
-                finalDoc: docName,
-                finalCount: sessionCounter
+                isUnruly: a.isUnruly || false,
+                isUniformViolation: a.isUniformViolation || false,
+                sessionCount: a.segment_count || 1, 
+                docName: a.doctorName || "غير محدد",
+                time: a.time || "--:--",
+                group: a.group || "General"
             };
+            if (a.uniID && a.uniID !== "---") studentIDs.push(a.uniID);
         });
+
+        const cumulativeStats = {};
+
+        if (studentIDs.length > 0) {
+            const chunkSize = 30;
+            const chunks = [];
+            for (let i = 0; i < studentIDs.length; i += chunkSize) {
+                chunks.push(studentIDs.slice(i, i + chunkSize));
+            }
+
+            const promises = chunks.map(async (chunk) => {
+                const statsQuery = query(
+                    collection(db, "student_stats"),
+                    where("studentID", "in", chunk)
+                );
+                const snapshot = await getDocs(statsQuery);
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    cumulativeStats[data.studentID] = {
+                        totalUnruly: data.cumulative_unruly || 0,
+                        totalUniform: data.cumulative_uniform || 0
+                    };
+                });
+            });
+
+            await Promise.all(promises);
+            console.log("✅ تم تحميل السجل التراكمي للطلاب بنجاح");
+        }
 
         const q = query(collection(db, "students"), where("academic_level", "==", TARGET_LEVEL));
         const querySnapshot = await getDocs(q);
@@ -235,51 +273,58 @@ window.exportAttendanceSheet = async function (subjectName) {
 
         querySnapshot.forEach((doc) => {
             const s = doc.data();
-            const attendanceRecord = attendeesMap[s.id];
+            const record = attendeesMap[s.id];
+            const history = cumulativeStats[s.id] || { totalUnruly: 0, totalUniform: 0 };
 
-            if (attendanceRecord) {
-                let rowStyle = "background-color: #ecfdf5; color: #065f46;";
-                let statusText = "✅ حاضر";
-                let notesText = "منضبط";
+            if (record) {
+                let statusColor = "#f0fdf4"; 
 
-                if (attendanceRecord.finalStatus.includes("غير منضبط")) {
-                    rowStyle = "background-color: #fee2e2; color: #b91c1c; font-weight:bold;"; // أحمر
-                    statusText = "⚠️ حاضر (سلوك)";
-                    notesText = "غير منضبط";
-                } else if (attendanceRecord.finalStatus.includes("زي")) {
-                    rowStyle = "background-color: #ffedd5; color: #c2410c; font-weight:bold;"; // برتقالي
-                    statusText = "👕 حاضر (زي)";
-                    notesText = "مخالفة زي";
+                let disciplineText = "منضبط";
+                if (record.isUnruly) {
+                    statusColor = "#fef2f2"; 
+                    disciplineText = `⚠️ مشاغب (تراكمي: ${history.totalUnruly + 1})`;
+                } else if (history.totalUnruly > 0) {
+                    disciplineText = `منضبط (سابقاً: ${history.totalUnruly})`;
+                }
+
+                let uniformText = "ملتزم";
+                if (record.isUniformViolation) {
+                    if (statusColor === "#f0fdf4") statusColor = "#fffbeb"; 
+                    uniformText = `👕 مخالف (تراكمي: ${history.totalUniform + 1})`;
+                } else if (history.totalUniform > 0) {
+                    uniformText = `ملتزم (سابقاً: ${history.totalUniform})`;
                 }
 
                 finalReport.push({
                     name: s.name,
                     id: s.id,
-                    level: s.academic_level,
-                    status: statusText,
-                    notes: notesText,
-                    time: attendanceRecord.time,
-                    group: attendanceRecord.group,
-                    doctor: attendanceRecord.finalDoc,
-                    sessions: attendanceRecord.finalCount,
-                    rowColor: `style='${rowStyle}'`,
+                    status: "✅ حاضر",
+                    discipline: disciplineText,
+                    uniform: uniformText,
+                    type: "نظامي",
+                    time: record.time,
+                    group: record.group,
+                    sessions: record.sessionCount,
+                    doctor: record.docName,
+                    rowStyle: `style='background-color: ${statusColor}; color: #000000;'`,
                     isPresent: true
                 });
 
-                delete attendeesMap[s.id];
+                delete attendeesMap[s.id]; 
 
             } else {
                 finalReport.push({
                     name: s.name,
                     id: s.id,
-                    level: s.academic_level,
                     status: "❌ غائب",
-                    notes: "-",
+                    discipline: history.totalUnruly > 0 ? `(سوابق: ${history.totalUnruly})` : "-",
+                    uniform: history.totalUniform > 0 ? `(سوابق: ${history.totalUniform})` : "-",
+                    type: "نظامي",
                     time: "--:--",
                     group: "--",
+                    sessions: "0",
                     doctor: "-",
-                    sessions: "-",
-                    rowColor: "style='color: #64748b;'",
+                    rowStyle: "style='color: #64748b;'",
                     isPresent: false
                 });
             }
@@ -287,17 +332,26 @@ window.exportAttendanceSheet = async function (subjectName) {
 
         for (let intruderID in attendeesMap) {
             const intruder = attendeesMap[intruderID];
+            const history = cumulativeStats[intruder.uniID] || { totalUnruly: 0, totalUniform: 0 };
+
+            let statusColor = "#fff9c4"; 
+            if (intruder.isUnruly) statusColor = "#fef2f2"; 
+
+            let disciplineText = intruder.isUnruly ? `⚠️ مشاغب (تراكمي: ${history.totalUnruly + 1})` : (history.totalUnruly > 0 ? `(سابقاً: ${history.totalUnruly})` : "منضبط");
+            let uniformText = intruder.isUniformViolation ? `👕 مخالف (تراكمي: ${history.totalUniform + 1})` : (history.totalUniform > 0 ? `(سابقاً: ${history.totalUniform})` : "ملتزم");
+
             finalReport.push({
                 name: intruder.name,
                 id: intruder.uniID,
-                level: "تخلفات",
-                status: "✅ حاضر (تخلفات)",
-                notes: intruder.finalStatus,
+                status: "✅ حاضر",
+                discipline: disciplineText,
+                uniform: uniformText,
+                type: "🔴 تخلفات",
                 time: intruder.time,
                 group: intruder.group,
-                doctor: intruder.finalDoc,
-                sessions: intruder.finalCount,
-                rowColor: "style='background-color: #fef08a; color: #854d0e; font-weight:bold;'", // أصفر
+                sessions: intruder.sessionCount,
+                doctor: intruder.docName,
+                rowStyle: `style='background-color: ${statusColor}; color: #000000; font-weight:bold;'`,
                 isPresent: true
             });
         }
@@ -305,15 +359,12 @@ window.exportAttendanceSheet = async function (subjectName) {
         finalReport.sort((a, b) => {
             if (a.isPresent && !b.isPresent) return -1;
             if (!a.isPresent && b.isPresent) return 1;
-
             return a.id.toString().localeCompare(b.id.toString(), undefined, { numeric: true, sensitivity: 'base' });
         });
 
         const now = new Date();
-        const dayName = now.toLocaleDateString('ar-EG', { weekday: 'long' });
         const dateOnly = now.toLocaleDateString('en-GB');
-        const dateStrForFile = dateOnly.replace(/\//g, '-');
-        const fileName = `تقرير_${subjectName}_${dateStrForFile}.xls`;
+        const fileName = `تقرير_${subjectName}_${dateOnly.replace(/\//g, '-')}.xls`;
 
         let tableContent = `
             <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
@@ -321,34 +372,37 @@ window.exportAttendanceSheet = async function (subjectName) {
                 <meta charset="UTF-8">
                 <style>
                     table { border-collapse: collapse; width: 100%; direction: rtl; font-family: 'Arial', sans-serif; }
-                    th { background-color: #1e293b; color: white; border: 1px solid #000; padding: 10px; text-align: center; font-size: 14px; }
-                    td { border: 1px solid #000; padding: 5px; text-align: center; vertical-align: middle; font-size: 12px; }
-                    .header-info { font-size: 16px; color: #334155; font-weight: normal; margin-top: 5px; }
+                    th { color: white; border: 1px solid #000; padding: 12px; text-align: center; font-size: 14px; font-weight: bold; }
+                    td { border: 1px solid #000; padding: 8px; text-align: center; vertical-align: middle; font-size: 12px; }
+                    .header-info { margin-top: 5px; font-size: 14px; }
                 </style>
             </head>
             <body>
             
-            <div style="text-align:center; padding:15px; margin-bottom:10px;">
-                <h2 style="margin:0; color:#0f172a;">كشف تفصيلي لمادة: ${subjectName} (الفرقة ${TARGET_LEVEL})</h2>
-                <div class="header-info">
-                    اليوم: <b>${dayName}</b> &nbsp;|&nbsp; التاريخ: <b>${dateOnly}</b>
-                </div>
+            <div style="text-align:center; padding:20px;">
+                <h2 style="margin:0; color:#1e293b;">جامعة الريادة - كلية التمريض</h2>
+                <h3 style="margin:5px 0;">كشف حضور وتتبع سلوك - مادة: ${subjectName}</h3>
+                <p class="header-info"><strong>${displayLevelName}</strong> | التاريخ: ${dateOnly}</p>
             </div>
 
             <table>
                 <thead>
                     <tr>
-                        <th>م</th>
-                        <th>اسم الطالب</th>
-                        <th>الكود الجامعي</th>
-                        <th>حالة الحضور</th>
-                        <th>ملاحظات السلوك</th>
-                        <th>وقت التسجيل</th>
-                        <th>المجموعة</th>
+                        <th style="background-color: #4472c4; width: 50px;">م</th>
+                        <th style="background-color: #4472c4; width: 200px;">اسم الطالب</th>
+                        <th style="background-color: #4472c4; width: 100px;">الكود الجامعي</th>
+                        <th style="background-color: #4472c4; width: 100px;">حالة الحضور</th>
                         
-                        <!-- 🔥 الأعمدة الجديدة 🔥 -->
-                        <th style="background-color: #0f766e;">عدد الجلسات</th>
-                        <th style="background-color: #0369a1;">اسم الدكتور</th>
+                        <th style="background-color: #c00000; width: 150px;">السلوك (التراكمي)</th>
+                        <th style="background-color: #ed7d31; width: 150px;">الزي (التراكمي)</th>
+                        <th style="background-color: #5b9bd5; width: 100px;">نوع القيد</th>
+
+                        <th style="background-color: #70ad47; width: 100px;">وقت الدخول</th>
+                        <th style="background-color: #70ad47; width: 100px;">المجموعة</th>
+                        <th style="background-color: #70ad47; width: 150px;">المحاضر</th>
+                        
+                        <!-- العمود الجديد -->
+                        <th style="background-color: #4f46e5; width: 100px;">عدد الفترات</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -356,77 +410,41 @@ window.exportAttendanceSheet = async function (subjectName) {
 
         finalReport.forEach((row, index) => {
             tableContent += `
-                <tr ${row.rowColor}>
+                <tr ${row.rowStyle}>
                     <td>${index + 1}</td>
                     <td>${row.name}</td>
                     <td style='mso-number-format:"\\@"'>${row.id}</td>
                     <td>${row.status}</td>
-                    <td>${row.notes}</td>
+                    
+                    <td style="font-weight:bold;">${row.discipline}</td>
+                    <td>${row.uniform}</td>
+                    <td style="font-weight:bold;">${row.type}</td>
+
                     <td>${row.time}</td>
                     <td>${row.group}</td>
-                    
-                    <!-- بيانات الأعمدة الجديدة -->
-                    <td style="font-weight:bold;">${row.sessions}</td>
                     <td>${row.doctor}</td>
+                    
+                    <td style="font-weight:bold;">${row.sessions}</td>
                 </tr>
             `;
         });
 
         tableContent += `</tbody></table></body></html>`;
 
-        if (typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform()) {
-
-            console.log("📲 Native Mode Detected: Starting Share Process...");
-
-            const { Filesystem, Directory, Encoding } = Capacitor.Plugins.Filesystem;
-            const { Share } = Capacitor.Plugins.Share;
-
-            try {
-                const base64Data = btoa(unescape(encodeURIComponent(tableContent)));
-
-                const result = await Filesystem.writeFile({
-                    path: fileName,
-                    data: base64Data,
-                    directory: Directory.Cache
-                });
-
-                console.log("✅ File saved at:", result.uri);
-
-                await Share.share({
-                    title: 'تصدير كشف الحضور',
-                    text: `إليك كشف حضور مادة ${subjectName}`,
-                    url: result.uri,
-                    dialogTitle: 'حفظ أو إرسال الملف'
-                });
-
-                showToast("✅ تم تجهيز الملف للمشاركة", 3000, "#10b981");
-
-            } catch (nativeError) {
-                console.error("Native Export Error:", nativeError);
-                downloadWebFile();
-            }
-
-        } else {
-            downloadWebFile();
-        }
-
-        function downloadWebFile() {
-            const blob = new Blob([tableContent], { type: 'application/vnd.ms-excel;charset=utf-8' });
-            const link = document.createElement("a");
-            const url = URL.createObjectURL(blob);
-            link.setAttribute("href", url);
-            link.setAttribute("download", fileName);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
+        const blob = new Blob([tableContent], { type: 'application/vnd.ms-excel;charset=utf-8' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", fileName);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
 
         if (typeof playSuccess === 'function') playSuccess();
-        if (document.getElementById('toastNotification')) document.getElementById('toastNotification').style.display = 'none';
 
     } catch (error) {
-        console.error(error);
-        alert("حدث خطأ: " + error.message);
+        console.error("Advanced Export Error:", error);
+        alert("حدث خطأ أثناء الاتصال بقاعدة البيانات: " + error.message);
     }
 };
 
@@ -437,7 +455,7 @@ window.downloadHistoricalSheet = async function () {
     const level = document.getElementById('archiveLevelSelect').value;
     const subjectName = document.getElementById('archiveSubjectInput').value.trim();
     const rawDate = document.getElementById('historyDateInput').value;
-    const isWeekly = document.getElementById('repWeekly').checked; // هل اختار أسبوع؟
+    const isWeekly = document.getElementById('repWeekly').checked;
 
     if (!level) { showToast("⚠️ اختر الفرقة", 3000, "#f59e0b"); return; }
     if (!subjectName) { showToast("⚠️ اكتب اسم المادة", 3000, "#f59e0b"); return; }

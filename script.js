@@ -305,7 +305,7 @@ window.monitorMyParticipation = async function () {
             const _t = (typeof t === 'function') ? t : (key, def) => def;
 
             if (window.studentStatusListener) {
-                window.studentStatusListener(); 
+                window.studentStatusListener();
                 window.studentStatusListener = null;
             }
 
@@ -330,14 +330,14 @@ window.monitorMyParticipation = async function () {
             if (exBody) exBody.innerHTML = _t('modal_expel_body', "The instructor has removed you from this session.<br>You cannot rejoin.");
 
             if (exModal) {
-                exModal.style.setProperty('display', 'flex', 'important'); 
+                exModal.style.setProperty('display', 'flex', 'important');
 
                 const leaveBtn = exModal.querySelector('button') || exModal.querySelector('.btn-danger');
                 if (leaveBtn) {
                     leaveBtn.innerHTML = _t('btn_leave_hall', "Leave Hall ➜");
                     leaveBtn.onclick = function () {
                         exModal.style.display = 'none';
-                        window.location.reload(); 
+                        window.location.reload();
                     };
                 }
 
@@ -3209,40 +3209,149 @@ document.addEventListener('click', (e) => {
     window.openStudentProfile = async function () {
         const user = auth.currentUser;
 
+        // 1. إخفاء زر المعلومات
         const infoBtn = document.getElementById('infoBtn');
         if (infoBtn) infoBtn.style.display = 'none';
 
+        // 2. التحقق من الدخول
         if (!user) {
             showToast("⚠️ يرجى تسجيل الدخول أولاً", 3000, "#f59e0b");
             return;
         }
 
+        // 3. فتح المودال
         const modal = document.getElementById('studentProfileModal');
         if (modal) {
             modal.style.display = 'flex';
             setTimeout(() => modal.classList.add('active'), 10);
         }
 
-        const renderData = (data, isCached) => {
+        // 4. مؤشرات التحميل
+        document.getElementById('profAttendanceVal').innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="font-size:14px"></i>';
+        document.getElementById('profAbsenceVal').innerHTML = '-';
+        document.getElementById('profDisciplineVal').innerHTML = '-';
+
+        // 5. دالة جلب البيانات والحساب
+        const renderData = async (data, isCached) => {
             const info = data.registrationInfo || data;
 
+            // --- عرض البيانات الشخصية ---
             document.getElementById('profFullName').innerText = info.fullName || "--";
             document.getElementById('profStudentID').innerText = info.studentID || "--";
             document.getElementById('profLevel').innerText = `الفرقة ${info.level || '?'}`;
             document.getElementById('profGender').innerText = info.gender || "--";
-            document.getElementById('profEmail').innerText = info.email || "--";
+
+            // عرض الإيميل
+            document.getElementById('profEmail').innerText = info.email || user.email || "--";
+
             document.getElementById('profUID').innerText = data.uid || user.uid;
 
+            // الأفاتار
             const currentAvatarEl = document.getElementById('currentAvatar');
             if (currentAvatarEl) {
                 const iconClass = data.avatarClass || info.avatarClass || "fa-user-graduate";
                 currentAvatarEl.innerHTML = `<i class="fa-solid ${iconClass}"></i>`;
                 currentAvatarEl.style.color = "var(--primary-dark)";
             }
+
+            // ==========================================================
+            // 🚀 الحساب الدقيق (كل مادة على حدة)
+            // ==========================================================
+            try {
+                const studentUID = user.uid;
+                const myGroup = (info.group && info.group.trim() !== "") ? info.group.trim() : "General";
+
+                // أ) ماذا حضر الطالب؟ (Student Stats)
+                const myStatsRef = doc(db, "student_stats", studentUID);
+                const myStatsSnap = await getDoc(myStatsRef);
+
+                let myAttendedSubjects = {};
+                let disciplineStatus = "good";
+
+                if (myStatsSnap.exists()) {
+                    const sData = myStatsSnap.data();
+                    myAttendedSubjects = sData.attended || {};
+
+                    if (sData.cumulative_unruly >= 3) disciplineStatus = "bad";
+                    else if (sData.cumulative_unruly > 0) disciplineStatus = "warning";
+                }
+
+                // ب) ماذا فُتح للجروب؟ (Course Counters)
+                const countersQuery = query(
+                    collection(db, "course_counters"),
+                    where("targetGroups", "array-contains", myGroup)
+                );
+
+                const countersSnap = await getDocs(countersQuery);
+
+                // تجميع المحاضرات المفتوحة لكل مادة
+                let totalSessionsHeldMap = {};
+                countersSnap.forEach(doc => {
+                    const cData = doc.data();
+                    const subjectName = cData.subject.trim();
+
+                    if (!totalSessionsHeldMap[subjectName]) {
+                        totalSessionsHeldMap[subjectName] = 0;
+                    }
+                    totalSessionsHeldMap[subjectName]++;
+                });
+
+                // ج) المطابقة والحساب (Loop Matching)
+                let totalAttendanceDays = 0;
+                let totalAbsenceDays = 0;
+
+                const normalizeStr = (str) => str.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '').toLowerCase();
+
+                // نلف على المواد التي فُتحت للجروب
+                for (const [subjectHeld, totalHeldCount] of Object.entries(totalSessionsHeldMap)) {
+
+                    let studentCount = 0;
+                    const targetSubjectNorm = normalizeStr(subjectHeld);
+
+                    // نبحث: هل حضر الطالب هذه المادة؟
+                    for (const [studentSubject, studentVal] of Object.entries(myAttendedSubjects)) {
+                        if (normalizeStr(studentSubject) === targetSubjectNorm) {
+                            studentCount = studentVal;
+                            break;
+                        }
+                    }
+
+                    // 1. إضافة رصيد الحضور للإجمالي
+                    totalAttendanceDays += studentCount;
+
+                    // 2. حساب رصيد الغياب لهذه المادة تحديداً
+                    // (عدد المرات اللي الدكتور فتح فيها - عدد المرات اللي الطالب حضر فيها)
+                    const absenceInSubject = Math.max(0, totalHeldCount - studentCount);
+                    totalAbsenceDays += absenceInSubject;
+                }
+
+                // د) تحديث الشاشة
+                document.getElementById('profAttendanceVal').innerText = totalAttendanceDays;
+                document.getElementById('profAbsenceVal').innerText = totalAbsenceDays;
+
+                // هـ) السلوك
+                const discEl = document.getElementById('profDisciplineVal');
+                if (disciplineStatus === "bad") {
+                    discEl.innerText = "مشاغب";
+                    discEl.style.color = "#ef4444";
+                } else if (disciplineStatus === "warning") {
+                    discEl.innerText = "تنبيه";
+                    discEl.style.color = "#f59e0b";
+                } else {
+                    discEl.innerText = "ملتزم";
+                    discEl.style.color = "#10b981";
+                }
+
+            } catch (calcError) {
+                console.error("Profile Calculation Error:", calcError);
+                document.getElementById('profAttendanceVal').innerText = "?";
+                document.getElementById('profAbsenceVal').innerText = "?";
+            }
         };
 
         smartFetch("user_registrations", user.uid, renderData);
     };
+
     window.openAvatarSelector = async function () {
         const user = auth.currentUser;
         if (!user) return;

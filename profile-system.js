@@ -15,7 +15,7 @@ window.openPublicProfile = async function (targetUID, ignoredFlag = false) {
 
     const elName = document.getElementById('publicName');
     const elRole = document.getElementById('publicRoleBadge');
-    const elLevel = document.getElementById('publicLevel'); 
+    const elLevel = document.getElementById('publicLevel');
     const elCode = document.getElementById('publicCode');
     const elAvatar = document.getElementById('publicAvatar');
     const statsContainer = document.querySelector('.stats-tri-grid');
@@ -30,7 +30,7 @@ window.openPublicProfile = async function (targetUID, ignoredFlag = false) {
 
     try {
         let userData = null;
-        let userType = "student"; 
+        let userType = "student";
 
         const facRef = doc(window.db, "faculty_members", targetUID);
         const facSnap = await getDoc(facRef);
@@ -40,7 +40,7 @@ window.openPublicProfile = async function (targetUID, ignoredFlag = false) {
             userData = raw;
             userType = (raw.role === 'dean') ? "dean" : "doctor";
         } else {
-               let docRef = (targetUID.length > 15)
+            let docRef = (targetUID.length > 15)
                 ? doc(window.db, "user_registrations", targetUID)
                 : doc(window.db, "students", targetUID);
 
@@ -128,7 +128,7 @@ async function analyzeDoctorStats(doctorUID, container) {
 
         let totalRating = 0;
         let count = 0;
-        let studentsMap = {}; 
+        let studentsMap = {};
 
         if (snapshot.empty) {
             container.innerHTML = `
@@ -161,15 +161,15 @@ async function analyzeDoctorStats(doctorUID, container) {
 
         if (average >= 4.5) {
             verdict = "أداء أكاديمي متميز ⭐";
-            colorClass = "s-green"; 
+            colorClass = "s-green";
             iconHtml = '<i class="fa-solid fa-medal"></i>';
         } else if (average >= 3.5) {
             verdict = "أداء جيد جداً ✨";
-            colorClass = "s-blue"; 
+            colorClass = "s-blue";
             iconHtml = '<i class="fa-solid fa-thumbs-up"></i>';
         } else {
-            verdict = "قيد المراجعة والتطوير 📈"; 
-            colorClass = "s-orange"; 
+            verdict = "قيد المراجعة والتطوير 📈";
+            colorClass = "s-orange";
             iconHtml = '<i class="fa-solid fa-clipboard-check"></i>';
         }
 
@@ -179,7 +179,7 @@ async function analyzeDoctorStats(doctorUID, container) {
         for (const [key, val] of Object.entries(studentsMap)) {
             if (val > topFanCount) {
                 topFanCount = val;
-                topFanName = key.split('|')[1]; 
+                topFanName = key.split('|')[1];
             }
         }
 
@@ -214,68 +214,129 @@ async function analyzeDoctorStats(doctorUID, container) {
 }
 
 async function calculateStudentStats(studentUID, studentGroup, container) {
+    // 1. عرض حالة التحميل
     container.innerHTML = `
-        <div class="stat-mini-card">
-            <div class="stat-icon s-green"><i class="fa-solid fa-calendar-check"></i></div>
-            <div class="stat-num" id="st_att">-</div>
-            <div class="stat-lbl">أيام الحضور</div>
-        </div>
-        <div class="stat-mini-card">
-            <div class="stat-icon s-red"><i class="fa-solid fa-calendar-xmark"></i></div>
-            <div class="stat-num" id="st_abs">-</div>
-            <div class="stat-lbl">أيام الغياب</div>
-        </div>
-        <div class="stat-mini-card">
-            <div class="stat-icon s-blue"><i class="fa-solid fa-scale-balanced"></i></div>
-            <div class="stat-num" id="st_disc" style="font-size: 11px;">...</div>
-            <div class="stat-lbl">الانضباط</div>
+        <div style="grid-column: span 3; text-align:center; padding:15px; color:#64748b;">
+            <i class="fa-solid fa-calculator fa-fade"></i> جاري جرد سجلات الحضور والغياب...
         </div>
     `;
 
     try {
-        const statsUID = studentUID; 
-        const grp = studentGroup || "General";
+        // تحديد جروب الطالب (إذا لم يكن له جروب نعتبره General)
+        const myGroup = (studentGroup && studentGroup.trim() !== "") ? studentGroup.trim() : "General";
 
-        const [groupStatsSnap, myStatsSnap] = await Promise.all([
-            getDoc(doc(window.db, "groups_stats", grp)),
-            getDoc(doc(window.db, "student_stats", statsUID))
-        ]);
+        // ========================================================
+        // الخطوة 1: كم مرة "حضر" الطالب فعلياً؟ (من سجله الشخصي)
+        // ========================================================
+        const myStatsRef = doc(window.db, "student_stats", studentUID);
+        const myStatsSnap = await getDoc(myStatsRef);
 
-        let totalAbsence = 0;
-        let totalAttendance = 0;
-        let violationsCount = 0;
+        let myAttendedSubjects = {}; // هيكل: { "Science": 3, "Anatomy": 5 }
+        let disciplineStatus = "good"; // good, warning, bad
 
-        if (groupStatsSnap.exists()) {
-            const groupSubjects = groupStatsSnap.data().subjects || {};
-            const myAttendedSubjects = myStatsSnap.exists() ? (myStatsSnap.data().attended || {}) : {};
-            violationsCount = myStatsSnap.exists() ? (myStatsSnap.data().violations_count || 0) : 0;
+        if (myStatsSnap.exists()) {
+            const data = myStatsSnap.data();
+            myAttendedSubjects = data.attended || {};
 
-            for (const [subjectKey, totalHeld] of Object.entries(groupSubjects)) {
-                const myCount = myAttendedSubjects[subjectKey] || 0;
-                let subjectAbsence = totalHeld - myCount;
-                if (subjectAbsence < 0) subjectAbsence = 0;
-                totalAbsence += subjectAbsence;
-                totalAttendance += myCount;
+            // تحديد حالة الانضباط
+            if (data.cumulative_unruly >= 3) disciplineStatus = "bad";
+            else if (data.cumulative_unruly > 0) disciplineStatus = "warning";
+        }
+
+        // ========================================================
+        // الخطوة 2: كم جلسة "عُقدت" لجروب هذا الطالب؟ (من course_counters)
+        // ========================================================
+
+        // نبحث عن كل الجلسات التي كان "targetGroups" يحتوي فيها على جروب الطالب
+        const countersQuery = query(
+            collection(window.db, "course_counters"),
+            where("targetGroups", "array-contains", myGroup)
+        );
+
+        const countersSnap = await getDocs(countersQuery);
+
+        let totalSessionsHeldMap = {}; // هيكل: { "Science": 5, "Anatomy": 10 }
+
+        countersSnap.forEach(doc => {
+            const sessionData = doc.data();
+            const subjectName = sessionData.subject.trim();
+
+            if (!totalSessionsHeldMap[subjectName]) {
+                totalSessionsHeldMap[subjectName] = 0;
             }
-        } else {
-            const attQuery = query(collection(window.db, "attendance"), where("id", "==", String(studentUID))); // قد تحتاج uid حسب الداتابيز
-            const attSnap = await getDocs(attQuery);
-            totalAttendance = attSnap.size;
+            totalSessionsHeldMap[subjectName]++;
+        });
+
+        // ========================================================
+        // الخطوة 3: المقارنة الجراحية (الفرص - الحضور = الغياب)
+        // ========================================================
+
+        let totalAttendanceDays = 0;
+        let totalAbsenceDays = 0;
+
+        // نمر على كل مادة تم تدريسها لهذا الجروب
+        for (const [subject, totalHeld] of Object.entries(totalSessionsHeldMap)) {
+
+            // نحاول إيجاد رصيد حضور الطالب لهذه المادة
+            // ملاحظة: أحياناً المفاتيح في Firebase تُحفظ بـ _ بدلاً من المسافات، لذا نقوم بتوحيد الصيغة
+
+            let studentCount = 0;
+
+            // 1. محاولة البحث بالاسم المباشر
+            if (myAttendedSubjects[subject]) {
+                studentCount = myAttendedSubjects[subject];
+            }
+            // 2. محاولة البحث بالاسم "الآمن" (بدون مسافات)
+            else {
+                const safeKey = subject.replace(/\s+/g, '_').replace(/[^\w\u0600-\u06FF]/g, '');
+                if (myAttendedSubjects[safeKey]) {
+                    studentCount = myAttendedSubjects[safeKey];
+                }
+            }
+
+            // الحساب النهائي لهذه المادة
+            const absenceInSubject = Math.max(0, totalHeld - studentCount);
+
+            totalAttendanceDays += studentCount;
+            totalAbsenceDays += absenceInSubject;
         }
 
-        document.getElementById('st_att').innerText = totalAttendance;
-        document.getElementById('st_abs').innerText = totalAbsence;
+        // ========================================================
+        // الخطوة 4: العرض النهائي
+        // ========================================================
 
-        const discEl = document.getElementById('st_disc');
-        if (violationsCount >= 3) {
-            discEl.innerText = "مشاغب ⚠️"; discEl.style.color = "#ef4444";
-        } else if (violationsCount > 0) {
-            discEl.innerText = "تنبيه ✋"; discEl.style.color = "#f59e0b";
-        } else {
-            discEl.innerText = "ملتزم ✅"; discEl.style.color = "#10b981";
+        // تحديد نص وأيقونة الانضباط
+        let discText = "ملتزم ✅";
+        let discColor = "#10b981"; // أخضر
+
+        if (disciplineStatus === "bad") {
+            discText = "مشاغب ⚠️";
+            discColor = "#ef4444"; // أحمر
+        } else if (disciplineStatus === "warning") {
+            discText = "تنبيه ✋";
+            discColor = "#f59e0b"; // برتقالي
         }
+
+        container.innerHTML = `
+            <div class="stat-mini-card">
+                <div class="stat-icon s-green"><i class="fa-solid fa-calendar-check"></i></div>
+                <div class="stat-num" id="st_att">${totalAttendanceDays}</div>
+                <div class="stat-lbl">أيام حضور</div>
+            </div>
+            <div class="stat-mini-card">
+                <div class="stat-icon s-red"><i class="fa-solid fa-calendar-xmark"></i></div>
+                <div class="stat-num" id="st_abs">${totalAbsenceDays}</div>
+                <div class="stat-lbl">أيام غياب</div>
+            </div>
+            <div class="stat-mini-card">
+                <div class="stat-icon s-blue"><i class="fa-solid fa-scale-balanced"></i></div>
+                <div class="stat-num" style="font-size: 11px; color:${discColor};">${discText}</div>
+                <div class="stat-lbl">السلوك</div>
+            </div>
+        `;
 
     } catch (err) {
-        console.error(err);
+        console.error("Stats Error:", err);
+        container.innerHTML = `<div style="grid-column:span 3; text-align:center; color:#ef4444; font-size:12px;">حدث خطأ في الحساب</div>`;
     }
 }
