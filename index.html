@@ -2408,16 +2408,13 @@
         <div id="liveStudentsGrid" class="live-students-grid" style="width: 100%; padding: 10px;"></div>
     </div>
 
-    <!-- ✅ الكود الجديد: أزرار عائمة صغيرة -->
     <style>
         .live-fab-container {
             position: fixed;
             bottom: 25px;
             left: 20px;
-            /* مكانها أسفل اليسار */
             display: flex;
             flex-direction: row;
-            /* الأزرار بجانب بعضها */
             gap: 15px;
             z-index: 2000;
             pointer-events: auto;
@@ -2443,24 +2440,20 @@
             transform: scale(0.9);
         }
 
-        /* لون زر الإضافة (أخضر) */
         .fab-add {
             background: linear-gradient(135deg, #10b981, #059669);
         }
 
-        /* لون زر الإنهاء (أحمر) */
         .fab-end {
             background: linear-gradient(135deg, #ef4444, #b91c1c);
         }
     </style>
 
-    <div class="live-fab-container">
-        <!-- زر إنهاء الجلسة -->
+    <div class="live-fab-container" id="adminFabControls" style="display: none !important;">
         <button onclick="triggerSessionEndOptions()" class="live-fab-btn fab-end" title="إنهاء الجلسة">
             <i class="fa-solid fa-power-off"></i>
         </button>
 
-        <!-- زر إضافة طالب -->
         <button onclick="document.getElementById('manualAddModal').style.display='flex'" class="live-fab-btn fab-add"
             title="إضافة طالب">
             <i class="fa-solid fa-user-plus"></i>
@@ -2819,48 +2812,51 @@
     }
 </style>
 <div id="publicProfileModal" class="modal-overlay" style="z-index: 2147483647 !important;">
-    <div class="modal-box social-profile-box extended-card">
+    <div class="modal-box social-profile-box extended-card" style="font-family: 'Outfit', 'Cairo', sans-serif;">
 
         <button onclick="document.getElementById('publicProfileModal').style.display='none'" class="btn-close-absolute">
             <i class="fa-solid fa-xmark"></i>
         </button>
 
-        <div class="social-avatar-wrapper" onclick="expandAvatar()">
+        <!-- 1. Avatar Section (Zoom Icon Removed) -->
+        <div class="social-avatar-wrapper" style="pointer-events: none;"> <!-- ألغينا التفاعل -->
             <div id="publicAvatar" class="social-avatar-img"></div>
-            <div class="zoom-hint"><i class="fa-solid fa-magnifying-glass-plus"></i></div>
+            <!-- تم حذف div class="zoom-hint" نهائياً من هنا -->
         </div>
 
-        <h2 id="publicName" class="social-name">--</h2>
+        <h2 id="publicName" class="social-name" style="font-family: 'Cairo', sans-serif;">--</h2>
         <div id="publicRoleBadge" class="social-role-badge">--</div>
 
+        <!-- 2. Stats Section (Heart of the card) -->
         <div class="stats-tri-grid">
-            <div class="stat-mini-card">
-                <div class="stat-icon s-green"><i class="fa-solid fa-calendar-check"></i></div>
-                <div class="stat-num" id="statAttendance">0</div>
-                <div class="stat-lbl">أيام الحضور</div>
-            </div>
-            <div class="stat-mini-card">
-                <div class="stat-icon s-red"><i class="fa-solid fa-calendar-xmark"></i></div>
-                <div class="stat-num" id="statAbsence">0</div>
-                <div class="stat-lbl">أيام الغياب</div>
-            </div>
-            <div class="stat-mini-card">
-                <div class="stat-icon s-blue"><i class="fa-solid fa-scale-balanced"></i></div>
-                <div class="stat-num" id="statDiscipline" style="font-size: 11px;">--</div>
-                <div class="stat-lbl">الانضباط</div>
-            </div>
+            <!-- سيتم تعبئة هذا الجزء ديناميكياً بواسطة JS باللغة الإنجليزية -->
         </div>
 
+        <!-- 3. Info Grid (Level & Code) -->
         <div class="social-info-grid">
             <div class="s-info-item">
-                <span class="lbl">القسم/الفرقة</span>
+                <span class="lbl" data-i18n="profile_level">Level / Year</span>
                 <span class="val" id="publicLevel">--</span>
             </div>
             <div class="s-info-item">
-                <span class="lbl">الكود</span>
+                <span class="lbl" data-i18n="profile_code">Student ID</span>
                 <span class="val en-font" id="publicCode">--</span>
             </div>
         </div>
+
+        <!-- 4. NEW: Exam Results Section -->
+        <div id="publicExamsSection"
+            style="margin-top: 15px; width: 100%; border-top: 1px solid #f1f5f9; padding-top: 10px; display:none;">
+            <h4
+                style="margin: 0 0 10px 0; font-size: 14px; color: #334155; text-align: left; display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid fa-graduation-cap" style="color: #6366f1;"></i>
+                <span data-i18n="exam_results_title">Exam Results</span>
+            </h4>
+            <div id="publicExamsList" style="display: flex; flex-direction: column; gap: 8px;">
+                <!-- سيتم حقن الدرجات هنا -->
+            </div>
+        </div>
+
     </div>
 </div>
 

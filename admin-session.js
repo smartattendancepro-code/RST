@@ -33,6 +33,8 @@ window.verifyAdminRole = async function () {
 let sessionInterval = null;
 let unsubscribeLiveSnapshot = null;
 let deanRadarUnsubscribe = null;
+let unsubscribeHeaderSession = null;
+
 
 
 
@@ -180,7 +182,6 @@ window.closeSessionImmediately = function () {
         }
 
         try {
-            // 1. إيقاف المستمعين
             if (window.unsubscribeLiveSnapshot) {
                 window.unsubscribeLiveSnapshot();
                 window.unsubscribeLiveSnapshot = null;
@@ -190,7 +191,6 @@ window.closeSessionImmediately = function () {
                 window.deanRadarUnsubscribe = null;
             }
 
-            // 2. جلب بيانات الجلسة
             const sessionRef = doc(db, "active_sessions", user.uid);
             const sessionSnap = await getDoc(sessionRef);
 
@@ -204,7 +204,6 @@ window.closeSessionImmediately = function () {
                 ? settings.targetGroups
                 : ["General"];
 
-            // 3. تجهيز التواريخ
             const now = new Date();
             const d = String(now.getDate()).padStart(2, '0');
             const m = String(now.getMonth() + 1).padStart(2, '0');
@@ -212,7 +211,6 @@ window.closeSessionImmediately = function () {
             const fixedDateStr = `${d}/${m}/${y}`;
             const closeTimeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
-            // 4. جلب الطلاب
             const partsRef = collection(db, "active_sessions", user.uid, "participants");
             const partsSnap = await getDocs(partsRef);
 
@@ -230,19 +228,14 @@ window.closeSessionImmediately = function () {
                 opCounter = 0;
             };
 
-            // تنظيف اسم المادة للمفتاح الآمن
             const rawSubject = settings.allowedSubject || "General";
             const cleanSubKey = rawSubject.trim().replace(/\s+/g, '_').replace(/[^\w\u0600-\u06FF]/g, '');
 
-            // ============================================================
-            // المرحلة الأولى: معالجة الطلاب
-            // ============================================================
             partsSnap.forEach(docSnap => {
                 const p = docSnap.data();
 
                 if (p.status === "active" || p.status === "on_break") {
 
-                    // 1. تسجيل وثيقة الحضور (Attendance Record)
                     const recID = `${p.id}_${fixedDateStr.replace(/\//g, '-')}_${cleanSubKey}`;
                     const attRef = doc(db, "attendance", recID);
 
@@ -272,15 +265,12 @@ window.closeSessionImmediately = function () {
                     });
                     opCounter++;
 
-                    // 2. تحديث إحصائيات الطالب (Student Stats)
-                    // 🔴🔴 هنا كان الخطأ وتم إصلاحه لضمان هيكلية Map صحيحة 🔴🔴
                     const studentStatsRef = doc(db, "student_stats", p.uid || p.id);
 
                     let statsUpdate = {
                         group: finalGroup,
                         studentID: p.id,
                         last_updated: serverTimestamp(),
-                        // التصحيح: استخدام كائن متداخل بدلاً من المفتاح المركب
                         attended: {
                             [cleanSubKey]: increment(1)
                         }
@@ -294,20 +284,15 @@ window.closeSessionImmediately = function () {
                     processedCount++;
                 }
 
-                // حذف من القاعة
                 currentBatch.delete(docSnap.ref);
                 opCounter++;
                 if (opCounter >= BATCH_LIMIT) pushBatch();
             });
 
-            // ============================================================
-            // المرحلة الثانية: Legacy Stats (اختياري)
-            // ============================================================
             if (targetGroups.length > 0) {
                 targetGroups.forEach(groupName => {
                     if (!groupName) return;
                     const groupRef = doc(db, "groups_stats", groupName);
-                    // هنا نستخدم صيغة النقطة لأننا نحدث حقلاً محدداً داخل وثيقة موجودة
                     currentBatch.set(groupRef, {
                         [`subjects.${cleanSubKey}.total_sessions_held`]: increment(1),
                         last_updated: serverTimestamp()
@@ -317,20 +302,16 @@ window.closeSessionImmediately = function () {
                 });
             }
 
-            // ============================================================
-            // 🚀 المرحلة الثالثة: تسجيل العداد (Course Counters) - بدون تكرار
-            // ============================================================
 
-            const safeDateID = fixedDateStr.replace(/\//g, '-'); // 29-01-2026
+            const safeDateID = fixedDateStr.replace(/\//g, '-'); 
 
             targetGroups.forEach(grp => {
-                // ID ثابت لمنع التكرار
                 const uniqueCounterID = `${safeDateID}_${cleanSubKey}_${grp}`;
 
                 const counterRef = doc(db, "course_counters", uniqueCounterID);
 
                 currentBatch.set(counterRef, {
-                    subject: rawSubject, // الاسم الأصلي
+                    subject: rawSubject, 
                     targetGroups: [grp],
                     date: fixedDateStr,
                     timestamp: serverTimestamp(),
@@ -341,10 +322,6 @@ window.closeSessionImmediately = function () {
                 opCounter++;
                 if (opCounter >= BATCH_LIMIT) pushBatch();
             });
-
-            // ============================================================
-            // المرحلة الرابعة: الإغلاق
-            // ============================================================
 
             currentBatch.update(sessionRef, { isActive: false, isDoorOpen: false });
             opCounter++;
@@ -858,6 +835,16 @@ window.startLiveSnapshotListener = function () {
     const adminToken = sessionStorage.getItem("secure_admin_session_token_v99");
     const isDean = (adminToken === "SUPER_ADMIN_ACTIVE");
     const isDoctor = (adminToken === "ADMIN_ACTIVE");
+
+    const adminFab = document.getElementById('adminFabControls');
+    if (adminFab) {
+        if (isDoctor || isDean) {
+            adminFab.style.setProperty('display', 'flex', 'important');
+        } else {
+            adminFab.style.setProperty('display', 'none', 'important');
+        }
+    }
+
     if (grid) {
         if (isDoctor || isDean) {
             grid.style.setProperty('display', 'grid', 'important');
@@ -918,10 +905,15 @@ window.startLiveSnapshotListener = function () {
         }
     };
 
+
     const sessionRef = doc(db, "active_sessions", targetRoomUID);
-    onSnapshot(sessionRef, (docSnap) => {
+
+    const updateSessionHeaderUI = (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
+
+            const myToken = sessionStorage.getItem("secure_admin_session_token_v99");
+            const iAmAdmin = (myToken === "ADMIN_ACTIVE" || myToken === "SUPER_ADMIN_ACTIVE");
 
             if (document.getElementById('liveDocName')) document.getElementById('liveDocName').innerText = data.doctorName || "Professor";
             if (document.getElementById('liveSubjectTag')) document.getElementById('liveSubjectTag').innerText = data.allowedSubject || "Subject";
@@ -931,15 +923,29 @@ window.startLiveSnapshotListener = function () {
             const avatarLink = document.getElementById('liveDocAvatar');
             if (avatarLink) {
                 avatarLink.innerHTML = `<i class="fa-solid ${data.doctorAvatar || 'fa-user-doctor'}"></i>`;
-                // ✅ ألغينا الـ onclick
-                avatarLink.onclick = null;
-                // ✅ الماوس شكله عادي مش يد
-                avatarLink.style.cursor = "default";
+
+                if (iAmAdmin) {
+                    avatarLink.onclick = () => openPublicProfile(targetRoomUID, true);
+                    avatarLink.style.cursor = "pointer";
+                    avatarLink.style.pointerEvents = "auto";
+                } else {
+                    avatarLink.onclick = null;
+                    avatarLink.style.cursor = "default";
+                    avatarLink.style.pointerEvents = "none";
+                }
             }
+
             const nameLink = document.getElementById('liveDocName');
             if (nameLink) {
-                nameLink.onclick = null;
-                nameLink.style.cursor = "default";
+                if (iAmAdmin) {
+                    nameLink.onclick = () => openPublicProfile(targetRoomUID, true);
+                    nameLink.style.cursor = "pointer";
+                    nameLink.style.pointerEvents = "auto";
+                } else {
+                    nameLink.onclick = null;
+                    nameLink.style.cursor = "default";
+                    nameLink.style.pointerEvents = "none";
+                }
             }
 
             if (document.getElementById('liveSessionCodeDisplay')) {
@@ -969,7 +975,14 @@ window.startLiveSnapshotListener = function () {
                 setTimeout(() => { goHome(); location.reload(); }, 1500);
             }
         }
-    });
+    };
+
+    getDoc(sessionRef).then(updateSessionHeaderUI).catch(e => console.log("Header Prefetch:", e));
+
+    if (window.unsubscribeHeaderSession) window.unsubscribeHeaderSession();
+
+    window.unsubscribeHeaderSession = onSnapshot(sessionRef, updateSessionHeaderUI);
+
 
     const participantsRef = collection(db, "active_sessions", targetRoomUID, "participants");
     const q = query(participantsRef, orderBy("timestamp", "desc"));
@@ -1032,7 +1045,7 @@ window.startLiveSnapshotListener = function () {
                         </div>`;
                 }
 
-                const clickAction = `onclick="event.stopPropagation(); openPublicProfile('${s.uid || s.id}', false)"`;
+                const clickAction = "";
 
                 if (isDoctor || isDean) {
                     const trap = s.trap_report || { device_match: true, in_range: true, gps_success: true };

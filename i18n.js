@@ -500,6 +500,7 @@ export const i18n = {
         status_new: "New",
         connection_error: "Connection Error",
 
+
         "stat_attendance": "Attendance",
         "stat_absence": "Absence",
         "stat_discipline": "Discipline",

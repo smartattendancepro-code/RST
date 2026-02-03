@@ -3206,7 +3206,7 @@ document.addEventListener('click', (e) => {
         }
     };
 
-    window.openStudentProfile = async function () {
+    window.openStudentProfile = async function (forceRefresh = false) {
         const user = auth.currentUser;
 
         // 1. إخفاء زر المعلومات
@@ -3226,12 +3226,70 @@ document.addEventListener('click', (e) => {
             setTimeout(() => modal.classList.add('active'), 10);
         }
 
-        // 4. مؤشرات التحميل
-        document.getElementById('profAttendanceVal').innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="font-size:14px"></i>';
+        // --- [جديد] محاولة عرض البيانات الأساسية من الذاكرة المحلية فوراً للسرعة ---
+        const cachedProfileData = localStorage.getItem('cached_profile_data');
+        if (cachedProfileData) {
+            try {
+                const cData = JSON.parse(cachedProfileData);
+                if (cData.uid === user.uid) {
+                    document.getElementById('profFullName').innerText = cData.fullName || "--";
+                    document.getElementById('profStudentID').innerText = cData.studentID || "--";
+                    document.getElementById('profLevel').innerText = `الفرقة ${cData.level || '?'}`;
+                    document.getElementById('profGender').innerText = cData.gender || "--";
+                    document.getElementById('profEmail').innerText = cData.email || user.email;
+                    document.getElementById('profUID').innerText = cData.uid;
+
+                    const cAvatarEl = document.getElementById('currentAvatar');
+                    if (cAvatarEl) {
+                        cAvatarEl.innerHTML = `<i class="fa-solid ${cData.avatarClass || 'fa-user-graduate'}"></i>`;
+                        cAvatarEl.style.color = "var(--primary-dark)";
+                    }
+                }
+            } catch (e) { }
+        }
+
+        // --- [جديد] التحقق من كاش الإحصائيات لتوفير القراءات (صلاحية 15 دقيقة) ---
+        const statsCacheKey = `stats_cache_${user.uid}`;
+        const cachedStatsStr = localStorage.getItem(statsCacheKey);
+
+        if (cachedStatsStr && !forceRefresh) {
+            try {
+                const cachedStats = JSON.parse(cachedStatsStr);
+                const now = Date.now();
+                // 900000 مللي ثانية = 15 دقيقة
+                if ((now - cachedStats.timestamp) < 900000) {
+                    console.log("⚡ Using Cached Stats (Saved Firebase Reads)");
+
+                    // عرض الأرقام من الكاش
+                    document.getElementById('profAttendanceVal').innerText = cachedStats.attendance;
+                    document.getElementById('profAbsenceVal').innerText = cachedStats.absence;
+
+                    // تلوين السلوك بناءً على القيمة المخزنة
+                    const discEl = document.getElementById('profDisciplineVal');
+                    const status = cachedStats.discipline;
+                    if (status === "bad") {
+                        discEl.innerText = "مشاغب";
+                        discEl.style.color = "#ef4444";
+                    } else if (status === "warning") {
+                        discEl.innerText = "تنبيه";
+                        discEl.style.color = "#f59e0b";
+                    } else {
+                        discEl.innerText = "ملتزم";
+                        discEl.style.color = "#10b981";
+                    }
+
+                    // 🛑 توقف هنا: لن نكمل الكود ولن نقرأ من الفايربيز
+                    return;
+                }
+            } catch (e) { }
+        }
+
+        // 4. مؤشرات التحميل (تظهر فقط لو مفيش كاش)
+        document.getElementById('profAttendanceVal').innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" style="font-size:14px"></i>';
         document.getElementById('profAbsenceVal').innerHTML = '-';
         document.getElementById('profDisciplineVal').innerHTML = '-';
 
-        // 5. دالة جلب البيانات والحساب
+        // 5. دالة جلب البيانات والحساب (الكود الأصلي تماماً)
         const renderData = async (data, isCached) => {
             const info = data.registrationInfo || data;
 
@@ -3341,6 +3399,15 @@ document.addEventListener('click', (e) => {
                     discEl.innerText = "ملتزم";
                     discEl.style.color = "#10b981";
                 }
+
+                const statsToCache = {
+                    attendance: totalAttendanceDays,
+                    absence: totalAbsenceDays,
+                    discipline: disciplineStatus,
+                    timestamp: Date.now()
+                };
+                localStorage.setItem(statsCacheKey, JSON.stringify(statsToCache));
+                console.log("✅ Stats Updated & Cached Successfully");
 
             } catch (calcError) {
                 console.error("Profile Calculation Error:", calcError);
