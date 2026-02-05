@@ -197,6 +197,7 @@ window.exportDashboard = async function (type) {
 window.exportAttendanceSheet = async function (subjectName) {
     if (typeof playClick === 'function') playClick();
 
+    // 1. تحديد الفرقة الدراسية بناءً على المادة
     const allSubjects = JSON.parse(localStorage.getItem('subjectsData_v4')) || window.subjectsData || {};
     let TARGET_LEVEL = "1";
 
@@ -213,24 +214,31 @@ window.exportAttendanceSheet = async function (subjectName) {
     };
     const displayLevelName = levelNames[TARGET_LEVEL] || `الفرقة ${TARGET_LEVEL}`;
 
+    // 2. التحقق من وجود بيانات
     if (!window.cachedReportData || window.cachedReportData.length === 0) {
         alert("⚠️ لا توجد بيانات في التقرير الحالي. يرجى فتح السجل أولاً.");
         return;
     }
 
-    showToast(`⏳ جاري الاتصال بقاعدة البيانات لجلب السجل التراكمي للطلاب...`, 20000, "#0ea5e9");
+    showToast(`⏳ جاري الاتصال بقاعدة البيانات لجلب السجل التراكمي...`, 20000, "#0ea5e9");
 
     try {
+        // 3. تجهيز بيانات الحضور الحالية (مع إصلاح قراءة الملاحظات)
         const attendees = window.cachedReportData.filter(s => s.subject === subjectName);
         const attendeesMap = {};
         const studentIDs = [];
 
         attendees.forEach(a => {
+            // --- [إصلاح] قراءة الملاحظات للتأكد من المخالفة ---
+            const notes = (a.notes || "").toString();
+            const hasUnrulyNote = notes.includes("مشاغب") || notes.includes("سلوك") || notes.includes("غير منضبط") || notes.includes("طرد");
+            const hasUniformNote = notes.includes("زي") || notes.includes("مخالف") || notes.includes("يونيفورم");
+
             attendeesMap[a.uniID] = {
                 ...a,
-                isUnruly: a.isUnruly || false,
-                isUniformViolation: a.isUniformViolation || false,
-                sessionCount: a.segment_count || 1, 
+                isUnruly: a.isUnruly === true || hasUnrulyNote, // دمج الشرطين
+                isUniformViolation: a.isUniformViolation === true || hasUniformNote, // دمج الشرطين
+                sessionCount: a.segment_count || 1,
                 docName: a.doctorName || "غير محدد",
                 time: a.time || "--:--",
                 group: a.group || "General"
@@ -238,10 +246,11 @@ window.exportAttendanceSheet = async function (subjectName) {
             if (a.uniID && a.uniID !== "---") studentIDs.push(a.uniID);
         });
 
+        // 4. جلب السجل التراكمي (Firebase)
         const cumulativeStats = {};
 
         if (studentIDs.length > 0) {
-            const chunkSize = 30;
+            const chunkSize = 30; // تقسيم الطلبات لتجنب الضغط
             const chunks = [];
             for (let i = 0; i < studentIDs.length; i += chunkSize) {
                 chunks.push(studentIDs.slice(i, i + chunkSize));
@@ -266,33 +275,54 @@ window.exportAttendanceSheet = async function (subjectName) {
             console.log("✅ تم تحميل السجل التراكمي للطلاب بنجاح");
         }
 
+        // 5. جلب قائمة الطلاب الأساسية للدفعة
         const q = query(collection(db, "students"), where("academic_level", "==", TARGET_LEVEL));
         const querySnapshot = await getDocs(q);
 
         let finalReport = [];
 
+        // 6. دمج البيانات وإنشاء التقرير
         querySnapshot.forEach((doc) => {
             const s = doc.data();
             const record = attendeesMap[s.id];
             const history = cumulativeStats[s.id] || { totalUnruly: 0, totalUniform: 0 };
 
             if (record) {
-                let statusColor = "#f0fdf4"; 
+                let statusColor = "#f0fdf4"; // أخضر فاتح (الوضع الطبيعي)
 
+                // --- منطق السلوك (مع قاعدة الـ 5 مخالفات) ---
                 let disciplineText = "منضبط";
+                let currentTotalUnruly = history.totalUnruly + (record.isUnruly ? 1 : 0);
+
                 if (record.isUnruly) {
-                    statusColor = "#fef2f2"; 
-                    disciplineText = `⚠️ مشاغب (تراكمي: ${history.totalUnruly + 1})`;
+                    statusColor = "#fef2f2"; // أحمر فاتح للمخالفة الحالية
+                    disciplineText = `⚠️ مشاغب (تراكمي: ${currentTotalUnruly})`;
                 } else if (history.totalUnruly > 0) {
                     disciplineText = `منضبط (سابقاً: ${history.totalUnruly})`;
                 }
 
+                // تنبيه الـ 5 مخالفات سلوك
+                if (currentTotalUnruly >= 5) {
+                    statusColor = "#b91c1c"; // أحمر غامق جداً
+                    disciplineText = `⛔ تجاوز الحد (${currentTotalUnruly} مخالفات)`;
+                }
+
+                // --- منطق الزي (مع قاعدة الـ 5 مخالفات) ---
                 let uniformText = "ملتزم";
+                let currentTotalUniform = history.totalUniform + (record.isUniformViolation ? 1 : 0);
+
                 if (record.isUniformViolation) {
-                    if (statusColor === "#f0fdf4") statusColor = "#fffbeb"; 
-                    uniformText = `👕 مخالف (تراكمي: ${history.totalUniform + 1})`;
+                    if (statusColor === "#f0fdf4") statusColor = "#fffbeb"; // أصفر
+                    uniformText = `👕 مخالف (تراكمي: ${currentTotalUniform})`;
                 } else if (history.totalUniform > 0) {
                     uniformText = `ملتزم (سابقاً: ${history.totalUniform})`;
+                }
+
+                // تنبيه الـ 5 مخالفات زي
+                if (currentTotalUniform >= 5) {
+                    // نغير اللون فقط إذا لم يكن هناك مخالفة سلوك أخطر
+                    if (currentTotalUnruly < 5 && !record.isUnruly) statusColor = "#fbbf24"; // برتقالي
+                    uniformText = `⚠️ تجاوز الحد (${currentTotalUniform} مخالفات)`;
                 }
 
                 finalReport.push({
@@ -306,13 +336,14 @@ window.exportAttendanceSheet = async function (subjectName) {
                     group: record.group,
                     sessions: record.sessionCount,
                     doctor: record.docName,
-                    rowStyle: `style='background-color: ${statusColor}; color: #000000;'`,
+                    rowStyle: `style='background-color: ${statusColor}; color: ${statusColor === "#b91c1c" ? "#fff" : "#000"};'`, // النص أبيض لو الخلفية أحمر غامق
                     isPresent: true
                 });
 
-                delete attendeesMap[s.id]; 
+                delete attendeesMap[s.id];
 
             } else {
+                // الطالب الغائب
                 finalReport.push({
                     name: s.name,
                     id: s.id,
@@ -330,15 +361,23 @@ window.exportAttendanceSheet = async function (subjectName) {
             }
         });
 
+        // 7. التعامل مع الدخلاء (التخلفات)
         for (let intruderID in attendeesMap) {
             const intruder = attendeesMap[intruderID];
             const history = cumulativeStats[intruder.uniID] || { totalUnruly: 0, totalUniform: 0 };
 
-            let statusColor = "#fff9c4"; 
-            if (intruder.isUnruly) statusColor = "#fef2f2"; 
+            let statusColor = "#fff9c4"; // أصفر فاتح (افتراضي للدخلاء)
+            let currentTotalUnruly = history.totalUnruly + (intruder.isUnruly ? 1 : 0);
+            let currentTotalUniform = history.totalUniform + (intruder.isUniformViolation ? 1 : 0);
 
-            let disciplineText = intruder.isUnruly ? `⚠️ مشاغب (تراكمي: ${history.totalUnruly + 1})` : (history.totalUnruly > 0 ? `(سابقاً: ${history.totalUnruly})` : "منضبط");
-            let uniformText = intruder.isUniformViolation ? `👕 مخالف (تراكمي: ${history.totalUniform + 1})` : (history.totalUniform > 0 ? `(سابقاً: ${history.totalUniform})` : "ملتزم");
+            if (intruder.isUnruly) statusColor = "#fef2f2";
+            if (currentTotalUnruly >= 5) statusColor = "#b91c1c";
+
+            let disciplineText = intruder.isUnruly ? `⚠️ مشاغب (تراكمي: ${currentTotalUnruly})` : (history.totalUnruly > 0 ? `(سابقاً: ${history.totalUnruly})` : "منضبط");
+            let uniformText = intruder.isUniformViolation ? `👕 مخالف (تراكمي: ${currentTotalUniform})` : (history.totalUniform > 0 ? `(سابقاً: ${history.totalUniform})` : "ملتزم");
+
+            if (currentTotalUnruly >= 5) disciplineText = `⛔ تجاوز الحد (${currentTotalUnruly})`;
+            if (currentTotalUniform >= 5) uniformText = `⚠️ تجاوز الحد (${currentTotalUniform})`;
 
             finalReport.push({
                 name: intruder.name,
@@ -351,17 +390,19 @@ window.exportAttendanceSheet = async function (subjectName) {
                 group: intruder.group,
                 sessions: intruder.sessionCount,
                 doctor: intruder.docName,
-                rowStyle: `style='background-color: ${statusColor}; color: #000000; font-weight:bold;'`,
+                rowStyle: `style='background-color: ${statusColor}; color: ${statusColor === "#b91c1c" ? "#fff" : "#000"}; font-weight:bold;'`,
                 isPresent: true
             });
         }
 
+        // 8. الترتيب النهائي
         finalReport.sort((a, b) => {
             if (a.isPresent && !b.isPresent) return -1;
             if (!a.isPresent && b.isPresent) return 1;
             return a.id.toString().localeCompare(b.id.toString(), undefined, { numeric: true, sensitivity: 'base' });
         });
 
+        // 9. إنشاء ملف الإكسيل HTML
         const now = new Date();
         const dateOnly = now.toLocaleDateString('en-GB');
         const fileName = `تقرير_${subjectName}_${dateOnly.replace(/\//g, '-')}.xls`;
@@ -401,7 +442,6 @@ window.exportAttendanceSheet = async function (subjectName) {
                         <th style="background-color: #70ad47; width: 100px;">المجموعة</th>
                         <th style="background-color: #70ad47; width: 150px;">المحاضر</th>
                         
-                        <!-- العمود الجديد -->
                         <th style="background-color: #4f46e5; width: 100px;">عدد الفترات</th>
                     </tr>
                 </thead>

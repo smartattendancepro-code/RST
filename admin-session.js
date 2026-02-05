@@ -1129,7 +1129,6 @@ window.startLiveSnapshotListener = function () {
                                 <div class="st-id en-font" style="font-size:10px; color:#64748b;">#${s.id}</div>
                                 
                             </div>
-                            </div>
                             <div style="margin-top:8px; padding:2px 8px; border-radius:6px; font-size:10px; font-weight:800; border:1px solid ${statusColor}30; background:${statusColor}15; color:${statusColor};">
                                 ${statusText}
                             </div>`;

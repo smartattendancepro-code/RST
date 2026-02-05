@@ -33,6 +33,53 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { i18n, t, changeLanguage, toggleSystemLanguage } from './i18n.js';
 
+window.HARDWARE_ID = null;
+
+// 1. محاولة التحميل المسبق للبصمة عند فتح الصفحة (لزيادة السرعة لاحقاً)
+document.addEventListener('DOMContentLoaded', () => {
+    if (window.FingerprintJS) {
+        FingerprintJS.load().then(fp => {
+            fp.get().then(result => {
+                window.HARDWARE_ID = result.visitorId;
+                console.log("🔒 Hardware ID Ready (Pre-loaded):", window.HARDWARE_ID);
+            });
+        }).catch(err => console.warn("Fingerprint Pre-load warning:", err));
+    }
+});
+
+// 2. الدالة الرئيسية لجلب البصمة (يجب استخدام await عند استدعائها)
+window.getUniqueDeviceId = async function () {
+    // أ. إذا كانت البصمة جاهزة في الذاكرة، أعدها فوراً
+    if (window.HARDWARE_ID) {
+        return window.HARDWARE_ID;
+    }
+
+    // ب. إذا لم تكن جاهزة، انتظر حسابها الآن (أهم خطوة)
+    try {
+        if (window.FingerprintJS) {
+            const fp = await FingerprintJS.load();
+            const result = await fp.get();
+            window.HARDWARE_ID = result.visitorId; // حفظها للمرات القادمة
+            console.log("🔒 Hardware ID Calculated on-demand:", window.HARDWARE_ID);
+            return window.HARDWARE_ID;
+        }
+    } catch (e) {
+        console.warn("⚠️ FingerprintJS Library failed or blocked. Using Fallback.", e);
+    }
+
+    // ج. الخطة البديلة (فقط في حال فشل المكتبة تماماً)
+    // نستخدم LocalStorage كحل أخير
+    const key = "secure_backup_device_id_v2";
+    let stored = localStorage.getItem(key);
+
+    if (!stored) {
+        // إنشاء كود يعتمد على الوقت والعشوائية ليكون فريداً قدر الإمكان
+        stored = "FALLBACK_" + Date.now().toString(36) + "_" + Math.random().toString(36).substring(2);
+        localStorage.setItem(key, stored);
+    }
+
+    return stored;
+};
 
 window.isJoiningProcessActive = false;
 window.isProcessingClick = false;
@@ -427,7 +474,7 @@ window.performStudentSignup = async function () {
     }
 
     try {
-        const deviceID = getUniqueDeviceId();
+        const deviceID = await window.getUniqueDeviceId();
         console.log("📤 Sending request to Backend...");
 
         const response = await fetch(`https://nursing-backend-rej8.vercel.app/api/registerStudent`, {
@@ -563,11 +610,14 @@ document.addEventListener('click', (e) => {
 
     const SEARCH_DB = ARCHIVE_SUBJECTS;
 
+    const COLLEGE_LAT = 30.38588267994032;
+    const COLLEGE_LNG = 30.488853271134253;
+
     const CONFIG = {
         gps: {
-            targetLat: 30.43841622978127,
-            targetLong: 30.836735200410153,
-            allowedDistanceKm: 5
+            targetLat: COLLEGE_LAT,
+            targetLong: COLLEGE_LNG,
+            allowedDistanceKm: 1
         },
         modelsUrl: './models'
     };
@@ -1189,73 +1239,98 @@ document.addEventListener('click', (e) => {
         if (navigator.vibrate) navigator.vibrate(10);
     };
 
-    function validateSignupForm() {
-        const getV = (id) => document.getElementById(id)?.value?.trim() || "";
+    window.validateSignupForm = function () {
         const getEl = (id) => document.getElementById(id);
+        const getVal = (id) => getEl(id)?.value?.trim() || "";
 
-        const email = getV('regEmail');
-        const emailConfirm = getV('regEmailConfirm');
-        const pass = getV('regPass');
-        const passConfirm = getV('regPassConfirm');
+        const email = getVal('regEmail');
+        const emailConfirm = getVal('regEmailConfirm');
+        const pass = getVal('regPass');
+        const passConfirm = getVal('regPassConfirm');
+        const level = getVal('regLevel');
+        const gender = getVal('regGender');
+        const name = getVal('regFullName');
 
-        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        const isValidEmailFormat = emailPattern.test(email);
+        const groupRaw = getVal('regGroup').toUpperCase();
 
-        const emailMatch = (email === emailConfirm && email !== "");
-        const emailConfirmField = getEl('regEmailConfirm');
-        const emailErrorMsg = getEl('emailError');
+        const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        const isEmailValid = emailPattern.test(email);
+        const isEmailMatch = (email === emailConfirm && isEmailValid);
 
+        const emailConfEl = getEl('regEmailConfirm');
+        const emailErr = getEl('emailError');
         if (emailConfirm !== "") {
-            emailConfirmField.classList.toggle('input-error', !emailMatch);
-            emailErrorMsg.style.display = emailMatch ? 'none' : 'block';
-        } else {
-            emailConfirmField.classList.remove('input-error');
-            emailErrorMsg.style.display = 'none';
+            emailConfEl.style.borderColor = isEmailMatch ? "#10b981" : "#ef4444";
+            if (emailErr) emailErr.style.display = isEmailMatch ? 'none' : 'block';
         }
 
-        const passMatch = (pass === passConfirm && pass !== "");
-        const passReady = pass.length >= 6;
-        const passConfirmField = getEl('regPassConfirm');
-        const passErrorMsg = getEl('passError');
+        const isPassLen = pass.length >= 6;
+        const isPassMatch = (pass === passConfirm && isPassLen);
 
+        const passConfEl = getEl('regPassConfirm');
+        const passErr = getEl('passError');
         if (passConfirm !== "") {
-            passConfirmField.classList.toggle('input-error', !passMatch);
-            passErrorMsg.style.display = passMatch ? 'none' : 'block';
-        } else {
-            passConfirmField.classList.remove('input-error');
-            passErrorMsg.style.display = 'none';
+            passConfEl.style.borderColor = isPassMatch ? "#10b981" : "#ef4444";
+            if (passErr) passErr.style.display = isPassMatch ? 'none' : 'block';
         }
 
-        const level = getV('regLevel');
-        const gender = getV('regGender');
-        const name = getV('regFullName');
-        const group = getV('regGroup');
+        const groupPattern = /^[1-4]G\d{1,2}$/;
+        const isGroupFormatValid = groupPattern.test(groupRaw);
+
+        let isGroupLevelMatch = true;
+        if (level !== "" && isGroupFormatValid) {
+            isGroupLevelMatch = groupRaw.startsWith(level);
+        }
+
+        const isGroupValid = isGroupFormatValid && isGroupLevelMatch;
+
+        const groupEl = getEl('regGroup');
+        if (groupEl) {
+            if (groupRaw.length > 0) {
+                groupEl.style.borderColor = isGroupValid ? "#10b981" : "#ef4444";
+                groupEl.style.backgroundColor = isGroupValid ? "#f0fdf4" : "#fef2f2";
+
+                if (getEl('regGroup').value !== groupRaw) {
+                    getEl('regGroup').value = groupRaw;
+                }
+            } else {
+                groupEl.style.borderColor = "";
+                groupEl.style.backgroundColor = "";
+            }
+        }
+
+        const isNameValid = name !== "" &&
+            !name.toLowerCase().includes("not registered") &&
+            !name.includes("⚠️") &&
+            !name.includes("❌");
 
         const isEverythingValid =
-            isValidEmailFormat &&
-            emailMatch &&
-            passMatch &&
-            passReady &&
-            group !== "" &&
+            isEmailValid &&
+            isEmailMatch &&
+            isPassLen &&
+            isPassMatch &&
             level !== "" &&
             gender !== "" &&
-            name !== "" &&
-            !name.toLowerCase().includes("not registered");
+            isNameValid &&
+            isGroupValid;
 
         const btn = getEl('btnDoSignup');
         if (btn) {
             btn.disabled = !isEverythingValid;
+
             if (isEverythingValid) {
                 btn.style.opacity = "1";
                 btn.style.filter = "grayscale(0%)";
                 btn.style.cursor = "pointer";
+                btn.style.boxShadow = "0 4px 12px rgba(16, 185, 129, 0.2)";
             } else {
                 btn.style.opacity = "0.5";
-                btn.style.filter = "grayscale(50%)";
+                btn.style.filter = "grayscale(100%)";
                 btn.style.cursor = "not-allowed";
+                btn.style.boxShadow = "none";
             }
         }
-    }
+    };
 
     document.addEventListener('input', (e) => {
         if (e.target.id && e.target.id.startsWith('reg')) {
@@ -1378,12 +1453,26 @@ document.addEventListener('click', (e) => {
                 };
                 localStorage.setItem('cached_profile_data', JSON.stringify(profileCache));
 
-                const currentDeviceId = getUniqueDeviceId();
-                if (!userData.bound_device_id) {
+                let currentDeviceId = "UNKNOWN_DEVICE";
+                if (typeof getUniqueDeviceId === 'function') {
+                    currentDeviceId = getUniqueDeviceId();
+                } else {
+                    const key = "unique_device_id_v3";
+                    currentDeviceId = localStorage.getItem(key);
+                    if (!currentDeviceId) {
+                        currentDeviceId = "DEV_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+                        localStorage.setItem(key, currentDeviceId);
+                    }
+                }
+                try {
                     await updateDoc(userRef, {
                         bound_device_id: currentDeviceId,
-                        device_bind_date: serverTimestamp()
+                        device_bind_date: serverTimestamp(),
+                        last_device_sync: serverTimestamp()
                     });
+                    console.log("✅ Device Fingerprint Force-Updated (Green Status Ready).");
+                } catch (err) {
+                    console.warn("⚠️ Device sync warning (Non-fatal):", err);
                 }
             }
 
@@ -2936,7 +3025,7 @@ document.addEventListener('click', (e) => {
                 return;
             }
 
-            const currentDeviceId = getUniqueDeviceId();
+            const currentDeviceId = await window.getUniqueDeviceId();
             const gpsData = await getSilentLocationData();
             const idToken = await user.getIdToken();
 
@@ -3054,56 +3143,6 @@ document.addEventListener('click', (e) => {
             }, 10);
         }
     };
-
-    function validateSignupForm() {
-        const getEl = (id) => document.getElementById(id);
-
-        const fields = {
-            email: getEl('regEmail'),
-            emailConfirm: getEl('regEmailConfirm'),
-            pass: getEl('regPass'),
-            passConfirm: getEl('regPassConfirm'),
-            gender: getEl('regGender'),
-            level: getEl('regLevel'),
-            group: getEl('regGroup'),
-            name: getEl('regFullName'),
-            btn: getEl('btnDoSignup')
-        };
-
-        if (!fields.btn) return;
-
-        const val = {
-            email: fields.email.value.trim(),
-            emailConfirm: fields.emailConfirm.value.trim(),
-            pass: fields.pass.value,
-            passConfirm: fields.passConfirm.value,
-            gender: fields.gender.value,
-            level: fields.level.value,
-            group: fields.group.value.trim(),
-            name: fields.name.value
-        };
-
-        const isEmailsMatch = val.email === val.emailConfirm && val.email !== "";
-        const isPassMatch = val.pass === val.passConfirm && val.pass.length >= 6;
-        const isLevelSelected = val.level !== "";
-        const isGenderSelected = val.gender !== "";
-        const isGroupValid = val.group !== "" && val.group.toUpperCase().startsWith('G');
-        const isNameFetched = val.name !== "" && !val.name.includes("غير مسجل");
-
-        const isFormReady = isEmailsMatch && isPassMatch && isLevelSelected && isGenderSelected && isGroupValid && isNameFetched;
-
-        if (isFormReady) {
-            fields.btn.disabled = false;
-            fields.btn.style.opacity = "1";
-            fields.btn.style.cursor = "pointer";
-        } else {
-            fields.btn.disabled = true;
-            fields.btn.style.opacity = "0.5";
-            fields.btn.style.cursor = "not-allowed";
-        }
-    }
-
-    window.validateSignupForm = validateSignupForm;
 
     window.toggleDropdown = function (listId) {
         const list = document.getElementById(listId);
@@ -4571,19 +4610,19 @@ document.addEventListener('click', (e) => {
     };
 
     window.getSilentLocationData = async function () {
-        const TARGET_LAT = 30.43841622978127;
-        const TARGET_LNG = 30.836735200410153;
-        const ALLOWED_DIST_KM = 0.5;
+        const TARGET_LAT = (typeof CONFIG !== 'undefined' && CONFIG.gps) ? CONFIG.gps.targetLat : 0;
+        const TARGET_LNG = (typeof CONFIG !== 'undefined' && CONFIG.gps) ? CONFIG.gps.targetLong : 0;
+        const ALLOWED_DIST_KM = (typeof CONFIG !== 'undefined' && CONFIG.gps) ? CONFIG.gps.allowedDistanceKm : 0.5;
 
         return new Promise((resolve) => {
             if (!navigator.geolocation) {
-                resolve({ status: "failed_no_support", in_range: false });
+                resolve({ status: "failed_no_support", in_range: false, gps_success: false });
                 return;
             }
 
             const options = {
                 enableHighAccuracy: true,
-                timeout: 5000,
+                timeout: 10000,
                 maximumAge: 0
             };
 
@@ -4604,34 +4643,39 @@ document.addEventListener('click', (e) => {
                         cheatReason += "[Too Perfect Accuracy] ";
                     }
 
-                    if (crd.accuracy > 1500) {
-                        resolve({
-                            status: "failed_bad_accuracy",
-                            in_range: false,
-                            msg: `الدقة سيئة جداً (${Math.round(crd.accuracy)}م). شغل الـ GPS واخرج لمكان مفتوح.`
-                        });
-                        return;
+                    let dist = 9999;
+                    if (typeof window.getDistanceFromLatLonInKm === 'function') {
+                        dist = window.getDistanceFromLatLonInKm(crd.latitude, crd.longitude, TARGET_LAT, TARGET_LNG);
+                    } else {
+                        console.error("⚠️ دالة حساب المسافة غير موجودة!");
                     }
 
-                    const dist = getDistanceFromLatLonInKm(crd.latitude, crd.longitude, TARGET_LAT, TARGET_LNG);
                     const inRange = (dist <= ALLOWED_DIST_KM);
 
                     resolve({
                         status: "success",
                         in_range: inRange,
+                        gps_success: true,
                         lat: crd.latitude,
                         lng: crd.longitude,
                         accuracy: crd.accuracy,
                         distance: dist.toFixed(3),
-
                         is_suspicious: isSuspicious,
                         cheat_reason: cheatReason.trim()
                     });
                 },
                 (err) => {
+                    console.error("GPS Error:", err);
+
                     let msg = "فشل تحديد الموقع";
-                    if (err.code === 1) msg = "الوصول للموقع مرفوض";
-                    resolve({ status: "failed_error", in_range: false, error: msg });
+                    if (err.code === 1) msg = "الوصول للموقع مرفوض من الطالب";
+
+                    resolve({
+                        status: "failed_error",
+                        in_range: false,
+                        gps_success: false,
+                        error: msg
+                    });
                 },
                 options
             );
@@ -5981,3 +6025,38 @@ window.handleIdSubmit = async function () {
 };
 
 window.html5QrCode = null;
+
+window.getDistanceFromLatLonInKm = function (lat1, lon1, lat2, lon2) {
+    var R = 6371;
+    var dLat = (lat2 - lat1) * (Math.PI / 180);
+    var dLon = (lon2 - lon1) * (Math.PI / 180);
+    var a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    var d = R * c;
+    return d;
+};
+document.addEventListener('DOMContentLoaded', () => {
+    const groupInput = document.getElementById('regGroup');
+    const levelSelect = document.getElementById('regLevel');
+
+    if (groupInput) {
+        groupInput.addEventListener('input', function (e) {
+            let val = this.value.toUpperCase();
+
+            val = val.replace(/[^0-9G]/g, '');
+
+            this.value = val;
+
+            if (typeof window.validateSignupForm === 'function') window.validateSignupForm();
+        });
+    }
+
+    if (levelSelect) {
+        levelSelect.addEventListener('change', function () {
+            if (typeof window.validateSignupForm === 'function') window.validateSignupForm();
+        });
+    }
+});
