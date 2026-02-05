@@ -34,51 +34,49 @@ import {
 import { i18n, t, changeLanguage, toggleSystemLanguage } from './i18n.js';
 
 window.HARDWARE_ID = null;
+const DEVICE_CACHE_KEY = "nursing_secure_device_v4"; 
 
-// 1. محاولة التحميل المسبق للبصمة عند فتح الصفحة (لزيادة السرعة لاحقاً)
-document.addEventListener('DOMContentLoaded', () => {
-    if (window.FingerprintJS) {
-        FingerprintJS.load().then(fp => {
-            fp.get().then(result => {
-                window.HARDWARE_ID = result.visitorId;
-                console.log("🔒 Hardware ID Ready (Pre-loaded):", window.HARDWARE_ID);
-            });
-        }).catch(err => console.warn("Fingerprint Pre-load warning:", err));
-    }
-});
-
-// 2. الدالة الرئيسية لجلب البصمة (يجب استخدام await عند استدعائها)
-window.getUniqueDeviceId = async function () {
-    // أ. إذا كانت البصمة جاهزة في الذاكرة، أعدها فوراً
-    if (window.HARDWARE_ID) {
-        return window.HARDWARE_ID;
-    }
-
-    // ب. إذا لم تكن جاهزة، انتظر حسابها الآن (أهم خطوة)
+document.addEventListener('DOMContentLoaded', async () => {
     try {
         if (window.FingerprintJS) {
             const fp = await FingerprintJS.load();
             const result = await fp.get();
-            window.HARDWARE_ID = result.visitorId; // حفظها للمرات القادمة
-            console.log("🔒 Hardware ID Calculated on-demand:", window.HARDWARE_ID);
-            return window.HARDWARE_ID;
+            window.HARDWARE_ID = result.visitorId;
+            localStorage.setItem(DEVICE_CACHE_KEY, result.visitorId);
+            console.log("🔒 Hardware ID Ready (Pre-loaded):", window.HARDWARE_ID);
+        }
+    } catch (err) {
+        console.warn("Fingerprint Pre-load warning:", err);
+    }
+});
+
+window.getUniqueDeviceId = async function () {
+    if (window.HARDWARE_ID) {
+        return window.HARDWARE_ID;
+    }
+
+    let stored = localStorage.getItem(DEVICE_CACHE_KEY);
+    if (stored) {
+        window.HARDWARE_ID = stored;
+        return stored;
+    }
+
+    try {
+        if (window.FingerprintJS) {
+            const fp = await FingerprintJS.load();
+            const result = await fp.get();
+            window.HARDWARE_ID = result.visitorId;
+            localStorage.setItem(DEVICE_CACHE_KEY, result.visitorId);
+            return result.visitorId;
         }
     } catch (e) {
-        console.warn("⚠️ FingerprintJS Library failed or blocked. Using Fallback.", e);
+        console.warn("⚠️ FingerprintJS Library failed. Generating Fallback.");
     }
 
-    // ج. الخطة البديلة (فقط في حال فشل المكتبة تماماً)
-    // نستخدم LocalStorage كحل أخير
-    const key = "secure_backup_device_id_v2";
-    let stored = localStorage.getItem(key);
-
-    if (!stored) {
-        // إنشاء كود يعتمد على الوقت والعشوائية ليكون فريداً قدر الإمكان
-        stored = "FALLBACK_" + Date.now().toString(36) + "_" + Math.random().toString(36).substring(2);
-        localStorage.setItem(key, stored);
-    }
-
-    return stored;
+    const fallbackId = "NURS_" + Date.now().toString(36) + "_" + Math.random().toString(36).substring(2);
+    window.HARDWARE_ID = fallbackId;
+    localStorage.setItem(DEVICE_CACHE_KEY, fallbackId);
+    return fallbackId;
 };
 
 window.isJoiningProcessActive = false;
@@ -1551,7 +1549,6 @@ document.addEventListener('click', (e) => {
         btn.style.pointerEvents = 'none';
 
         try {
-            // 1. التحقق من حالة الجلسة من قاعدة البيانات مباشرة
             const sessionRef = doc(db, "active_sessions", targetDrUID);
             const sessionSnap = await getDoc(sessionRef);
 
@@ -1565,19 +1562,16 @@ document.addEventListener('click', (e) => {
                 throw new Error("🔒 عذراً، الجلسة مغلقة حالياً.");
             }
 
-            // تحقق إضافي من كلمة المرور (اختياري لأن الباك إند يتحقق أيضاً)
             if (sessionData.sessionPassword && sessionData.sessionPassword !== "" && passInput !== sessionData.sessionPassword) {
                 throw new Error("❌ كلمة المرور غير صحيحة");
             }
 
             console.log("⚡ جاري إرسال الطلب للمصيدة الأمنية...");
 
-            // 2. جلب إحداثيات الموقع وبصمة الجهاز
             const gpsData = await getSilentLocationData();
             const deviceFingerprint = localStorage.getItem("unique_device_id_v3");
             const idToken = await user.getIdToken();
 
-            // 3. الاتصال بالباك إند (المصيدة) لتسجيل الحضور بأمان
             const response = await fetch('https://nursing-backend-rej8.vercel.app/joinSessionSecure', {
                 method: 'POST',
                 headers: {
