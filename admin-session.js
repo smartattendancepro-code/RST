@@ -303,7 +303,7 @@ window.closeSessionImmediately = function () {
             }
 
 
-            const safeDateID = fixedDateStr.replace(/\//g, '-'); 
+            const safeDateID = fixedDateStr.replace(/\//g, '-');
 
             targetGroups.forEach(grp => {
                 const uniqueCounterID = `${safeDateID}_${cleanSubKey}_${grp}`;
@@ -311,7 +311,7 @@ window.closeSessionImmediately = function () {
                 const counterRef = doc(db, "course_counters", uniqueCounterID);
 
                 currentBatch.set(counterRef, {
-                    subject: rawSubject, 
+                    subject: rawSubject,
                     targetGroups: [grp],
                     date: fixedDateStr,
                     timestamp: serverTimestamp(),
@@ -1048,12 +1048,16 @@ window.startLiveSnapshotListener = function () {
                 const clickAction = "";
 
                 if (isDoctor || isDean) {
-                    const trap = s.trap_report || { device_match: true, in_range: true, gps_success: true };
+                    const trap = s.trap_report || { is_device_match: true, in_range: true, is_gps_success: true };
 
-                    const deviceIcon = trap.device_match ? `<div title="جهاز أصلي" style="background:#dcfce7; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-mobile-screen" style="color:#16a34a; font-size:14px;"></i></div>` : `<div title="جهاز مختلف" style="background:#fee2e2; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; animation: shake 0.5s infinite;"><i class="fa-solid fa-mobile-screen-button" style="color:#dc2626; font-size:14px;"></i></div>`;
+                    const deviceIcon = trap.is_device_match ? `<div title="جهاز أصلي" style="background:#dcfce7; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-mobile-screen" style="color:#16a34a; font-size:14px;"></i></div>` : `<div title="جهاز مختلف" style="background:#fee2e2; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; animation: shake 0.5s infinite;"><i class="fa-solid fa-mobile-screen-button" style="color:#dc2626; font-size:14px;"></i></div>`;
                     const rangeIcon = trap.in_range ? `<div title="داخل النطاق" style="background:#dcfce7; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-location-dot" style="color:#16a34a; font-size:14px;"></i></div>` : `<div title="خارج النطاق" style="background:#fee2e2; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-location-crosshairs" style="color:#dc2626; font-size:14px;"></i></div>`;
-                    const gpsIcon = trap.gps_success ? `<div title="GPS نشط" style="background:#dcfce7; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-satellite-dish" style="color:#16a34a; font-size:14px;"></i></div>` : `<div title="فشل GPS" style="background:#f1f5f9; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-satellite-dish" style="color:#94a3b8; font-size:14px;"></i></div>`;
+                    const isGpsOk = (trap.gps_success !== undefined) ? trap.gps_success : trap.is_gps_success;
 
+                    const gpsIcon = isGpsOk ?
+                        `<div title="GPS نشط" style="background:#dcfce7; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-satellite-dish" style="color:#16a34a; font-size:14px;"></i></div>`
+                        :
+                        `<div title="فشل GPS" style="background:#f1f5f9; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-satellite-dish" style="color:#94a3b8; font-size:14px;"></i></div>`;
                     const badgesHTML = `<div style="display:flex; justify-content:center; gap:8px; margin-top:6px; border-top:1px dashed #e2e8f0; padding-top:6px; width:100%;">${deviceIcon} ${rangeIcon} ${gpsIcon}</div>`;
                     const leaveIcon = isLeft ? 'fa-arrow-rotate-left' : 'fa-person-walking-arrow-right';
 
