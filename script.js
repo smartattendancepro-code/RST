@@ -34,7 +34,7 @@ import {
 import { i18n, t, changeLanguage, toggleSystemLanguage } from './i18n.js';
 
 window.HARDWARE_ID = null;
-const DEVICE_CACHE_KEY = "nursing_secure_device_v4"; 
+const DEVICE_CACHE_KEY = "nursing_secure_device_v4";
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {
@@ -1569,7 +1569,9 @@ document.addEventListener('click', (e) => {
             console.log("⚡ جاري إرسال الطلب للمصيدة الأمنية...");
 
             const gpsData = await getSilentLocationData();
-            const deviceFingerprint = localStorage.getItem("unique_device_id_v3");
+
+            const deviceFingerprint = await window.getUniqueDeviceId();
+
             const idToken = await user.getIdToken();
 
             const response = await fetch('https://nursing-backend-rej8.vercel.app/joinSessionSecure', {
