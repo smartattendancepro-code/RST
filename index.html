@@ -1209,8 +1209,13 @@
 
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 15px;">
                             <div>
-                                <label class="setup-label" data-i18n="setup_group_label">Group</label>
-                                <input type="text" id="modalGroupInput" class="simple-input" placeholder="G1">
+                                <label class="setup-label">
+                                    <span data-i18n="setup_group_label">Group</span>
+                                    <span
+                                        style="font-size: 11px; color: #ef4444; font-weight: 800; margin-left: 5px;">(e.g.
+                                        1G1)</span>
+                                </label>
+                                <input type="text" id="modalGroupInput" class="simple-input" placeholder=" ">
                             </div>
                             <div>
                                 <label class="setup-label" data-i18n="session_pass_label">Password</label>
@@ -2412,20 +2417,21 @@
     <style>
         .live-fab-container {
             position: fixed;
-            bottom: 25px;
-            left: 20px;
+            bottom: 92px;
+            right: 20px;
             display: flex;
-            flex-direction: row;
+            flex-direction: column;
             gap: 15px;
             z-index: 2000;
             pointer-events: auto;
+            align-items: center;
         }
 
         .live-fab-btn {
             width: 55px;
             height: 55px;
             border-radius: 50%;
-            border: none;
+            border: 2px solid white;
             color: white;
             font-size: 20px;
             display: flex;
@@ -2433,12 +2439,7 @@
             justify-content: center;
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
             cursor: pointer;
-            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            border: 2px solid white;
-        }
-
-        .live-fab-btn:active {
-            transform: scale(0.9);
+            transition: transform 0.2s;
         }
 
         .fab-add {
@@ -2450,7 +2451,7 @@
         }
     </style>
 
-    <div class="live-fab-container" id="adminFabControls" style="display: none !important;">
+    <div class="live-fab-container" id="adminFabControls" style="display: flex;">
         <button onclick="triggerSessionEndOptions()" class="live-fab-btn fab-end" title="إنهاء الجلسة">
             <i class="fa-solid fa-power-off"></i>
         </button>
@@ -2565,16 +2566,27 @@
     </div>
 </div>
 <div id="manageGroupsModal" class="modal-overlay" style="z-index: 2147483647; display: none;">
+    <style>
+        #sessionGroupsList:empty {
+            display: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+    </style>
+
     <div class="modal-box" style="max-width: 340px; border-radius: 30px;">
-        <div class="modal-title" style="color: #6366f1;">
-            <i class="fa-solid fa-users-gear"></i> <span data-i18n="manage_groups_title">إدارة المجموعات</span>
+        <div class="modal-title"
+            style="color: #6366f1; display: flex; align-items: center; justify-content: center; gap: 5px;">
+            <i class="fa-solid fa-users-gear"></i>
+            <span data-i18n="manage_groups_title">Manage Groups</span>
+            <span style="font-size: 11px; color: #ef4444; font-weight: 800;">(e.g. 1G1)</span>
         </div>
-        <p style="font-size: 12px; margin-bottom: 15px;" data-i18n="manage_groups_hint">يمكنك إضافة أكثر من مجموعة لهذه
-            المحاضرة</p>
+        <p style="font-size: 12px; margin-bottom: 15px;" data-i18n="manage_groups_hint">You can add multiple groups to
+            this session</p>
 
         <div style="display: flex; gap: 8px; margin-bottom: 15px;">
-            <input type="text" id="newGroupInput" class="modern-input" data-i18n-placeholder="group_placeholder"
-                placeholder="مثلاً: G5" style="text-align: center; text-transform: uppercase;">
+            <input type="text" id="newGroupInput" class="modern-input" placeholder=" "
+                style="text-align: center; text-transform: uppercase;">
             <button onclick="addNewGroupToSession()" class="btn-main"
                 style="width: 60px; margin: 0; border-radius: 12px;">+</button>
         </div>
@@ -2584,7 +2596,7 @@
         </div>
 
         <button onclick="document.getElementById('manageGroupsModal').style.display='none'" class="btn-cancel-modern"
-            style="margin-top: 15px;" data-i18n="save_close_btn">حفظ وإغلاق</button>
+            style="margin-top: 15px;" data-i18n="save_close_btn">Save & Close</button>
     </div>
 </div>
 
@@ -2819,21 +2831,16 @@
             <i class="fa-solid fa-xmark"></i>
         </button>
 
-        <!-- 1. Avatar Section (Zoom Icon Removed) -->
-        <div class="social-avatar-wrapper" style="pointer-events: none;"> <!-- ألغينا التفاعل -->
+        <div class="social-avatar-wrapper" style="pointer-events: none;">
             <div id="publicAvatar" class="social-avatar-img"></div>
-            <!-- تم حذف div class="zoom-hint" نهائياً من هنا -->
         </div>
 
         <h2 id="publicName" class="social-name" style="font-family: 'Cairo', sans-serif;">--</h2>
         <div id="publicRoleBadge" class="social-role-badge">--</div>
 
-        <!-- 2. Stats Section (Heart of the card) -->
         <div class="stats-tri-grid">
-            <!-- سيتم تعبئة هذا الجزء ديناميكياً بواسطة JS باللغة الإنجليزية -->
         </div>
 
-        <!-- 3. Info Grid (Level & Code) -->
         <div class="social-info-grid">
             <div class="s-info-item">
                 <span class="lbl" data-i18n="profile_level">Level / Year</span>
@@ -2845,7 +2852,6 @@
             </div>
         </div>
 
-        <!-- 4. NEW: Exam Results Section -->
         <div id="publicExamsSection"
             style="margin-top: 15px; width: 100%; border-top: 1px solid #f1f5f9; padding-top: 10px; display:none;">
             <h4
@@ -2854,7 +2860,6 @@
                 <span data-i18n="exam_results_title">Exam Results</span>
             </h4>
             <div id="publicExamsList" style="display: flex; flex-direction: column; gap: 8px;">
-                <!-- سيتم حقن الدرجات هنا -->
             </div>
         </div>
 

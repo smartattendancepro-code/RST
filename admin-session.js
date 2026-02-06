@@ -999,7 +999,26 @@ window.startLiveSnapshotListener = function () {
 
         if (grid) {
             grid.innerHTML = '';
-            snapshot.forEach(docSnap => {
+            let sortedDocs = [];
+            snapshot.forEach(doc => sortedDocs.push(doc));
+
+            sortedDocs.sort((a, b) => {
+                const sA = a.data();
+                const sB = b.data();
+
+                const trapA = sA.trap_report || { is_device_match: true, in_range: true };
+                const trapB = sB.trap_report || { is_device_match: true, in_range: true };
+
+                const isRedA = (trapA.is_device_match === false) || (trapA.in_range === false);
+                const isRedB = (trapB.is_device_match === false) || (trapB.in_range === false);
+
+                if (isRedA && !isRedB) return -1;
+                if (!isRedA && isRedB) return 1;
+
+                return 0; 
+            });
+
+            sortedDocs.forEach(docSnap => {
                 const s = docSnap.data();
                 if (s.status === 'expelled') return;
 
