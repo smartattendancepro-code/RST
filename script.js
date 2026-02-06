@@ -3973,7 +3973,11 @@ document.addEventListener('click', (e) => {
 
                 document.getElementById('profFacName').innerText = data.fullName || "Faculty Member";
                 document.getElementById('profFacRole').innerText = (data.role === "dean") ? "👑 Vice Dean / Dean" : "👨‍🏫 Doctor / Professor";
-                document.getElementById('profFacSubject').innerText = data.subject || "Not Assigned";
+                const jobTitleEl = document.getElementById('profFacJobTitle') || document.getElementById('profFacSubject');
+
+                if (jobTitleEl) {
+                    jobTitleEl.innerText = data.jobTitle || data.subject || "Not Assigned";
+                }
 
                 const avatarEl = document.getElementById('facCurrentAvatar');
                 if (data.avatarClass) {
@@ -3985,6 +3989,7 @@ document.addEventListener('click', (e) => {
                     fullName: data.fullName,
                     email: user.email,
                     role: data.role,
+                    jobTitle: data.jobTitle,
                     subject: data.subject,
                     avatarClass: data.avatarClass || "fa-user-doctor",
                     uid: user.uid,
