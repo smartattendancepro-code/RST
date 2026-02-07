@@ -3,7 +3,7 @@ import { MASTER_HALLS, MASTER_SUBJECTS } from './config.js';
 import {
     doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs,
     onSnapshot, serverTimestamp, increment, writeBatch, orderBy, limit,
-    arrayUnion, arrayRemove
+    arrayUnion, arrayRemove, getCountFromServer
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { i18n } from './i18n.js';
 const db = window.db;
@@ -824,6 +824,8 @@ window.startLiveSnapshotListener = function () {
         return;
     }
 
+    if (window.studentCountInterval) clearInterval(window.studentCountInterval);
+
     const grid = document.getElementById('liveStudentsGrid');
 
     const countEl = document.getElementById('livePresentCount');
@@ -848,10 +850,11 @@ window.startLiveSnapshotListener = function () {
     if (grid) {
         if (isDoctor || isDean) {
             grid.style.setProperty('display', 'grid', 'important');
-            grid.style.setProperty('grid-template-columns', '1fr 1fr', 'important');
-            grid.style.setProperty('gap', '10px', 'important');
+            grid.style.setProperty('grid-template-columns', '1fr', 'important');
+            grid.style.setProperty('gap', '15px', 'important');
         } else {
             grid.style.removeProperty('grid-template-columns');
+            grid.style.display = 'block';
         }
     }
 
@@ -985,38 +988,67 @@ window.startLiveSnapshotListener = function () {
 
 
     const participantsRef = collection(db, "active_sessions", targetRoomUID, "participants");
-    const q = query(participantsRef, orderBy("timestamp", "desc"));
+    let q;
+
+    if (isDoctor || isDean) {
+        q = query(participantsRef, orderBy("timestamp", "desc"));
+    } else {
+        q = query(participantsRef, where("uid", "==", user.uid));
+    }
 
     if (window.unsubscribeLiveSnapshot) window.unsubscribeLiveSnapshot();
 
     window.unsubscribeLiveSnapshot = onSnapshot(q, (snapshot) => {
+
         const activeDocs = snapshot.docs.filter(d => d.data().status === 'active');
 
-        currentCount = activeDocs.length;
-        if (countEl) countEl.innerText = currentCount;
+        if (isDoctor || isDean) {
+            currentCount = activeDocs.length;
+            if (countEl) countEl.innerText = currentCount;
+            updateCapacityUI();
+        } else {
+            const fetchRealCount = async () => {
+                try {
+                    const countQuery = query(participantsRef, where("status", "==", "active"));
+                    const snapshotCount = await getCountFromServer(countQuery);
+                    currentCount = snapshotCount.data().count;
 
-        updateCapacityUI();
+                    if (countEl) countEl.innerText = currentCount;
+                    updateCapacityUI();
+                } catch (e) {
+                    console.error("Count Error:", e);
+                }
+            };
+
+            fetchRealCount();
+
+            if (!window.studentCountInterval) {
+                window.studentCountInterval = setInterval(fetchRealCount, 15000);
+            }
+        }
 
         if (grid) {
             grid.innerHTML = '';
             let sortedDocs = [];
             snapshot.forEach(doc => sortedDocs.push(doc));
 
-            sortedDocs.sort((a, b) => {
-                const sA = a.data();
-                const sB = b.data();
+            if (isDoctor || isDean) {
+                sortedDocs.sort((a, b) => {
+                    const sA = a.data();
+                    const sB = b.data();
 
-                const trapA = sA.trap_report || { is_device_match: true, in_range: true };
-                const trapB = sB.trap_report || { is_device_match: true, in_range: true };
+                    const trapA = sA.trap_report || { is_device_match: true, in_range: true };
+                    const trapB = sB.trap_report || { is_device_match: true, in_range: true };
 
-                const isRedA = (trapA.is_device_match === false) || (trapA.in_range === false);
-                const isRedB = (trapB.is_device_match === false) || (trapB.in_range === false);
+                    const isRedA = (trapA.is_device_match === false) || (trapA.in_range === false);
+                    const isRedB = (trapB.is_device_match === false) || (trapB.in_range === false);
 
-                if (isRedA && !isRedB) return -1;
-                if (!isRedA && isRedB) return 1;
+                    if (isRedA && !isRedB) return -1;
+                    if (!isRedA && isRedB) return 1;
 
-                return 0; 
-            });
+                    return 0;
+                });
+            }
 
             sortedDocs.forEach(docSnap => {
                 const s = docSnap.data();
@@ -1095,7 +1127,7 @@ window.startLiveSnapshotListener = function () {
                             height: auto; 
                             min-height: 220px; 
                             
-                            width: 100%;  /* ✅✅✅ لازم تكون 100% مش 150% */
+                            width: 100%;  
                             
                             position: relative;
                             overflow: visible !important; 
@@ -1113,7 +1145,8 @@ window.startLiveSnapshotListener = function () {
                                 <div class="st-id en-font" style="font-size:10px; color:#64748b; background:#f1f5f9; padding:1px 8px; border-radius:10px;">#${s.id}</div>
                                 ${badgesHTML}
                             </div>
-                            <div style="display:flex; justify-content:center; gap:5px; border-top:1px solid #f1f5f9; padding-top:8px;">
+                            <div style="display:flex; justify-content:center; gap:30px; border-top:1px solid #f1f5f9; padding-top:12px;">
+
                                 <button onclick="toggleStudentFlag('${docSnap.id}', 'isUniformViolation', ${s.isUniformViolation})" class="mini-action-btn" style="background:${s.isUniformViolation ? '#f97316' : '#fff7ed'}; color:${s.isUniformViolation ? 'white' : '#ea580c'};"><i class="fa-solid fa-shirt"></i></button>
                                 <button onclick="toggleStudentFlag('${docSnap.id}', 'isUnruly', ${s.isUnruly})" class="mini-action-btn" style="background:${s.isUnruly ? '#ef4444' : '#fef2f2'}; color:${s.isUnruly ? 'white' : '#ef4444'};"><i class="fa-solid fa-fire"></i></button>
                                 <button onclick="toggleStudentStatus('${docSnap.id}', '${s.status}')" class="mini-action-btn" style="background:#f8fafc; color:#64748b;"><i class="fa-solid ${leaveIcon}"></i></button>
@@ -1129,13 +1162,15 @@ window.startLiveSnapshotListener = function () {
                     card.style.cssText = `
                             background:white; 
                             border-radius:15px; 
-                            padding:10px; 
+                            padding:20px; 
                             display:flex; 
                             flex-direction:column; 
                             align-items:center; 
                             opacity:${opacityVal}; 
                             transition:0.3s; 
                             width:100%; 
+                            max-width: 320px;
+                            margin: 0 auto;
                             border: ${borderStyle}; 
                             position: relative;
                             overflow: visible !important; 
@@ -1144,22 +1179,40 @@ window.startLiveSnapshotListener = function () {
                     card.innerHTML = `
                         ${isMe ? '<div class="me-badge">أنت</div>' : ''}
                             ${countBadge}
-                            <div ${clickAction} style="cursor:pointer; width:55px; height:55px; border-radius:50%; background:#f8fafc; border:3.5px solid ${statusColor}; display:flex; align-items:center; justify-content:center; font-size:24px; color:#0284c7; margin-bottom:5px; z-index:2;">
+                            <div ${clickAction} style="cursor:pointer; width:70px; height:70px; border-radius:50%; background:#f8fafc; border:3.5px solid ${statusColor}; display:flex; align-items:center; justify-content:center; font-size:30px; color:#0284c7; margin-bottom:10px; z-index:2;">
                                 <i class="fa-solid ${s.avatarClass || 'fa-user-graduate'}"></i>
                             </div>
                             <div style="text-align:center;">
-                                <div ${clickAction} class="st-name" style="cursor:pointer; font-size:13px; font-weight:900; color:#1e293b; text-decoration:none;">${s.name.split(' ')[0]} ${s.name.split(' ')[1] || ''}</div>
-                                <div class="st-id en-font" style="font-size:10px; color:#64748b;">#${s.id}</div>
+                                <div ${clickAction} class="st-name" style="cursor:pointer; font-size:16px; font-weight:900; color:#1e293b; text-decoration:none;">${s.name.split(' ')[0]} ${s.name.split(' ')[1] || ''}</div>
+                                <div class="st-id en-font" style="font-size:12px; color:#64748b;">#${s.id}</div>
                                 
                             </div>
-                            <div style="margin-top:8px; padding:2px 8px; border-radius:6px; font-size:10px; font-weight:800; border:1px solid ${statusColor}30; background:${statusColor}15; color:${statusColor};">
+                            <div style="margin-top:12px; padding:4px 15px; border-radius:6px; font-size:11px; font-weight:800; border:1px solid ${statusColor}30; background:${statusColor}15; color:${statusColor};">
                                 ${statusText}
                             </div>`;
                 }
                 grid.appendChild(card);
             });
         }
+        if (!isDoctor && !isDean) {
+            const noteDiv = document.createElement('div');
+            noteDiv.style.cssText = `
+                    margin-top: 50px; 
+                    text-align: center; 
+                    color: #070707; 
+                    font-size: 15px; 
+                    width: 100%;
+                    font-family: 'Tajawal', sans-serif;
+                    opacity: 1;
+                `;
+            noteDiv.innerHTML = `
+                    <i class="fa-solid fa-circle-info" style="margin-left:5px;"></i>
+                     سيتم إتاحة عرض قائمة الحضور الكاملة في التحديث القادم
+                `;
+            grid.appendChild(noteDiv);
+        }
     });
+
 };
 
 
