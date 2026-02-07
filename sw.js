@@ -1,4 +1,3 @@
-// 1. تحديث اسم الكاش ليتماشى مع الاسم الجديد
 const CACHE_NAME = 'proattend-v1'; 
 
 const ASSETS_TO_CACHE = [
@@ -7,14 +6,10 @@ const ASSETS_TO_CACHE = [
   './style.css',
   './script.js',
   './manifest.json',
-  // 2. ضروري نضيف الأيقونات الجديدة للكاش عشان تظهر والنت قاطع
   './icon-192.png', 
   './icon-512.png'
 ];
 
-// ==========================================
-// تثبيت الـ Service Worker
-// ==========================================
 self.addEventListener('install', (event) => {
   self.skipWaiting(); 
   event.waitUntil(
@@ -25,9 +20,6 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// ==========================================
-// تنظيف الكاش القديم (بيمسح أي كاش قديم زي 7odorak)
-// ==========================================
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -39,11 +31,8 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// ==========================================
-// التعامل مع الطلبات (Network First Strategy)
-// ==========================================
+
 self.addEventListener('fetch', (event) => {
-  // تجاهل طلبات الـ POST (إرسال البيانات) وطلبات فايربيس
   if (event.request.method !== 'GET') return;
   if (event.request.url.includes('firestore.googleapis.com') || 
       event.request.url.startsWith('chrome-extension')) return;
@@ -51,7 +40,6 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(event.request)
       .then((networkResponse) => {
-        // لو النت شغال، حدث الكاش بالنسخة الجديدة
         if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
@@ -61,7 +49,6 @@ self.addEventListener('fetch', (event) => {
         return networkResponse;
       })
       .catch(() => {
-        // لو النت قاطع، هات من الكاش
         return caches.match(event.request);
       })
   );
@@ -80,7 +67,6 @@ self.addEventListener('push', (event) => {
   const title = data.notification?.title || data.title || 'ProAttend';
   const options = {
     body: data.notification?.body || data.body || 'لديك تنبيه جديد من النظام',
-    // 3. تحديث مسار الأيقونة للأيقونة الجديدة عشان تظهر في الإشعار
     icon: './icon-192.png', 
     badge: './icon-192.png',
     vibrate: [100, 50, 100],
