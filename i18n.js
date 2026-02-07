@@ -481,8 +481,12 @@ export const i18n = {
         status_new: "جديد",
         connection_error: "خطأ في الاتصال",
 
-
-
+        "error_no_active_subject": "يرجى بدء جلسة أو اختيار مادة أولاً لعرض التقارير.",
+        "report_searching_text": "جاري البحث في سجلات تاريخ:",
+        "report_empty_msg": "لا توجد سجلات محفوظة لهذا اليوم.",
+        "report_check_save": "تأكد من إنهاء وحفظ الجلسات بشكل صحيح.",
+        "report_error_fetch": "حدث خطأ أثناء جلب البيانات.",
+        "report_error_unknown": "خطأ غير متوقع في النظام."
 
     },
 
@@ -499,6 +503,13 @@ export const i18n = {
         status_excellent: "Excellent (100%)",
         status_new: "New",
         connection_error: "Connection Error",
+
+        "error_no_active_subject": "Please start a session or select a subject first to view reports.",
+        "report_searching_text": "Searching records for date:",
+        "report_empty_msg": "No records found for today.",
+        "report_check_save": "Make sure sessions are ended and saved correctly.",
+        "report_error_fetch": "Error fetching data.",
+        "report_error_unknown": "Unexpected System Error.",
 
 
         "stat_attendance": "Attendance",

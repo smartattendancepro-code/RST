@@ -2223,44 +2223,123 @@ document.addEventListener('click', (e) => {
     }
 
     let unsubscribeReport = null;
+
     window.openReportModal = async function () {
+        // تشغيل صوت النقر
         if (typeof playClick === 'function') playClick();
 
+        // 1. عرض المودال وتجهيز الواجهة
         const modal = document.getElementById('reportModal');
         if (modal) {
             modal.style.display = 'flex';
+            // تطبيق اللغة الحالية
+            const currentLang = localStorage.getItem('sys_lang') || 'en';
+            if (typeof changeLanguage === 'function') changeLanguage(currentLang);
+
             if (typeof showSubjectsView === 'function') showSubjectsView();
         }
 
+        // 2. تجهيز التاريخ الحالي
         const now = new Date();
         const d = String(now.getDate()).padStart(2, '0');
         const m = String(now.getMonth() + 1).padStart(2, '0');
         const y = now.getFullYear();
         const dateStr = `${d}/${m}/${y}`;
 
+        // عرض التاريخ في العنوان
         const dateDisplay = document.getElementById('reportDateDisplay');
         if (dateDisplay) dateDisplay.innerText = dateStr;
 
+        // 3. عرض شاشة التحميل (Loading)
         const container = document.getElementById('subjectsContainer');
         if (container) {
-            container.innerHTML = `<div style="text-align:center; padding:50px 20px;"><i class="fa-solid fa-circle-notch fa-spin" style="font-size:30px; color:var(--primary); margin-bottom:15px;"></i><div style="font-weight:bold; color:#64748b;">جاري البحث عن سجلات ${dateStr}...</div></div>`;
+            container.innerHTML = `
+            <div style="text-align:center; padding:50px 20px;">
+                <i class="fa-solid fa-circle-notch fa-spin" style="font-size:30px; color:var(--primary); margin-bottom:15px;"></i>
+                <div style="font-weight:bold; color:#64748b;">
+                    <span data-i18n="report_searching_text">Searching records for date:</span> ${dateStr}
+                </div>
+            </div>`;
+
+            // تحديث الترجمة للنص الجديد فوراً
+            if (typeof changeLanguage === 'function') changeLanguage(localStorage.getItem('sys_lang') || 'en');
         }
 
+        // 4. إغلاق أي استماع سابق لتجنب التكرار
         if (window.unsubscribeReport) {
             window.unsubscribeReport();
             window.unsubscribeReport = null;
         }
 
         try {
+            const user = auth.currentUser;
+            const adminToken = sessionStorage.getItem("secure_admin_session_token_v99");
+            const isDean = (adminToken === "SUPER_ADMIN_ACTIVE");
+
+            let q;
+
+            if (isDean) {
+                // ============================================================
+                // السيناريو A: العميد (يرى كل المواد في هذا التاريخ)
+                // ============================================================
+                q = query(
+                    collection(db, "attendance"),
+                    where("date", "==", dateStr)
+                );
+            } else {
+                // ============================================================
+                // السيناريو B: الدكتور (يرى مادته فقط - مجمعة من كل الدكاترة)
+                // ============================================================
+
+                // 1. جلب اسم المادة من مستند الجلسة الحالية/الأخيرة للدكتور
+                // هذا يحل مشكلة أن المادة متغيرة وليست ثابتة في البروفايل
+                const sessionRef = doc(db, "active_sessions", user.uid);
+                const sessionSnap = await getDoc(sessionRef);
+
+                let targetSubject = "";
+
+                if (sessionSnap.exists()) {
+                    const sessionData = sessionSnap.data();
+                    // الأولوية لـ allowedSubject ثم subject
+                    targetSubject = sessionData.allowedSubject || sessionData.subject || "";
+                }
+
+                // تنظيف النص
+                targetSubject = targetSubject ? targetSubject.trim() : "";
+
+                // 2. التحقق من وجود مادة
+                if (!targetSubject) {
+                    if (container) {
+                        container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fa-solid fa-chalkboard-user" style="font-size:40px; color:#f59e0b; margin-bottom:15px;"></i>
+                        <br>
+                        <span data-i18n="error_no_active_subject">Please start a session or select a subject first to view reports.</span>
+                        <br>
+                        <small style="color:#64748b; margin-top:10px; display:block;">
+                            (System couldn't detect subject from your session settings)
+                        </small>
+                    </div>`;
+                        if (typeof changeLanguage === 'function') changeLanguage(localStorage.getItem('sys_lang') || 'en');
+                    }
+                    return; // إيقاف التنفيذ لتوفير القراءات
+                }
+
+                // 3. بناء الاستعلام المفلتر (يوفر التكلفة بشكل كبير)
+                // يتطلب Index: Date + Subject
+                q = query(
+                    collection(db, "attendance"),
+                    where("date", "==", dateStr),
+                    where("subject", "==", targetSubject)
+                );
+            }
+
+            // 5. جلب قائمة المواد النشطة حالياً (لتمييزها في العرض)
             const activeSessionsQ = query(collection(db, "active_sessions"), where("isActive", "==", true));
             const activeSnap = await getDocs(activeSessionsQ);
             const activeSubjectsList = activeSnap.docs.map(doc => doc.data().allowedSubject ? doc.data().allowedSubject.trim() : "");
 
-            const q = query(
-                collection(db, "attendance"),
-                where("date", "==", dateStr)
-            );
-
+            // 6. الاستماع للبيانات (Real-time Listener)
             window.unsubscribeReport = onSnapshot(q, (querySnapshot) => {
                 let allData = [];
 
@@ -2269,58 +2348,84 @@ document.addEventListener('click', (e) => {
                     allData.push({
                         docId: doc.id,
                         uniID: data.id || "---",
-                        name: data.name || "طالب غير معروف",
-                        subject: (data.subject || "مادة غير محددة").trim(),
+                        name: data.name || "Unknown Student",
+                        subject: (data.subject || "Unknown Subject").trim(),
                         group: data.group || "--",
                         time: data.time_str || "--:--",
-                        hall: data.hall || "غير محدد",
+                        hall: data.hall || "Unknown Hall",
                         code: data.session_code || "",
-                        notes: data.notes || "منضبط",
-                        doctorName: data.doctorName || "غير محدد",
+                        notes: data.notes || "Disciplined",
+                        doctorName: data.doctorName || "---",
                         segment_count: data.segment_count || 1,
                         timestamp: data.archivedAt || data.timestamp
                     });
                 });
 
+                // ترتيب البيانات: الأحدث أولاً
                 allData.sort((a, b) => {
                     const tA = a.timestamp ? (a.timestamp.seconds || 0) : 0;
                     const tB = b.timestamp ? (b.timestamp.seconds || 0) : 0;
                     return tB - tA;
                 });
 
+                // تخزين البيانات في متغير عام (للتصدير وللتفاصيل)
                 window.cachedReportData = allData;
 
+                // تحديث الواجهة
                 if (container) {
                     if (allData.length === 0) {
+                        // حالة لا توجد بيانات
                         container.innerHTML = `
-                        <div class="empty-state">
-                            <i class="fa-solid fa-folder-open" style="font-size:40px; color:#cbd5e1; margin-bottom:15px;"></i>
-                            <br>
-                            لا توجد سجلات محفوظة لهذا اليوم (${dateStr}).
-                            <br>
-                            <small style="color:#ef4444; margin-top:10px; display:block;">
-                                تأكد أنك قمت بإنهاء الجلسة وحفظها بنجاح.
-                            </small>
-                        </div>`;
+                    <div class="empty-state">
+                        <i class="fa-solid fa-folder-open" style="font-size:40px; color:#cbd5e1; margin-bottom:15px;"></i>
+                        <br>
+                        <span data-i18n="report_empty_msg">No records found for today.</span>
+                        <br>
+                        <small style="color:#ef4444; margin-top:10px; display:block;">
+                            <span data-i18n="report_check_save">Make sure sessions are ended and saved correctly.</span>
+                        </small>
+                    </div>`;
                     } else {
+                        // عرض القائمة
                         if (typeof renderSubjectsList === 'function') {
                             renderSubjectsList(allData, activeSubjectsList);
                         } else {
                             console.error("Function renderSubjectsList is missing!");
                         }
                     }
+
+                    // إعادة تطبيق الترجمة على المحتوى الجديد
+                    if (typeof changeLanguage === 'function') changeLanguage(localStorage.getItem('sys_lang') || 'en');
                 }
             }, (error) => {
                 console.error("Snapshot Error:", error);
+
+                // التعامل مع خطأ الفهرس المفقود
+                let errorDetails = "";
+                if (error.message.includes("requires an index")) {
+                    errorDetails = "<br><span style='font-size:11px; color:#f59e0b'>(System: Missing Index. Check Console for Link)</span>";
+                }
+
                 if (container) {
-                    container.innerHTML = `<div style="color:#ef4444; text-align:center; padding:30px;">⚠️ حدث خطأ في جلب البيانات.<br><small>${error.message}</small></div>`;
+                    container.innerHTML = `
+                <div style="color:#ef4444; text-align:center; padding:30px;">
+                    ⚠️ <span data-i18n="report_error_fetch">Error fetching data.</span>
+                    ${errorDetails}
+                    <br><small>${error.message}</small>
+                </div>`;
+                    if (typeof changeLanguage === 'function') changeLanguage(localStorage.getItem('sys_lang') || 'en');
                 }
             });
 
         } catch (e) {
             console.error("Report Function Error:", e);
             if (container) {
-                container.innerHTML = `<div style="color:#ef4444; text-align:center; padding:30px;">⚠️ خطأ غير متوقع.<br><small>${e.message}</small></div>`;
+                container.innerHTML = `
+            <div style="color:#ef4444; text-align:center; padding:30px;">
+                ⚠️ <span data-i18n="report_error_unknown">Unexpected System Error.</span>
+                <br><small>${e.message}</small>
+            </div>`;
+                if (typeof changeLanguage === 'function') changeLanguage(localStorage.getItem('sys_lang') || 'en');
             }
         }
     };
