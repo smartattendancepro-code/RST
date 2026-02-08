@@ -24,9 +24,11 @@
     <link rel="stylesheet" href="style.css">
 
     <script src="https://unpkg.com/read-excel-file@5.x/bundle/read-excel-file.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.min.js"></script>
     <script defer src="./face-api.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="./advanced_archive.js" type="module"></script>
     <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@3/dist/fp.min.js"></script>
@@ -1451,11 +1453,9 @@
             </div>
 
             <div id="studentProfileModal" class="profile-overlay">
-                <!-- كارت بتصميم عصري ونظيف -->
                 <div class="pro-card"
                     style="padding: 0; max-width: 350px; border-radius: 24px; overflow: hidden; background: #fff; font-family: 'Cairo', sans-serif;">
 
-                    <!-- 1. الهيدر الخلفي -->
                     <div
                         style="height: 110px; background: linear-gradient(135deg, #0ea5e9, #3b82f6); position: relative;">
                         <button
@@ -1465,7 +1465,6 @@
                         </button>
                     </div>
 
-                    <!-- 2. الصورة والاسم -->
                     <div style="text-align: center; margin-top: -55px; padding-bottom: 10px;">
                         <div class="avatar-wrapper" onclick="openAvatarSelector()"
                             style="margin: 0 auto; width: 100px; height: 100px; position: relative;">
@@ -1486,7 +1485,6 @@
                             data-i18n="student_role">Nursing Student</p>
                     </div>
 
-                    <!-- 3. شريط الإحصائيات -->
                     <div
                         style="display: flex; justify-content: space-around; padding: 15px 20px; border-bottom: 1px solid #f1f5f9;">
                         <div style="text-align: center;">
@@ -1517,17 +1515,14 @@
                         </div>
                     </div>
 
-                    <!-- 4. تنويه النظام التجريبي -->
                     <div
                         style="background: #fff7ed; padding: 10px 20px; font-size: 10px; color: #c2410c; text-align: center; border-bottom: 1px solid #ffedd5; line-height: 1.5;">
                         <i class="fa-solid fa-circle-info"></i> <b data-i18n="note_title">Note:</b> <span
                             data-i18n="beta_system_msg">Experimental system. Numbers are for review only.</span>
                     </div>
 
-                    <!-- 5. البيانات التفصيلية -->
                     <div style="padding: 20px;">
 
-                        <!-- المستوى والنوع -->
                         <div style="display: flex; gap: 15px; margin-bottom: 15px;">
                             <div
                                 style="flex: 1; background: #f8fafc; padding: 10px; border-radius: 12px; display: flex; align-items: center; gap: 10px;">
@@ -1556,7 +1551,6 @@
                             </div>
                         </div>
 
-                        <!-- الكود والإيميل -->
                         <div style="display: flex; flex-direction: column; gap: 10px;">
                             <div
                                 style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px dashed #e2e8f0;">
@@ -1579,7 +1573,6 @@
                             </div>
                         </div>
 
-                        <!-- 🔥🔥 (تحديث) بصمة الجهاز بشكل واضح 🔥🔥 -->
                         <div
                             style="margin-top: 15px; padding: 10px; background: #fef2f2; border-radius: 12px; border: 1px dashed #fca5a5; text-align: center;">
 
@@ -1597,7 +1590,6 @@
                             </div>
                         </div>
 
-                        <!-- زر الخروج -->
                         <button onclick="performLogout()"
                             style="margin-top: 20px; width: 100%; padding: 12px; background: #fee2e2; color: #ef4444; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s;">
                             <span data-i18n="sign_out">Sign Out</span> <i
@@ -2417,8 +2409,8 @@
     <style>
         .live-fab-container {
             position: fixed;
-            bottom: 92px;
-            right: 20px;
+            bottom: 25px;
+            left: 20px;
             display: flex;
             flex-direction: column;
             gap: 15px;

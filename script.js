@@ -2225,32 +2225,26 @@ document.addEventListener('click', (e) => {
     let unsubscribeReport = null;
 
     window.openReportModal = async function () {
-        // تشغيل صوت النقر
         if (typeof playClick === 'function') playClick();
 
-        // 1. عرض المودال وتجهيز الواجهة
         const modal = document.getElementById('reportModal');
         if (modal) {
             modal.style.display = 'flex';
-            // تطبيق اللغة الحالية
             const currentLang = localStorage.getItem('sys_lang') || 'en';
             if (typeof changeLanguage === 'function') changeLanguage(currentLang);
 
             if (typeof showSubjectsView === 'function') showSubjectsView();
         }
 
-        // 2. تجهيز التاريخ الحالي
         const now = new Date();
         const d = String(now.getDate()).padStart(2, '0');
         const m = String(now.getMonth() + 1).padStart(2, '0');
         const y = now.getFullYear();
         const dateStr = `${d}/${m}/${y}`;
 
-        // عرض التاريخ في العنوان
         const dateDisplay = document.getElementById('reportDateDisplay');
         if (dateDisplay) dateDisplay.innerText = dateStr;
 
-        // 3. عرض شاشة التحميل (Loading)
         const container = document.getElementById('subjectsContainer');
         if (container) {
             container.innerHTML = `
@@ -2261,11 +2255,9 @@ document.addEventListener('click', (e) => {
                 </div>
             </div>`;
 
-            // تحديث الترجمة للنص الجديد فوراً
             if (typeof changeLanguage === 'function') changeLanguage(localStorage.getItem('sys_lang') || 'en');
         }
 
-        // 4. إغلاق أي استماع سابق لتجنب التكرار
         if (window.unsubscribeReport) {
             window.unsubscribeReport();
             window.unsubscribeReport = null;
@@ -2279,20 +2271,13 @@ document.addEventListener('click', (e) => {
             let q;
 
             if (isDean) {
-                // ============================================================
-                // السيناريو A: العميد (يرى كل المواد في هذا التاريخ)
-                // ============================================================
+
                 q = query(
                     collection(db, "attendance"),
                     where("date", "==", dateStr)
                 );
             } else {
-                // ============================================================
-                // السيناريو B: الدكتور (يرى مادته فقط - مجمعة من كل الدكاترة)
-                // ============================================================
 
-                // 1. جلب اسم المادة من مستند الجلسة الحالية/الأخيرة للدكتور
-                // هذا يحل مشكلة أن المادة متغيرة وليست ثابتة في البروفايل
                 const sessionRef = doc(db, "active_sessions", user.uid);
                 const sessionSnap = await getDoc(sessionRef);
 
@@ -2300,14 +2285,11 @@ document.addEventListener('click', (e) => {
 
                 if (sessionSnap.exists()) {
                     const sessionData = sessionSnap.data();
-                    // الأولوية لـ allowedSubject ثم subject
                     targetSubject = sessionData.allowedSubject || sessionData.subject || "";
                 }
 
-                // تنظيف النص
                 targetSubject = targetSubject ? targetSubject.trim() : "";
 
-                // 2. التحقق من وجود مادة
                 if (!targetSubject) {
                     if (container) {
                         container.innerHTML = `
@@ -2322,11 +2304,9 @@ document.addEventListener('click', (e) => {
                     </div>`;
                         if (typeof changeLanguage === 'function') changeLanguage(localStorage.getItem('sys_lang') || 'en');
                     }
-                    return; // إيقاف التنفيذ لتوفير القراءات
+                    return;
                 }
 
-                // 3. بناء الاستعلام المفلتر (يوفر التكلفة بشكل كبير)
-                // يتطلب Index: Date + Subject
                 q = query(
                     collection(db, "attendance"),
                     where("date", "==", dateStr),
@@ -2334,12 +2314,10 @@ document.addEventListener('click', (e) => {
                 );
             }
 
-            // 5. جلب قائمة المواد النشطة حالياً (لتمييزها في العرض)
             const activeSessionsQ = query(collection(db, "active_sessions"), where("isActive", "==", true));
             const activeSnap = await getDocs(activeSessionsQ);
             const activeSubjectsList = activeSnap.docs.map(doc => doc.data().allowedSubject ? doc.data().allowedSubject.trim() : "");
 
-            // 6. الاستماع للبيانات (Real-time Listener)
             window.unsubscribeReport = onSnapshot(q, (querySnapshot) => {
                 let allData = [];
 
@@ -2361,20 +2339,16 @@ document.addEventListener('click', (e) => {
                     });
                 });
 
-                // ترتيب البيانات: الأحدث أولاً
                 allData.sort((a, b) => {
                     const tA = a.timestamp ? (a.timestamp.seconds || 0) : 0;
                     const tB = b.timestamp ? (b.timestamp.seconds || 0) : 0;
                     return tB - tA;
                 });
 
-                // تخزين البيانات في متغير عام (للتصدير وللتفاصيل)
                 window.cachedReportData = allData;
 
-                // تحديث الواجهة
                 if (container) {
                     if (allData.length === 0) {
-                        // حالة لا توجد بيانات
                         container.innerHTML = `
                     <div class="empty-state">
                         <i class="fa-solid fa-folder-open" style="font-size:40px; color:#cbd5e1; margin-bottom:15px;"></i>
@@ -2386,7 +2360,6 @@ document.addEventListener('click', (e) => {
                         </small>
                     </div>`;
                     } else {
-                        // عرض القائمة
                         if (typeof renderSubjectsList === 'function') {
                             renderSubjectsList(allData, activeSubjectsList);
                         } else {
@@ -2394,13 +2367,11 @@ document.addEventListener('click', (e) => {
                         }
                     }
 
-                    // إعادة تطبيق الترجمة على المحتوى الجديد
                     if (typeof changeLanguage === 'function') changeLanguage(localStorage.getItem('sys_lang') || 'en');
                 }
             }, (error) => {
                 console.error("Snapshot Error:", error);
 
-                // التعامل مع خطأ الفهرس المفقود
                 let errorDetails = "";
                 if (error.message.includes("requires an index")) {
                     errorDetails = "<br><span style='font-size:11px; color:#f59e0b'>(System: Missing Index. Check Console for Link)</span>";
@@ -5033,11 +5004,17 @@ window.openManageStudentsModal = function () {
 };
 
 window.openArchiveModal = function () {
-    playClick();
+    if (typeof playClick === 'function') playClick();
 
-    document.getElementById('dataEntryModal').style.display = 'none';
+    const menuModal = document.getElementById('dataEntryModal');
+    if (menuModal) menuModal.style.display = 'none';
 
-    document.getElementById('attendanceRecordsModal').style.display = 'flex';
+    if (window.advancedArchiveSystem) {
+        window.advancedArchiveSystem.open();
+    } else {
+        console.warn("Advanced Archive Module not loaded yet.");
+        alert("⚠️ جاري تحميل نظام الأرشيف المتقدم... حاول مرة أخرى بعد ثوانٍ.");
+    }
 };
 
 window.closeManageStudentsModal = function () {
@@ -5124,9 +5101,9 @@ window.toggleDateLabel = function () {
 function normalizeText(text) {
     if (!text) return "";
     return text.toString()
-        .replace(/[أإآ]/g, 'ا')  // الألفات
-        .replace(/ة/g, 'ه')      // التاء المربوطة
-        .replace(/ى/g, 'ي');     // الياء
+        .replace(/[أإآ]/g, 'ا')
+        .replace(/ة/g, 'ه')
+        .replace(/ى/g, 'ي');
 }
 
 window.smartSubjectSearch = function () {

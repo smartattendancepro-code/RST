@@ -35,5 +35,4 @@ export const MASTER_SUBJECTS = {
     "third_year": [],
 
     "fourth_year": []
-
 };

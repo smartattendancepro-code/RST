@@ -1,11 +1,13 @@
 
 import { MASTER_HALLS, MASTER_SUBJECTS } from './config.js';
+import { SmartHistory } from './SmartHistory.js'; 
 import {
     doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs,
     onSnapshot, serverTimestamp, increment, writeBatch, orderBy, limit,
     arrayUnion, arrayRemove, getCountFromServer
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { i18n } from './i18n.js';
+
 const db = window.db;
 const auth = window.auth;
 
@@ -35,9 +37,6 @@ let unsubscribeLiveSnapshot = null;
 let deanRadarUnsubscribe = null;
 let unsubscribeHeaderSession = null;
 
-
-
-
 window.toggleSessionState = function () {
     if (!sessionStorage.getItem("secure_admin_session_token_v99")) return;
 
@@ -61,6 +60,20 @@ window.toggleSessionState = function () {
 
         let hallsArray = (typeof MASTER_HALLS !== 'undefined') ? MASTER_HALLS : [];
 
+        const user = auth.currentUser;
+        if (user) {
+            const historySubs = SmartHistory.get(`history_subjects_${user.uid}`);
+            if (historySubs.length > 0) {
+                const markedSubs = historySubs.map(s => `🕒 ${s}`);
+                subjectsArray = [...markedSubs, ...subjectsArray];
+            }
+
+            const historyHalls = SmartHistory.get(`history_halls_${user.uid}`);
+            if (historyHalls.length > 0) {
+                const markedHalls = historyHalls.map(h => `🕒 ${h}`);
+                hallsArray = [...markedHalls, ...hallsArray];
+            }
+        }
         renderCustomList('subjectList', subjectsArray, 'finalSubjectValue');
         renderCustomList('hallList', hallsArray, 'finalHallValue');
     }
@@ -79,8 +92,8 @@ window.confirmSessionStart = async function () {
         return;
     }
 
-    const subject = subjectEl.value;
-    const hall = hallEl.value;
+    const subject = subjectEl.value.replace("🕒 ", "").trim();
+    const hall = hallEl.value.replace("🕒 ", "").trim();
     const groupInput = groupEl ? (groupEl.value.trim().toUpperCase() || "GENERAL") : "GENERAL";
     const password = passEl ? passEl.value.trim() : "";
 
@@ -103,6 +116,11 @@ window.confirmSessionStart = async function () {
     const doctorName = window.currentDoctorName || document.getElementById('profFacName')?.innerText || "Doctor";
     const facAvatarEl = document.getElementById('facCurrentAvatar');
     const avatarIconClass = facAvatarEl && facAvatarEl.querySelector('i') ? facAvatarEl.querySelector('i').className : "fa-solid fa-user-doctor";
+
+    if (typeof SmartHistory !== 'undefined') {
+        SmartHistory.push(`history_subjects_${user.uid}`, subject);
+        SmartHistory.push(`history_halls_${user.uid}`, hall);
+    }
 
     const btn = document.querySelector('#customTimeModal .btn-start-action') || document.querySelector('#customTimeModal .btn-main');
     const originalText = btn ? btn.innerHTML : "Start";
@@ -633,7 +651,42 @@ window.handleSessionTimer = function (isActive, startTime, duration) {
     updateTick();
     sessionInterval = setInterval(updateTick, 1000);
 };
+window.closeDoorImmediately = async function () {
+    const user = auth.currentUser;
+    if (!user) return;
 
+    const lang = localStorage.getItem('sys_lang') || 'en';
+    const dict = (typeof i18n !== 'undefined' && i18n[lang]) ? i18n[lang] : {};
+    const t = (key, defaultText) => dict[key] || defaultText;
+
+    const btn = document.getElementById('btnCloseDoor');
+    if (btn) {
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${t('closing_door_loading', 'Closing Door...')}`;
+        btn.style.pointerEvents = 'none';
+    }
+
+    try {
+        const sessionRef = doc(db, "active_sessions", user.uid);
+
+        await updateDoc(sessionRef, {
+            isDoorOpen: false,
+            sessionCode: "EXPIRED",
+            duration: 0
+        });
+
+        document.getElementById('doorDurationModal').style.display = 'none';
+
+        showToast(`🔒 ${t('close_door_success_toast', 'Door closed successfully')}`, 3000, "#10b981");
+
+    } catch (e) {
+        console.error("Error Closing Door:", e);
+        showToast(`❌ ${t('close_door_error_toast', 'Error closing door')}`, 3000, "#ef4444");
+        if (btn) {
+            btn.innerHTML = `⛔ ${t('close_door_btn', 'Close Door')}`;
+            btn.style.pointerEvents = 'auto';
+        }
+    }
+};
 window.openDoorActionModal = function () {
     const isAdmin = sessionStorage.getItem("secure_admin_session_token_v99");
     if (!isAdmin) return;
@@ -713,6 +766,29 @@ window.openDoorActionModal = function () {
                 display:block; text-align:${lang === 'ar' ? 'right' : 'left'}; 
                 font-size:13px; font-weight:700; color:#334155; margin-bottom:8px;
             }
+                .btn-close-door {
+                width: 100%; 
+                margin-top: 5px;
+                margin-bottom: 20px;
+                background: #fef2f2; 
+                color: #b91c1c; 
+                border: 1px dashed #fca5a5;
+                padding: 10px; 
+                border-radius: 10px; 
+                font-weight: bold; 
+                cursor: pointer; 
+                font-size: 13px;
+                transition: 0.2s;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 5px;
+            }
+            .btn-close-door:hover { 
+                background: #fee2e2; 
+                border-color: #ef4444; 
+                transform: translateY(-1px);
+            }
         </style>
     `;
 
@@ -768,6 +844,10 @@ window.openDoorActionModal = function () {
             <!-- زر الوقت المفتوح -->
             <button onclick="confirmOpenDoor(-1)" class="btn-infinity">
                 ${t('time_inf', '∞ وقت مفتوح (بدون عداد)')}
+            </button>
+
+             <button id="btnCloseDoor" onclick="closeDoorImmediately()" class="btn-close-door">
+                ⛔ (Close Door)
             </button>
 
             <!-- زر الإلغاء -->
