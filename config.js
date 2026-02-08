@@ -17,7 +17,8 @@ export const MASTER_SUBJECTS = {
         "اناتومى نظرى",
         "اناتومى عملى",
         "فسيولوجى",
-        "تكنولوجيا المعلومات"
+        "تكنولوجيا المعلومات",
+        "تمريض"
     ],
 
     "second_year": [
@@ -34,4 +35,5 @@ export const MASTER_SUBJECTS = {
     "third_year": [],
 
     "fourth_year": []
+
 };
