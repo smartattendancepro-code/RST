@@ -1596,13 +1596,10 @@ document.addEventListener('click', (e) => {
                 if (typeof playSuccess === 'function') playSuccess();
                 showToast(`✅ ${result.message}`, 3000, "#10b981");
 
-                // --- 🔄 تحديث التخزين لاستعادة الجلسة لاحقاً ---
-                // نستخدم localStorage لضمان بقاء الطالب في الجلسة حتى بعد الـ Refresh
                 localStorage.setItem('TARGET_DOCTOR_UID', targetDrUID);
                 sessionStorage.setItem('TARGET_DOCTOR_UID', targetDrUID);
                 sessionStorage.removeItem('TEMP_DR_UID');
 
-                // تحديث الكاش المحلي للبروفايل (للعرض فقط)
                 try {
                     let cached = localStorage.getItem('cached_profile_data');
                     if (cached) {
@@ -1614,7 +1611,6 @@ document.addEventListener('click', (e) => {
                     }
                 } catch (err) { console.warn("Cache update skipped."); }
 
-                // تحديث واجهة المحاضرة الحية ببيانات الدكتور
                 if (document.getElementById('liveDocName')) document.getElementById('liveDocName').innerText = sessionData.doctorName || "Professor";
                 if (document.getElementById('liveSubjectTag')) document.getElementById('liveSubjectTag').innerText = sessionData.allowedSubject || "Subject";
                 const liveAvatar = document.getElementById('liveDocAvatar');
@@ -1622,10 +1618,6 @@ document.addEventListener('click', (e) => {
                     liveAvatar.innerHTML = `<i class="fa-solid ${sessionData.doctorAvatar}"></i>`;
                 }
 
-                // ❌ ملاحظة: تم حذف كود تحديث "student_stats" يدوياً من هنا
-                // لأن الباك إند يقوم بهذه المهمة الآن بصلاحيات الـ Admin لضمان عدم التزوير.
-
-                // 4. الانتقال لشاشة المحاضرة
                 switchScreen('screenLiveSession');
                 if (typeof startLiveSnapshotListener === 'function') startLiveSnapshotListener();
 
@@ -2411,13 +2403,14 @@ document.addEventListener('click', (e) => {
         }
 
         subjects.forEach(subject => {
+            const btnTargetedStyle = `background:#fffbeb; color:#d97706; border:1px solid #fde68a;`;
             const count = data.filter(i => i.subject === subject).length;
 
             const isSubjectActiveNow = activeSubjects.includes(subject.trim());
 
             let activeBadge = '';
             let cardStyle = '';
-            let statusIcon = '<i class="fa-solid fa-check-circle" style="color:#10b981;"></i> مكتمل'; // الافتراضي
+            let statusIcon = '<i class="fa-solid fa-check-circle" style="color:#10b981;"></i> مكتمل';
 
             if (isSubjectActiveNow) {
                 activeBadge = `
@@ -2455,6 +2448,13 @@ document.addEventListener('click', (e) => {
                     style="${isSubjectActiveNow ? 'opacity:0.5; cursor:not-allowed; background:#f1f5f9; color:#94a3b8; border-color:#e2e8f0;' : ''}">
                 <i class="fa-solid fa-file-excel"></i>
             </button>
+            <button onclick="event.stopPropagation(); downloadSimpleSheet('${subject}')" title="تحميل الحضور الحالي فقط" class="btn-download-excel" style="background:#e0f2fe; color:#0284c7; border:1px solid #bae6fd; margin-top: 5px;"><i class="fa-solid fa-download"></i></button>
+             <button onclick="event.stopPropagation(); exportTargetedAttendance('${subject}')" 
+                        title="تقرير الحضور والغياب للمجموعات المستهدفة" 
+                        class="btn-download-excel" 
+                        style="${btnTargetedStyle}">
+                    <i class="fa-solid fa-clipboard-user"></i>
+                </button>
         </div>`;
         });
 
@@ -2765,10 +2765,19 @@ document.addEventListener('click', (e) => {
             const file = e.target.files[0];
             if (!file) return;
 
+            const levelSelect = document.getElementById('uploadLevelSelect');
+            const selectedLevel = levelSelect ? levelSelect.value : null;
+
+            if (!selectedLevel) {
+                showToast("⚠️ خطأ: يجب اختيار الفرقة الدراسية من القائمة أولاً!", 4000, "#ef4444");
+                this.value = '';
+                return;
+            }
+
             const statusDiv = document.getElementById('uploadStatus');
             const batchID = `BATCH_OFFICIAL_${Date.now()}`;
 
-            statusDiv.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري قراءة البيانات الرسمية...';
+            statusDiv.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري قراءة الملف...';
 
             try {
                 const rows = await readXlsxFile(file);
@@ -2779,14 +2788,13 @@ document.addEventListener('click', (e) => {
                     return;
                 }
 
-                statusDiv.innerHTML = `<i class="fa-solid fa-server"></i> جاري تحديث بيانات ${data.length} طالب...`;
+                statusDiv.innerHTML = `<i class="fa-solid fa-server"></i> جاري رفع ${data.length} طالب للفرقة ${selectedLevel}...`;
 
                 const batchSize = 450;
                 let chunks = [];
                 for (let i = 0; i < data.length; i += batchSize) chunks.push(data.slice(i, i + batchSize));
 
                 let totalUploaded = 0;
-                let levelsCount = { "1": 0, "2": 0, "3": 0, "4": 0 };
 
                 for (const chunk of chunks) {
                     const batch = writeBatch(db);
@@ -2794,23 +2802,27 @@ document.addEventListener('click', (e) => {
                     chunk.forEach(row => {
                         let studentId = row[0];
                         let studentName = row[1];
-                        let officialLevel = row[2];
+                        let groupCode = row[2];
 
-                        if (studentId && studentName && officialLevel) {
+                        if (studentId && studentName) {
                             studentId = String(studentId).trim();
                             studentName = String(studentName).trim();
-                            officialLevel = String(officialLevel).trim();
 
-                            if (levelsCount[officialLevel] !== undefined) levelsCount[officialLevel]++;
+                            let finalGroup = "UNKNOWN";
+                            if (groupCode) {
+                                finalGroup = String(groupCode).trim().toUpperCase();
+                            }
 
                             const docRef = doc(db, "students", studentId);
 
                             batch.set(docRef, {
                                 name: studentName,
                                 id: studentId,
-                                academic_level: officialLevel,
+                                academic_level: selectedLevel,
+                                group_code: finalGroup,
                                 upload_batch_id: batchID,
-                                created_at: Timestamp.now()
+                                created_at: serverTimestamp(),
+                                method: "Excel_With_Group"
                             }, { merge: true });
                         }
                     });
@@ -2824,15 +2836,15 @@ document.addEventListener('click', (e) => {
                     batch_id: batchID,
                     filename: file.name,
                     count: totalUploaded,
+                    level: selectedLevel,
                     timestamp: Timestamp.now(),
-                    method: "Excel_Official_Level"
+                    method: "Excel_Group_System"
                 });
 
                 statusDiv.innerHTML = `
-                    <div style="color: #10b981; font-weight:bold;">✅ تم التحديث بنجاح!</div>
+                    <div style="color: #10b981; font-weight:bold;">✅ تم الرفع بنجاح!</div>
                     <div style="font-size:12px; color:#334155; margin-top:5px;">
-                        تم تصنيف الطلاب حسب الملف:<br>
-                        سنة أولى: ${levelsCount["1"]} | سنة ثانية: ${levelsCount["2"]}
+                        تمت إضافة ${totalUploaded} طالب إلى الفرقة ${selectedLevel}.
                     </div>
                 `;
                 playSuccess();
@@ -2840,11 +2852,10 @@ document.addEventListener('click', (e) => {
 
             } catch (error) {
                 console.error("Upload Error:", error);
-                statusDiv.innerText = "❌ تأكد أن الملف يحتوي على 3 أعمدة (كود، اسم، فرقة)";
+                statusDiv.innerText = "❌ تأكد أن الملف يحتوي على 3 أعمدة (ID, Name, Group)";
             }
         });
     }
-
     if (!isMobileDevice()) { document.getElementById('desktop-blocker').style.display = 'flex'; document.body.style.overflow = 'hidden'; throw new Error("Desktop access denied."); }
 
     window.startProcess = startProcess;
@@ -3320,24 +3331,20 @@ document.addEventListener('click', (e) => {
     window.openStudentProfile = async function (forceRefresh = false) {
         const user = auth.currentUser;
 
-        // 1. إخفاء زر المعلومات
         const infoBtn = document.getElementById('infoBtn');
         if (infoBtn) infoBtn.style.display = 'none';
 
-        // 2. التحقق من الدخول
         if (!user) {
             showToast("⚠️ يرجى تسجيل الدخول أولاً", 3000, "#f59e0b");
             return;
         }
 
-        // 3. فتح المودال
         const modal = document.getElementById('studentProfileModal');
         if (modal) {
             modal.style.display = 'flex';
             setTimeout(() => modal.classList.add('active'), 10);
         }
 
-        // --- [جديد] محاولة عرض البيانات الأساسية من الذاكرة المحلية فوراً للسرعة ---
         const cachedProfileData = localStorage.getItem('cached_profile_data');
         if (cachedProfileData) {
             try {
@@ -3359,7 +3366,6 @@ document.addEventListener('click', (e) => {
             } catch (e) { }
         }
 
-        // --- [جديد] التحقق من كاش الإحصائيات لتوفير القراءات (صلاحية 15 دقيقة) ---
         const statsCacheKey = `stats_cache_${user.uid}`;
         const cachedStatsStr = localStorage.getItem(statsCacheKey);
 
@@ -3367,15 +3373,12 @@ document.addEventListener('click', (e) => {
             try {
                 const cachedStats = JSON.parse(cachedStatsStr);
                 const now = Date.now();
-                // 900000 مللي ثانية = 15 دقيقة
                 if ((now - cachedStats.timestamp) < 900000) {
                     console.log("⚡ Using Cached Stats (Saved Firebase Reads)");
 
-                    // عرض الأرقام من الكاش
                     document.getElementById('profAttendanceVal').innerText = cachedStats.attendance;
                     document.getElementById('profAbsenceVal').innerText = cachedStats.absence;
 
-                    // تلوين السلوك بناءً على القيمة المخزنة
                     const discEl = document.getElementById('profDisciplineVal');
                     const status = cachedStats.discipline;
                     if (status === "bad") {
@@ -3389,33 +3392,27 @@ document.addEventListener('click', (e) => {
                         discEl.style.color = "#10b981";
                     }
 
-                    // 🛑 توقف هنا: لن نكمل الكود ولن نقرأ من الفايربيز
                     return;
                 }
             } catch (e) { }
         }
 
-        // 4. مؤشرات التحميل (تظهر فقط لو مفيش كاش)
         document.getElementById('profAttendanceVal').innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" style="font-size:14px"></i>';
         document.getElementById('profAbsenceVal').innerHTML = '-';
         document.getElementById('profDisciplineVal').innerHTML = '-';
 
-        // 5. دالة جلب البيانات والحساب (الكود الأصلي تماماً)
         const renderData = async (data, isCached) => {
             const info = data.registrationInfo || data;
 
-            // --- عرض البيانات الشخصية ---
             document.getElementById('profFullName').innerText = info.fullName || "--";
             document.getElementById('profStudentID').innerText = info.studentID || "--";
             document.getElementById('profLevel').innerText = `الفرقة ${info.level || '?'}`;
             document.getElementById('profGender').innerText = info.gender || "--";
 
-            // عرض الإيميل
             document.getElementById('profEmail').innerText = info.email || user.email || "--";
 
             document.getElementById('profUID').innerText = data.uid || user.uid;
 
-            // الأفاتار
             const currentAvatarEl = document.getElementById('currentAvatar');
             if (currentAvatarEl) {
                 const iconClass = data.avatarClass || info.avatarClass || "fa-user-graduate";
@@ -3423,14 +3420,10 @@ document.addEventListener('click', (e) => {
                 currentAvatarEl.style.color = "var(--primary-dark)";
             }
 
-            // ==========================================================
-            // 🚀 الحساب الدقيق (كل مادة على حدة)
-            // ==========================================================
             try {
                 const studentUID = user.uid;
                 const myGroup = (info.group && info.group.trim() !== "") ? info.group.trim() : "General";
 
-                // أ) ماذا حضر الطالب؟ (Student Stats)
                 const myStatsRef = doc(db, "student_stats", studentUID);
                 const myStatsSnap = await getDoc(myStatsRef);
 
@@ -3445,7 +3438,6 @@ document.addEventListener('click', (e) => {
                     else if (sData.cumulative_unruly > 0) disciplineStatus = "warning";
                 }
 
-                // ب) ماذا فُتح للجروب؟ (Course Counters)
                 const countersQuery = query(
                     collection(db, "course_counters"),
                     where("targetGroups", "array-contains", myGroup)
@@ -3453,7 +3445,6 @@ document.addEventListener('click', (e) => {
 
                 const countersSnap = await getDocs(countersQuery);
 
-                // تجميع المحاضرات المفتوحة لكل مادة
                 let totalSessionsHeldMap = {};
                 countersSnap.forEach(doc => {
                     const cData = doc.data();
@@ -3465,19 +3456,16 @@ document.addEventListener('click', (e) => {
                     totalSessionsHeldMap[subjectName]++;
                 });
 
-                // ج) المطابقة والحساب (Loop Matching)
                 let totalAttendanceDays = 0;
                 let totalAbsenceDays = 0;
 
                 const normalizeStr = (str) => str.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '').toLowerCase();
 
-                // نلف على المواد التي فُتحت للجروب
                 for (const [subjectHeld, totalHeldCount] of Object.entries(totalSessionsHeldMap)) {
 
                     let studentCount = 0;
                     const targetSubjectNorm = normalizeStr(subjectHeld);
 
-                    // نبحث: هل حضر الطالب هذه المادة؟
                     for (const [studentSubject, studentVal] of Object.entries(myAttendedSubjects)) {
                         if (normalizeStr(studentSubject) === targetSubjectNorm) {
                             studentCount = studentVal;
@@ -3485,20 +3473,15 @@ document.addEventListener('click', (e) => {
                         }
                     }
 
-                    // 1. إضافة رصيد الحضور للإجمالي
                     totalAttendanceDays += studentCount;
 
-                    // 2. حساب رصيد الغياب لهذه المادة تحديداً
-                    // (عدد المرات اللي الدكتور فتح فيها - عدد المرات اللي الطالب حضر فيها)
                     const absenceInSubject = Math.max(0, totalHeldCount - studentCount);
                     totalAbsenceDays += absenceInSubject;
                 }
 
-                // د) تحديث الشاشة
                 document.getElementById('profAttendanceVal').innerText = totalAttendanceDays;
                 document.getElementById('profAbsenceVal').innerText = totalAbsenceDays;
 
-                // هـ) السلوك
                 const discEl = document.getElementById('profDisciplineVal');
                 if (disciplineStatus === "bad") {
                     discEl.innerText = "مشاغب";
@@ -3612,7 +3595,7 @@ document.addEventListener('click', (e) => {
             if (cached) {
                 let cacheObj = JSON.parse(cached);
                 if (cacheObj.uid === user.uid) {
-                    cacheObj.avatarClass = iconClass; // تحديث الصورة في الكاش
+                    cacheObj.avatarClass = iconClass; 
                     localStorage.setItem('cached_profile_data', JSON.stringify(cacheObj));
                 }
             }
@@ -3712,34 +3695,24 @@ document.addEventListener('click', (e) => {
                 throw new Error(result.error || "Registration Failed");
             }
 
-            // ============================================================
-            // 📧 الخطوة 2: إرسال رابط التفعيل (التصحيح لنظام Modular v9)
-            // ============================================================
             try {
                 console.log("Backend approved. Starting email verification process...");
 
-                // 1. تسجيل الدخول اللحظي (بالطريقة الجديدة)
-                // نمرر متغير auth كأول معامل للدالة
                 const userCredential = await signInWithEmailAndPassword(auth, email, pass);
 
-                // 2. إعدادات رابط العودة
                 const actionCodeSettings = {
                     url: window.location.href,
                     handleCodeInApp: true
                 };
 
-                // 3. إرسال الرابط (بالطريقة الجديدة)
-                // نمرر المستخدم (userCredential.user) كأول معامل
                 await sendEmailVerification(userCredential.user, actionCodeSettings);
 
                 console.log("✅ Verification email sent successfully!");
 
-                // 4. تسجيل الخروج (بالطريقة الجديدة)
                 await signOut(auth);
 
             } catch (emailError) {
                 console.error("⚠️ Warning: Account created but email failed to send:", emailError);
-                // رسالة توضيحية للمستخدم
                 showToast("تم إنشاء الحساب، ولكن حدثت مشكلة في إرسال الإيميل.", 5000, "#f59e0b");
             }
 
@@ -4255,6 +4228,339 @@ document.addEventListener('click', (e) => {
         const now = new Date();
         document.getElementById('reportEndDate').valueAsDate = now;
         document.getElementById('reportStartDate').valueAsDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    };
+    window.generateDeanOfficialPDF = async function () {
+        const startDateInput = document.getElementById('reportStartDate').value;
+        const endDateInput = document.getElementById('reportEndDate').value;
+        const btn = document.querySelector('.btn-dash-run');
+
+        if (!startDateInput || !endDateInput) {
+            showToast("⚠️ Please select dates first", 3000, "#f59e0b");
+            return;
+        }
+
+        const startObj = new Date(startDateInput);
+        const endObj = new Date(endDateInput);
+        endObj.setHours(23, 59, 59, 999);
+
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing...';
+        btn.style.pointerEvents = 'none';
+
+        try {
+            const attSnap = await getDocs(query(collection(db, "attendance")));
+            const feedSnap = await getDocs(query(collection(db, "feedback_reports")));
+            const statsSnap = await getDocs(query(collection(db, "student_stats"), orderBy("cumulative_absence", "desc"), limit(20)));
+
+            let totalAttendance = 0;
+            let doctorsStats = {};
+            let violations = [];
+            let ratingsMap = {};
+            let absenceList = [];
+
+            attSnap.forEach(doc => {
+                const data = doc.data();
+                const parts = data.date.split('/');
+                const recDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+
+                if (recDate >= startObj && recDate <= endObj) {
+                    totalAttendance++;
+
+                    if (!doctorsStats[data.doctorUID]) {
+                        doctorsStats[data.doctorUID] = { name: data.doctorName, count: 0, sessions: new Set() };
+                    }
+                    doctorsStats[data.doctorUID].count++;
+                    doctorsStats[data.doctorUID].sessions.add(data.date + data.subject);
+
+                    if (data.isUnruly || data.isUniformViolation || (data.notes && data.notes.includes("مخالف"))) {
+                        let vioType = "Behavioral Misconduct"; // Default
+                        if (data.isUniformViolation || (data.notes && data.notes.includes("زي"))) {
+                            vioType = "Uniform Violation";
+                        }
+
+                        violations.push({
+                            name: data.name,
+                            type: vioType,
+                            doctor: data.doctorName,
+                            date: data.date
+                        });
+                    }
+                }
+            });
+
+            feedSnap.forEach(doc => {
+                const d = doc.data();
+                const ts = d.timestamp.toDate();
+                if (ts >= startObj && ts <= endObj) {
+                    const uid = d.doctorUID || "unk";
+                    if (!ratingsMap[uid]) ratingsMap[uid] = { score: 0, count: 0, name: d.doctorName };
+                    ratingsMap[uid].score += (d.rating || 0);
+                    ratingsMap[uid].count++;
+                }
+            });
+
+            statsSnap.forEach(doc => {
+                const d = doc.data();
+                if (d.cumulative_absence > 0) absenceList.push({ id: d.studentID || doc.id, count: d.cumulative_absence, name: "Loading..." });
+            });
+
+            for (let i = 0; i < absenceList.length; i++) {
+                try {
+                    const sDoc = await getDoc(doc(db, "students", absenceList[i].id));
+                    if (sDoc.exists()) absenceList[i].name = sDoc.data().name;
+                } catch (e) { }
+            }
+
+            let doctorsRows = '';
+            Object.values(doctorsStats).forEach(d => {
+                doctorsRows += `<tr>
+                <td style="text-align:left; padding-left:10px;">${d.name}</td>
+                <td>${d.sessions.size}</td>
+                <td>${d.count}</td>
+            </tr>`;
+            });
+
+            let ratingsRows = '';
+            Object.values(ratingsMap).map(r => ({
+                name: r.name,
+                percent: r.count > 0 ? Math.round((r.score / (r.count * 5)) * 100) : 0
+            }))
+                .sort((a, b) => b.percent - a.percent).forEach((r, i) => {
+                    let grade;
+                    if (r.percent >= 90) grade = "Excellent";
+                    else if (r.percent >= 80) grade = "Very Good";
+                    else if (r.percent >= 65) grade = "Good";
+                    else grade = "Acceptable";
+
+                    ratingsRows += `<tr>
+                <td>${i + 1}</td>
+                <td style="text-align:left; padding-left:10px;">${r.name}</td>
+                <td>${r.percent}%</td>
+                <td><span class="grade-badge ${grade.toLowerCase().replace(' ', '-')}">${grade}</span></td>
+            </tr>`;
+                });
+
+            let violationsRows = '';
+            violations.forEach(v => {
+                violationsRows += `<tr>
+                <td style="text-align:left; padding-left:10px;">${v.name}</td>
+                <td style="color:#b91c1c; font-weight:bold;">${v.type}</td>
+                <td>${v.doctor}</td>
+                <td>${v.date}</td>
+            </tr>`;
+            });
+
+            let absenceRows = '';
+            absenceList.forEach(a => {
+                absenceRows += `<tr>
+                <td style="font-family:'Courier New'; font-weight:bold;">${a.id}</td>
+                <td style="text-align:left; padding-left:10px;">${a.name}</td>
+                <td>${a.count} Days</td>
+            </tr>`;
+            });
+
+            const mainContent = Array.from(document.body.children);
+
+            const originalDisplays = mainContent.map(el => el.style.display);
+
+            mainContent.forEach(el => el.style.display = 'none');
+
+            const printContainer = document.createElement('div');
+            printContainer.id = "final-print-container";
+
+            printContainer.style.width = '794px';
+            printContainer.style.minHeight = '1123px';
+            printContainer.style.margin = '0 auto';
+            printContainer.style.backgroundColor = '#ffffff';
+            printContainer.style.color = '#0f172a';
+            printContainer.style.padding = '30px';
+            printContainer.style.boxSizing = 'border-box';
+            printContainer.style.display = 'block';
+
+            printContainer.innerHTML = `
+            <style>
+                @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap');
+                
+                #final-print-container { 
+                    font-family: 'Roboto', sans-serif; 
+                    direction: ltr; 
+                    text-align: left; 
+                    line-height: 1.5; 
+                }
+                
+                /* Header */
+                .header-box { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f172a; padding-bottom: 15px; margin-bottom: 25px; }
+                .uni-info h3 { margin: 0; font-size: 18px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; }
+                .uni-info h4 { margin: 2px 0; font-size: 14px; font-weight: 500; color: #334155; }
+                .uni-info p { margin: 0; font-size: 12px; font-weight: 400; color: #64748b; font-style: italic; }
+                
+                .report-meta { text-align: right; }
+                .report-meta h3 { margin: 0; font-size: 16px; font-weight: 700; color: #0f172a; text-transform: uppercase; }
+                .report-meta p { margin: 2px 0; font-size: 11px; color: #475569; font-family: 'Courier New', monospace; }
+
+                /* Info Grid */
+                .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 15px; margin-bottom: 25px; border-radius: 6px; font-size: 12px; font-weight: 600; -webkit-print-color-adjust: exact; }
+                .info-item span { color: #2563eb; font-weight: 800; margin-left: 5px; }
+
+                /* Sections */
+                .section-block { margin-bottom: 30px; page-break-inside: avoid; }
+                .section-title { 
+                    background: #1e293b; 
+                    color: #fff !important; 
+                    padding: 8px 12px; 
+                    font-size: 13px; 
+                    font-weight: 700; 
+                    text-transform: uppercase;
+                    border-radius: 4px 4px 0 0; 
+                    -webkit-print-color-adjust: exact; 
+                    letter-spacing: 0.5px;
+                }
+                
+                /* Tables */
+                .main-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 0; table-layout: fixed; }
+                .main-table th { background-color: #e2e8f0 !important; color: #0f172a; border: 1px solid #cbd5e1; padding: 8px; text-align: center; font-weight: 800; text-transform: uppercase; -webkit-print-color-adjust: exact; }
+                .main-table td { border: 1px solid #cbd5e1; padding: 6px; text-align: center; color: #334155; word-wrap: break-word; }
+                .main-table tr:nth-child(even) { background-color: #f8fafc !important; -webkit-print-color-adjust: exact; }
+
+                /* Summary Box */
+                .summary-box { border: 2px solid #0f172a; padding: 15px; text-align: center; font-size: 16px; font-weight: 500; margin-bottom: 15px; background: #fff; }
+                .summary-box strong { font-size: 20px; font-weight: 900; color: #0f172a; }
+
+                /* Grade Badges */
+                .grade-badge { padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; }
+                .excellent { color: #166534; background: #dcfce7; }
+                .very-good { color: #15803d; background: #f0fdf4; }
+                .good { color: #0284c7; background: #e0f2fe; }
+                .acceptable { color: #ca8a04; background: #fef9c3; }
+
+                /* Signatures */
+                .signatures { margin-top: 60px; display: flex; justify-content: space-between; page-break-inside: avoid; padding: 0 40px; }
+                .sig-block { text-align: center; width: 200px; }
+                .sig-block h5 { margin: 0 0 40px 0; font-size: 12px; font-weight: 700; text-transform: uppercase; color: #0f172a; border-bottom: 1px solid #0f172a; padding-bottom: 5px; }
+                .sig-block p { margin: 0; font-size: 11px; font-weight: 600; }
+            </style>
+
+            <div class="header-box">
+                <div class="uni-info">
+                    <h3>Al-Ryada University</h3>
+                    <h4>Faculty of Nursing</h4>
+                    <p>Office of the Dean</p>
+                </div>
+                <div class="report-meta">
+                    <h3>Official Statistical Report</h3>
+                    <p>Date: ${new Date().toLocaleDateString('en-GB')}</p>
+                    <p>Ref No: REF-${Math.floor(Math.random() * 100000)}</p>
+                </div>
+            </div>
+
+            <div class="info-grid">
+                <div class="info-item">Start Date: <span>${startDateInput}</span></div>
+                <div class="info-item">End Date: <span>${endDateInput}</span></div>
+            </div>
+
+            <!-- Section 1 -->
+            <div class="section-block">
+                <div class="section-title">1. General Attendance Index</div>
+                <div class="summary-box">
+                    Total Student Attendance: <strong>${totalAttendance}</strong> Students
+                </div>
+            </div>
+
+            <!-- Section 2 -->
+            <div class="section-block">
+                <div class="section-title">2. Faculty Performance Report</div>
+                <table class="main-table">
+                    <thead><tr><th width="45%">Instructor Name</th><th width="25%">Sessions</th><th width="30%">Total Attendance</th></tr></thead>
+                    <tbody>${doctorsRows}</tbody>
+                </table>
+            </div>
+
+            <!-- Section 3 -->
+            <div class="section-block">
+                <div class="section-title">3. Quality Assurance Assessment (Descending)</div>
+                <table class="main-table">
+                    <thead><tr><th width="10%">#</th><th width="40%">Instructor Name</th><th width="20%">Score</th><th width="30%">Rating</th></tr></thead>
+                    <tbody>${ratingsRows}</tbody>
+                </table>
+            </div>
+
+            <!-- Section 4 -->
+            <div class="section-block">
+                <div class="section-title" style="background:#b91c1c !important;">4. Disciplinary Log (Conduct / Uniform)</div>
+                <table class="main-table">
+                    <thead><tr><th width="30%">Student Name</th><th width="25%">Violation Type</th><th width="25%">Proctor</th><th width="20%">Date</th></tr></thead>
+                    <tbody>${violationsRows}</tbody>
+                </table>
+            </div>
+
+            <!-- Section 5 -->
+            <div class="section-block">
+                <div class="section-title" style="background:#334155 !important;">5. Absenteeism Warnings (Threshold Exceeded)</div>
+                <table class="main-table">
+                    <thead><tr><th width="25%">Student ID</th><th width="45%">Student Name</th><th width="30%">Absence Count</th></tr></thead>
+                    <tbody>${absenceRows}</tbody>
+                </table>
+            </div>
+
+            <div class="signatures">
+                <div class="sig-block">
+                    <h5>Director of Student Affairs</h5>
+                    <p>.............................</p>
+                </div>
+                <div class="sig-block">
+                    <h5>Dean of the Faculty</h5>
+                    <p>Prof. Naglaa Abdelmawgoud</p>
+                </div>
+            </div>
+        `;
+
+            document.body.appendChild(printContainer);
+            window.scrollTo(0, 0);
+
+            btn.innerHTML = '<i class="fa-solid fa-print fa-bounce"></i> Generating PDF...';
+            await new Promise(resolve => setTimeout(resolve, 1500)); // Wait for render
+
+            const opt = {
+                margin: 0,
+                filename: `Dean_Report_EN_${new Date().toISOString().slice(0, 10)}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: {
+                    scale: 2,
+                    useCORS: true,
+                    scrollY: 0,
+                },
+                jsPDF: {
+                    unit: 'pt',
+                    format: 'a4',
+                    orientation: 'portrait'
+                }
+            };
+
+            await html2pdf().set(opt).from(printContainer).save();
+
+            document.body.removeChild(printContainer);
+            mainContent.forEach((el, i) => {
+                el.style.display = originalDisplays[i];
+            });
+            btn.innerHTML = originalText;
+            btn.style.pointerEvents = 'auto';
+            showToast("✅ Report Downloaded Successfully", 3000, "#10b981");
+
+        } catch (e) {
+            console.error(e);
+            const stuck = document.getElementById('final-print-container');
+            if (stuck) document.body.removeChild(stuck);
+            if (typeof originalDisplays !== 'undefined') {
+                mainContent.forEach((el, i) => el.style.display = originalDisplays[i]);
+            } else {
+                Array.from(document.body.children).forEach(el => {
+                    if (el.id !== 'advancedArchiveModal') el.style.display = '';
+                });
+            }
+            showToast("Error: " + e.message, 4000, "#ef4444");
+            btn.innerHTML = originalText;
+            btn.style.pointerEvents = 'auto';
+        }
     };
 
     let chartsInstances = {};
@@ -4875,6 +5181,141 @@ document.addEventListener('click', (e) => {
                 </div>
             `;
             }
+        }
+    };
+
+    window.exportTargetedAttendance = async function (subjectName) {
+        if (typeof playClick === 'function') playClick();
+
+        const now = new Date();
+        const dateStr = ('0' + now.getDate()).slice(-2) + '/' + ('0' + (now.getMonth() + 1)).slice(-2) + '/' + now.getFullYear();
+        const cleanSubject = subjectName.trim();
+
+        showToast("⏳ جاري إعداد التقرير الملون...", 3000, "#f59e0b");
+
+        try {
+            const counterRef = collection(db, "course_counters");
+            const qCounter = query(counterRef, where("subject", "==", cleanSubject), where("date", "==", dateStr));
+            const counterSnap = await getDocs(qCounter);
+
+            let allTargetGroups = [];
+            counterSnap.forEach(doc => {
+                const groups = doc.data().targetGroups || [];
+                allTargetGroups = [...allTargetGroups, ...groups];
+            });
+
+            if (allTargetGroups.length === 0) {
+                const attendees = window.cachedReportData.filter(s => s.subject === cleanSubject);
+                allTargetGroups = [...new Set(attendees.map(a => a.group))].filter(g => g && g !== "--");
+            }
+            allTargetGroups = [...new Set(allTargetGroups)];
+
+            const usersRef = collection(db, "user_registrations");
+            const masterList = [];
+            for (let i = 0; i < allTargetGroups.length; i += 10) {
+                const chunk = allTargetGroups.slice(i, i + 10);
+                const qUsers = query(usersRef, where("registrationInfo.group", "in", chunk));
+                const chunkSnap = await getDocs(qUsers);
+                chunkSnap.forEach(doc => {
+                    const userData = doc.data();
+                    masterList.push({
+                        id: String(userData.registrationInfo?.studentID || userData.studentID || "").trim(),
+                        name: userData.registrationInfo?.fullName || userData.fullName,
+                        group: userData.registrationInfo?.group || userData.group
+                    });
+                });
+            }
+
+            const allAttendedRecords = window.cachedReportData.filter(s => s.subject === cleanSubject);
+            const attendanceMap = new Map();
+            allAttendedRecords.forEach(rec => attendanceMap.set(String(rec.uniID).trim(), rec));
+
+            let finalData = [];
+            const masterIDsFound = new Set();
+
+            masterList.forEach(student => {
+                const attData = attendanceMap.get(student.id);
+                if (attData) masterIDsFound.add(student.id);
+
+                finalData.push({
+                    "الرقم الجامعي": student.id,
+                    "اسم الطالب": student.name,
+                    "المجموعة": student.group,
+                    "الحالة": attData ? "✅ حاضر" : "❌ غائب",
+                    "وقت الحضور": attData ? attData.time : "--",
+                    "المحاضر": attData ? attData.doctorName : "--",
+                    "القاعة": attData ? attData.hall : "--",
+                    "ملاحظات": attData ? (attData.notes || "منضبط") : "لم يحضر"
+                });
+            });
+
+            allAttendedRecords.forEach(att => {
+                if (!masterIDsFound.has(String(att.uniID).trim())) {
+                    finalData.push({
+                        "الرقم الجامعي": att.uniID,
+                        "اسم الطالب": att.name,
+                        "المجموعة": att.group + " (خارج النطاق)",
+                        "الحالة": "✅ حاضر إضافي",
+                        "وقت الحضور": att.time,
+                        "المحاضر": att.doctorName,
+                        "القاعة": att.hall,
+                        "ملاحظات": "حاضر من مجموعة غير مستهدفة"
+                    });
+                }
+            });
+
+            finalData.sort((a, b) => {
+                const order = { "✅ حاضر": 1, "✅ حاضر إضافي": 2, "❌ غائب": 3 };
+                return order[a["الحالة"]] - order[b["الحالة"]];
+            });
+
+            const finalReportWithIndex = finalData.map((item, index) => ({ "م": index + 1, ...item }));
+
+            const ws = XLSX.utils.json_to_sheet(finalReportWithIndex);
+
+            const headerStyle = {
+                font: { bold: true, color: { rgb: "FFFFFF" } },
+                fill: { fgColor: { rgb: "4472C4" } },
+                alignment: { horizontal: "center" }
+            };
+
+            const range = XLSX.utils.decode_range(ws['!ref']);
+            for (let R = range.s.r; R <= range.e.r; ++R) {
+                for (let C = range.s.c; C <= range.e.c; ++C) {
+                    const cell_address = { c: C, r: R };
+                    const cell_ref = XLSX.utils.encode_cell(cell_address);
+                    if (!ws[cell_ref]) continue;
+
+                    if (R === 0) {
+                        ws[cell_ref].s = headerStyle;
+                    } else {
+                        const statusCellRef = XLSX.utils.encode_cell({ c: 4, r: R });
+                        const statusValue = ws[statusCellRef] ? ws[statusCellRef].v : "";
+
+                        if (statusValue === "❌ غائب") {
+                            ws[cell_ref].s = {
+                                font: { color: { rgb: "9C0006" } }, 
+                                fill: { fgColor: { rgb: "FFC7CE" } }, 
+                                alignment: { horizontal: "center" }
+                            };
+                        } else {
+                            ws[cell_ref].s = { alignment: { horizontal: "center" } };
+                        }
+                    }
+                }
+            }
+
+            ws['!cols'] = [{ wch: 5 }, { wch: 15 }, { wch: 35 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 20 }, { wch: 10 }, { wch: 30 }];
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "تقرير الحضور والغياب");
+
+            XLSX.writeFile(wb, `تقرير_ملون_${cleanSubject.replace(/\s/g, '_')}_${dateStr.replace(/\//g, '-')}.xlsx`);
+            showToast("✅ تم تصدير التقرير المفرز والملون", 4000, "#10b981");
+
+        } catch (error) {
+            console.error("Master Logic Error:", error);
+            showToast("❌ خطأ في معالجة البيانات", 3000, "#ef4444");
         }
     };
 
@@ -5745,11 +6186,9 @@ window.startSmartSearch = async function () {
 
     const t = window.t || ((k, def) => def);
 
-    // 1. دوال التنظيف والمعالجة
     const smartNormalize = (text) => {
         if (!text) return "";
         let clean = text.toString().toLowerCase();
-        // إزالة الألقاب والرموز
         clean = clean.replace(/\b(dr|prof|eng|mr|mrs|ms|د|دكتور|مهندس)\b\.?/g, ' ');
         clean = clean.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, " ");
         clean = clean.replace(/\s+/g, ' ').trim();
@@ -5772,7 +6211,6 @@ window.startSmartSearch = async function () {
     const queryNormal = smartNormalize(rawInput);
     const queryPhonetic = smartNormalize(transliterateArabicToEnglish(rawInput));
 
-    // تشغيل الـ Loader
     btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
     content.innerHTML = `<div style="padding:30px; text-align:center;">
         <i class="fa-solid fa-wand-magic-sparkles fa-bounce" style="font-size:40px; color:#0ea5e9;"></i>
@@ -6143,3 +6581,121 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+window.submitManualStudent = async function () {
+    const levelSelect = document.getElementById('uploadLevelSelect');
+    const nameInput = document.getElementById('manualStName');
+    const idInput = document.getElementById('manualStID');
+    const groupInput = document.getElementById('manualStGroup');
+    const btn = document.getElementById('btnManualSave');
+
+    const level = levelSelect ? levelSelect.value : null;
+    const name = nameInput.value.trim();
+    const id = idInput.value.trim();
+    let groupCode = groupInput.value.trim().toUpperCase();
+
+    if (!level) {
+        showToast("⚠️ Please select the Level first!", 3000, "#f59e0b");
+        return;
+    }
+
+    if (!name || !id || !groupCode) {
+        showToast("⚠️ Please fill all fields (Name, ID, Group Code)", 3000, "#f59e0b");
+        return;
+    }
+    if (!groupCode.startsWith(level)) {
+        showToast(`⚠️ Group Code must start with Level ${level} (e.g., ${level}G1)`, 4000, "#ef4444");
+        return;
+    }
+
+    const groupRegex = /^\dG\d+$/;
+    if (!groupRegex.test(groupCode)) {
+        showToast("⚠️ Invalid Group Code Format! Use format like 1G1", 4000, "#ef4444");
+        return;
+    }
+
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+    btn.disabled = true;
+
+    try {
+        const studentRef = doc(db, "students", id);
+
+        await setDoc(studentRef, {
+            name: name,
+            id: id,
+            academic_level: level,
+            group: groupCode,
+            upload_batch_id: "MANUAL_ENTRY",
+            created_at: serverTimestamp(),
+            method: "Manual"
+        }, { merge: true });
+
+        playSuccess();
+        showToast(`✅ Added: ${name} (${groupCode})`, 3000, "#10b981");
+
+        nameInput.value = "";
+        idInput.value = "";
+        groupInput.value = "";
+        nameInput.focus();
+
+    } catch (error) {
+        console.error("Manual Add Error:", error);
+        showToast("❌ Error saving student", 3000, "#ef4444");
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+};
+window.downloadSimpleSheet = function (subjectName) {
+    if (!window.cachedReportData || window.cachedReportData.length === 0) {
+        alert("⚠️ لا توجد بيانات للتحميل!");
+        return;
+    }
+
+    const cleanSubject = subjectName.trim();
+    const studentsList = window.cachedReportData.filter(s => s.subject === cleanSubject);
+
+    if (studentsList.length === 0) {
+        alert("⚠️ لا يوجد طلاب مسجلين في هذه المادة حالياً.");
+        return;
+    }
+
+    studentsList.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+
+    const excelData = studentsList.map((student, index) => ({
+        "م": index + 1,
+        "اسم الطالب": student.name,
+        "الرقم الجامعي (ID)": student.uniID,
+        "المجموعة": student.group || "--",
+        "وقت التسجيل": student.time,
+        "الحالة": "حضور"
+    }));
+
+    try {
+        const worksheet = XLSX.utils.json_to_sheet(excelData);
+
+        const wscols = [
+            { wch: 5 },
+            { wch: 30 },
+            { wch: 15 },
+            { wch: 10 },
+            { wch: 15 },
+            { wch: 10 }
+        ];
+        worksheet['!cols'] = wscols;
+
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "الحاضرين");
+
+        const fileName = `حضور_${cleanSubject.replace(/\s/g, '_')}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+        XLSX.writeFile(workbook, fileName);
+
+        if (navigator.vibrate) navigator.vibrate(50);
+        console.log(`✅ تم تحميل ملف الحضور البسيط لـ: ${cleanSubject}`);
+
+    } catch (error) {
+        console.error("Excel Export Error:", error);
+        alert("حدث خطأ أثناء إنشاء ملف الإكسيل.");
+    }
+};

@@ -1,6 +1,6 @@
 {
-  "name": "ProAttend - Smart Attendance",
-  "short_name": "7ProAttend",
+  "name": "Smart Attendance Platform",
+  "short_name": "SAP",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#ffffff",

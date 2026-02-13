@@ -25,8 +25,8 @@
 
     <script src="https://unpkg.com/read-excel-file@5.x/bundle/read-excel-file.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script defer src="./face-api.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="./advanced_archive.js" type="module"></script>
     <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
@@ -525,18 +525,10 @@
                             <div class="modal-box dashboard-box">
                                 <div class="dashboard-header">
                                     <h2 class="dash-title">
-                                        <i class="fa-solid fa-chart-pie"></i>
-                                        <span data-i18n="dashboard_title">مركز التحليلات المتقدم</span>
+                                        <i class="fa-solid fa-file-contract"></i>
+                                        <span>مركز التقارير السيادية</span>
                                     </h2>
                                     <div class="dash-actions">
-                                        <button onclick="exportDashboard('image')" class="btn-export"
-                                            data-i18n-title="save_as_image" title="حفظ كصورة">
-                                            <i class="fa-solid fa-camera"></i>
-                                        </button>
-                                        <button onclick="exportDashboard('pdf')" class="btn-export"
-                                            data-i18n-title="save_as_pdf" title="حفظ PDF">
-                                            <i class="fa-solid fa-file-pdf"></i>
-                                        </button>
                                         <button
                                             onclick="document.getElementById('deanReportsModal').style.display='none'"
                                             class="btn-close-dash">
@@ -545,77 +537,30 @@
                                     </div>
                                 </div>
 
-                                <div class="dashboard-controls">
-                                    <input type="date" id="reportStartDate" class="dash-input">
-                                    <span style="color:#94a3b8" data-i18n="date_to">إلى</span>
-                                    <input type="date" id="reportEndDate" class="dash-input">
-                                    <button onclick="generateDeanAnalytics()" class="btn-dash-run">
-                                        <span data-i18n="analyze_btn">تحليل</span> <i class="fa-solid fa-bolt"></i>
+                                <div class="dashboard-controls" style="flex-direction: column; gap: 15px;">
+                                    <div style="width: 100%; text-align: center; color: #64748b; margin-bottom: 10px;">
+                                        حدد الفترة الزمنية لاستخراج التقرير الرسمي
+                                    </div>
+
+                                    <div style="display: flex; gap: 10px; width: 100%; justify-content: center;">
+                                        <input type="date" id="reportStartDate" class="dash-input" style="width: 45%;">
+                                        <span style="align-self: center; font-weight: bold;">إلى</span>
+                                        <input type="date" id="reportEndDate" class="dash-input" style="width: 45%;">
+                                    </div>
+
+                                    <button onclick="generateDeanOfficialPDF()" class="btn-dash-run"
+                                        style="width: 100%; margin-top: 10px; background: linear-gradient(135deg, #1e1b4b, #312e81); border: 1px solid #4338ca; cursor: pointer;">
+                                        <span>Extract Official Report (PDF)</span>
+                                        <i class="fa-solid fa-file-pdf"></i>
                                     </button>
                                 </div>
 
-                                <div id="dashboardContent" class="dashboard-body">
-
-                                    <div class="stats-grid">
-                                        <div class="stat-card blue">
-                                            <div class="st-icon"><i class="fa-solid fa-users-viewfinder"></i></div>
-                                            <div class="st-info">
-                                                <span class="st-lbl" data-i18n="total_attendance_dash">إجمالي
-                                                    الحضور</span>
-                                                <span class="st-val" id="totalAttVal">0</span>
-                                            </div>
-                                        </div>
-                                        <div class="stat-card orange">
-                                            <div class="st-icon"><i class="fa-solid fa-star"></i></div>
-                                            <div class="st-info">
-                                                <span class="st-lbl" data-i18n="avg_rating_dash">متوسط التقييم</span>
-                                                <span class="st-val" id="avgRatingVal">0.0</span>
-                                            </div>
-                                        </div>
-                                        <div class="stat-card green">
-                                            <div class="st-icon"><i class="fa-solid fa-screwdriver-wrench"></i></div>
-                                            <div class="st-info">
-                                                <span class="st-lbl" data-i18n="tools_req_dash">طلب أدوات</span>
-                                                <span class="st-val" id="totalToolsVal">0</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="charts-container">
-
-                                        <div class="chart-row">
-                                            <div class="chart-box">
-                                                <h4><i class="fa-solid fa-chart-area"></i> <span
-                                                        data-i18n="chart_subjects">الأكثر حضوراً (المواد)</span></h4>
-                                                <canvas id="subjectsChart"></canvas>
-                                            </div>
-                                            <div class="chart-box">
-                                                <h4><i class="fa-solid fa-calendar-week"></i> <span
-                                                        data-i18n="chart_days">نشاط الأيام (الذروة)</span></h4>
-                                                <canvas id="daysChart"></canvas>
-                                            </div>
-                                        </div>
-
-                                        <div class="chart-row">
-                                            <div class="chart-box">
-                                                <h4><i class="fa-solid fa-user-doctor"></i> <span
-                                                        data-i18n="chart_ratings">رضا الطلاب عن الدكاترة</span></h4>
-                                                <canvas id="ratingsChart"></canvas>
-                                            </div>
-                                            <div class="chart-box">
-                                                <h4><i class="fa-solid fa-toolbox"></i> <span
-                                                        data-i18n="chart_tools">الأدوات الأكثر طلباً</span></h4>
-                                                <canvas id="toolsChart"></canvas>
-                                            </div>
-                                        </div>
-
-                                    </div>
-
-                                    <div class="report-footer">
-                                        <span data-i18n="report_footer_text">تم استخراج التقرير آلياً من نظام إدارة
-                                            الكلية الذكي -</span>
-                                        <span id="reportGenDate">--</span>
-                                    </div>
+                                <div id="dashboardContent" class="dashboard-body"
+                                    style="text-align: center; padding: 40px; color: #94a3b8;">
+                                    <i class="fa-solid fa-print"
+                                        style="font-size: 50px; margin-bottom: 20px; opacity: 0.5;"></i>
+                                    <p>سيتم تحميل ملف PDF يحتوي على (الحضور، الغياب، تقييمات الدكاترة، والمخالفات)
+                                        بتنسيق رسمي.</p>
                                 </div>
                             </div>
                         </div>
@@ -951,12 +896,10 @@
                             <i class="fa-solid fa-graduation-cap"></i> رفع نتائج (كويز / ميدتيرم)
                         </div>
 
-                        <!-- إدخال اسم المادة -->
                         <input type="text" id="examSubjectName" class="modern-input"
                             placeholder="اسم المادة (مثال: تشريح)"
                             style="background: white !important; color: #1e293b !important; margin-bottom: 10px; border: 1px solid #cbd5e1;">
 
-                        <!-- إدخال نوع الاختبار -->
                         <div class="modern-select-wrapper" style="margin-bottom: 10px;">
                             <select id="examTypeSelect" class="modern-select-input"
                                 style="background: white !important; color: #1e293b !important;">
@@ -967,7 +910,6 @@
                             <i class="fa-solid fa-chevron-down select-arrow" style="color: #1e293b;"></i>
                         </div>
 
-                        <!-- زر الرفع -->
                         <input type="file" id="examSheetInput" style="display: none;" accept=".xlsx, .xls" />
                         <button onclick="triggerExamUpload()" class="btn-action-modern" style="background: #3b82f6;">
                             رفع شيت الدرجات <i class="fa-solid fa-file-csv"></i>
@@ -3220,6 +3162,203 @@
 </div>
 <div class="floating-refresh-btn" onclick="if(navigator.vibrate) navigator.vibrate(50); location.reload();">
     <i class="fa-solid fa-rotate-right"></i>
+</div>
+<div id="officialReportTemplate"
+    style="position: fixed; top: -9999px; left: -9999px; width: 794px; background: white; z-index: -1;">
+    <style>
+        .pdf-page {
+            width: 100%;
+            font-family: 'Cairo', sans-serif;
+            direction: rtl;
+            text-align: right;
+            background: #fff;
+            color: #000;
+            line-height: 1.5;
+        }
+
+        .header-box {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 3px double #000;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            background: #f8f9fa;
+            border: 1px solid #000;
+            padding: 10px;
+            margin-bottom: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .section-block {
+            margin-bottom: 25px;
+            page-break-inside: avoid;
+        }
+
+        .section-title {
+            background: #1e293b;
+            color: #fff;
+            padding: 8px 15px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 4px 4px 0 0;
+            margin-bottom: 0;
+            border: 1px solid #000;
+        }
+
+        .main-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+
+        .main-table th {
+            background-color: #e2e8f0;
+            border: 1px solid #000;
+            padding: 8px;
+            text-align: center;
+            font-weight: 900;
+        }
+
+        .main-table td {
+            border: 1px solid #000;
+            padding: 6px;
+            text-align: center;
+        }
+
+        .main-table tr:nth-child(even) {
+            background-color: #f8fafc;
+        }
+
+        .summary-box {
+            border: 2px solid #000;
+            padding: 10px;
+            text-align: center;
+            font-size: 16px;
+            font-weight: bold;
+            margin-top: -1px;
+            margin-bottom: 20px;
+        }
+
+        .signatures {
+            margin-top: 50px;
+            display: flex;
+            justify-content: space-between;
+            page-break-inside: avoid;
+        }
+
+        .sig-block {
+            text-align: center;
+            width: 200px;
+        }
+    </style>
+
+    <div class="pdf-page">
+
+        <div class="header-box">
+            <div style="text-align: center;">
+                <h3 style="margin:0; font-size:16px;">جامعة الريادة</h3>
+                <h4 style="margin:5px 0; font-size:14px;">كلية التمريض</h4>
+                <p style="margin:0; font-size:11px;">مكتب العميد</p>
+            </div>
+            <div style="text-align: left;">
+                <h3 style="margin:0; font-size:16px;">تقرير إحصائي رسمي</h3>
+                <p style="margin:2px 0; font-size:11px;">التاريخ: <span id="pdfPrintDate">--</span></p>
+                <p style="margin:0; font-size:11px;">المرجع: <span id="pdfRefNum">--</span></p>
+            </div>
+        </div>
+
+        <div class="info-grid">
+            <div>بداية الفترة: <span id="pdfDateFrom" style="color:#2563eb">--</span></div>
+            <div style="text-align: left;">نهاية الفترة: <span id="pdfDateTo" style="color:#2563eb">--</span></div>
+        </div>
+
+        <div class="section-block">
+            <div class="section-title">1. المؤشر العام للحضور</div>
+            <div class="summary-box">
+                إجمالي عدد الطلاب الحاضرين: <span id="pdfTotalAttendance" style="font-size: 22px;">0</span> طالب
+            </div>
+        </div>
+
+        <div class="section-block">
+            <div class="section-title">2. تقرير أداء الهيئة التدريسية</div>
+            <table class="main-table">
+                <thead>
+                    <tr>
+                        <th width="40%">اسم الدكتور</th>
+                        <th width="30%">عدد المحاضرات</th>
+                        <th width="30%">إجمالي حضور الطلاب</th>
+                    </tr>
+                </thead>
+                <tbody id="pdfDoctorsTable"></tbody>
+            </table>
+        </div>
+
+        <div class="section-block">
+            <div class="section-title">3. تقييم الجودة (تنازلياً)</div>
+            <table class="main-table">
+                <thead>
+                    <tr>
+                        <th width="10%">#</th>
+                        <th width="40%">اسم الدكتور</th>
+                        <th width="20%">النسبة</th>
+                        <th width="30%">التقدير اللفظي</th>
+                    </tr>
+                </thead>
+                <tbody id="pdfRatingsTable"></tbody>
+            </table>
+        </div>
+
+        <div class="section-block">
+            <div class="section-title" style="background:#b91c1c;">4. سجل المخالفات (سلوك / زي)</div>
+            <table class="main-table">
+                <thead>
+                    <tr>
+                        <th>اسم الطالب</th>
+                        <th>نوع المخالفة</th>
+                        <th>المحاضر</th>
+                        <th>التاريخ</th>
+                    </tr>
+                </thead>
+                <tbody id="pdfViolationsTable"></tbody>
+            </table>
+        </div>
+
+        <div class="section-block">
+            <div class="section-title" style="background:#374151;">5. إنذارات الغياب (تجاوز الحد المسموح)</div>
+            <table class="main-table">
+                <thead>
+                    <tr>
+                        <th>كود الطالب</th>
+                        <th>الاسم الثلاثي</th>
+                        <th>أيام الغياب</th>
+                    </tr>
+                </thead>
+                <tbody id="pdfAbsenceTable"></tbody>
+            </table>
+        </div>
+
+        <div class="signatures">
+            <div class="sig-block">
+                <p><b>مدير شؤون الطلاب</b></p>
+                <br><br>
+                <p>....................</p>
+            </div>
+            <div class="sig-block">
+                <p><b>يعتمد، عميد الكلية</b></p>
+                <br>
+                <p>أ.د/ نجلاء عبدالمنعم</p>
+            </div>
+        </div>
+
+    </div>
 </div>
 
 </body>
