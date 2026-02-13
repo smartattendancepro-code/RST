@@ -2410,57 +2410,75 @@ document.addEventListener('click', (e) => {
 
             let activeBadge = '';
             let cardStyle = '';
-            let statusIcon = '<i class="fa-solid fa-check-circle" style="color:#10b981;"></i> مكتمل';
+            let statusIcon = '<div style="font-size:11px; background:#dcfce7; color:#166534; padding:2px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px;"><i class="fa-solid fa-check-circle"></i> Completed</div>';
 
             if (isSubjectActiveNow) {
                 activeBadge = `
-            <div style="margin-top:8px; display:inline-flex; align-items:center; gap:6px; background:#fef2f2; color:#ef4444; padding:6px 12px; border-radius:8px; font-size:11px; font-weight:800; border:1px solid #fecaca; width:fit-content;">
-                <span class="blink-dot" style="width:8px; height:8px; background:#ef4444; border-radius:50%; display:inline-block;"></span>
-            انتظر 
-            </div>`;
+    <div style="margin-top:5px; margin-bottom:5px; display:inline-flex; align-items:center; gap:6px; background:#fef2f2; color:#ef4444; padding:4px 12px; border-radius:12px; font-size:11px; font-weight:800; border:1px solid #fecaca;">
+        <span class="blink-dot" style="width:6px; height:6px; background:#ef4444; border-radius:50%; display:inline-block;"></span>
+        Please wait until lectures close
+    </div>`;
 
-                cardStyle = 'border-right: 5px solid #ef4444; background: #fffbfb;';
                 statusIcon = '';
+            } else {
+                cardStyle = 'border-top: 4px solid #10b981;';
             }
 
             html += `
-        <div class="subject-big-card" onclick="openSubjectDetails('${subject}')" style="${cardStyle} position: relative; transition:0.2s;">
-            <div style="flex: 1;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <h3 style="margin: 0; font-size: 16px; font-weight: 900; color: #1e293b;">
+        <div class="subject-big-card" onclick="openSubjectDetails('${subject}')" 
+             style="${cardStyle} position: relative; transition:0.2s; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 15px; padding: 20px;">
+            
+            <!-- الجزء العلوي: اسم المادة والحالة -->
+            <div style="width: 100%;">
+                <div style="display:flex; flex-direction:column; align-items:center; gap: 5px;">
+                    <h3 style="margin: 0; font-size: 18px; font-weight: 900; color: #1e293b; line-height: 1.4;">
                         ${subject}
                     </h3>
-                    ${statusIcon ? `<div style="font-size:10px; color:#10b981; font-weight:bold;">${statusIcon}</div>` : ''}
+                    ${statusIcon ? statusIcon : ''}
                 </div>
                 
-                ${activeBadge} <!-- هنا يظهر التنبيه الأحمر لو الجلسة شغالة -->
-
-                <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
-                    <span style="background: #e0f2fe; color: #0284c7; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; border:1px solid #bae6fd;">
-                        <i class="fa-solid fa-users"></i> ${count} طالب (محفوظ)
-                    </span>
-                </div>
+                ${activeBadge} <!-- يظهر هنا لو المحاضرة شغالة -->
             </div>
 
-            <button onclick="event.stopPropagation(); exportAttendanceSheet('${subject}')" 
-                    title="تصدير شيت إكسيل"
-                    class="btn-download-excel"
-                    style="${isSubjectActiveNow ? 'opacity:0.5; cursor:not-allowed; background:#f1f5f9; color:#94a3b8; border-color:#e2e8f0;' : ''}">
-                <i class="fa-solid fa-file-excel"></i>
-            </button>
-            <button onclick="event.stopPropagation(); downloadSimpleSheet('${subject}')" title="تحميل الحضور الحالي فقط" class="btn-download-excel" style="background:#e0f2fe; color:#0284c7; border:1px solid #bae6fd; margin-top: 5px;"><i class="fa-solid fa-download"></i></button>
-             <button onclick="event.stopPropagation(); exportTargetedAttendance('${subject}')" 
-                        title="تقرير الحضور والغياب للمجموعات المستهدفة" 
-                        class="btn-download-excel" 
-                        style="${btnTargetedStyle}">
-                    <i class="fa-solid fa-clipboard-user"></i>
+            <!-- الجزء الأوسط: عدد الطلاب (تم التعديل: الأيقونة والرقم فقط) -->
+            <div>
+                <span style="background: #e0f2fe; color: #0284c7; padding: 8px 20px; border-radius: 50px; font-size: 16px; font-weight: 800; border:1px solid #bae6fd; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 2px 5px rgba(2, 132, 199, 0.1);">
+                    <i class="fa-solid fa-users"></i> ${count}
+                </span>
+            </div>
+
+            <!-- الجزء السفلي: الأزرار بجانب بعض -->
+            <div style="display: flex; gap: 12px; width: 100%; justify-content: center; margin-top: 5px;">
+                
+                <!-- زر إكسيل -->
+                <button onclick="event.stopPropagation(); exportAttendanceSheet('${subject}')" 
+                        title="تصدير شيت إكسيل"
+                        class="btn-download-excel"
+                        style="flex:1; justify-content: center; ${isSubjectActiveNow ? 'opacity:0.5; cursor:not-allowed; background:#f1f5f9; color:#94a3b8; border-color:#e2e8f0;' : ''}">
+                    <i class="fa-solid fa-file-excel" style="margin:0;"></i>
                 </button>
+                
+                <!-- زر التحميل البسيط -->
+                <button onclick="event.stopPropagation(); downloadSimpleSheet('${subject}')" 
+                        title="تحميل الحضور الحالي فقط" 
+                        class="btn-download-excel" 
+                        style="flex:1; justify-content: center; background:#e0f2fe; color:#0284c7; border:1px solid #bae6fd;">
+                    <i class="fa-solid fa-download" style="margin:0;"></i>
+                </button>
+                
+                <!-- زر التقرير الملون -->
+                 <button onclick="event.stopPropagation(); exportTargetedAttendance('${subject}')" 
+                            title="تقرير الحضور والغياب للمجموعات المستهدفة" 
+                            class="btn-download-excel" 
+                            style="flex:1; justify-content: center; ${btnTargetedStyle}">
+                        <i class="fa-solid fa-clipboard-user" style="margin:0;"></i>
+                    </button>
+            </div>
         </div>`;
         });
 
         document.getElementById('subjectsContainer').innerHTML = html;
     };
-
 
     window.openSubjectDetails = function (subjectName) {
         playClick();
@@ -3595,7 +3613,7 @@ document.addEventListener('click', (e) => {
             if (cached) {
                 let cacheObj = JSON.parse(cached);
                 if (cacheObj.uid === user.uid) {
-                    cacheObj.avatarClass = iconClass; 
+                    cacheObj.avatarClass = iconClass;
                     localStorage.setItem('cached_profile_data', JSON.stringify(cacheObj));
                 }
             }
@@ -5294,8 +5312,8 @@ document.addEventListener('click', (e) => {
 
                         if (statusValue === "❌ غائب") {
                             ws[cell_ref].s = {
-                                font: { color: { rgb: "9C0006" } }, 
-                                fill: { fgColor: { rgb: "FFC7CE" } }, 
+                                font: { color: { rgb: "9C0006" } },
+                                fill: { fgColor: { rgb: "FFC7CE" } },
                                 alignment: { horizontal: "center" }
                             };
                         } else {

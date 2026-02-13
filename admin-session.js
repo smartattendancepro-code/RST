@@ -1,6 +1,6 @@
 
 import { MASTER_HALLS, MASTER_SUBJECTS } from './config.js';
-import { SmartHistory } from './SmartHistory.js'; 
+import { SmartHistory } from './SmartHistory.js';
 import {
     doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs,
     onSnapshot, serverTimestamp, increment, writeBatch, orderBy, limit,
@@ -94,8 +94,24 @@ window.confirmSessionStart = async function () {
 
     const subject = subjectEl.value.replace("🕒 ", "").trim();
     const hall = hallEl.value.replace("🕒 ", "").trim();
-    const groupInput = groupEl ? (groupEl.value.trim().toUpperCase() || "GENERAL") : "GENERAL";
-    const password = passEl ? passEl.value.trim() : "";
+    let rawGroup = groupEl ? groupEl.value.replace(/\s+/g, '').toUpperCase() : "";
+    let groupInput = "GENERAL";
+
+    if (rawGroup !== "") {
+        const groupPattern = /^\d+G\d+$/;
+
+        if (!groupPattern.test(rawGroup)) {
+            showToast("⚠️ Invalid Group Format! Must be like: 1G1", 4000, "#ef4444");
+
+            if (groupEl) {
+                groupEl.style.borderColor = "#ef4444";
+                groupEl.focus();
+                setTimeout(() => groupEl.style.borderColor = "", 2000);
+            }
+            return;
+        }
+        groupInput = rawGroup;
+    } const password = passEl ? passEl.value.trim() : "";
 
     const user = auth.currentUser;
 
@@ -1425,3 +1441,16 @@ window.enterRoomAsDean = function (doctorUID) {
 
     document.getElementById('deanOversightModal').style.display = 'none';
 };
+document.addEventListener('input', function (e) {
+    if (e.target && e.target.id === 'modalGroupInput') {
+        let val = e.target.value;
+
+        val = val.toUpperCase();
+
+        val = val.replace(/\s/g, '');
+
+        if (e.target.value !== val) {
+            e.target.value = val;
+        }
+    }
+});
