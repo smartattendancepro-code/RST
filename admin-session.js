@@ -7,6 +7,8 @@ import {
     arrayUnion, arrayRemove, getCountFromServer
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { i18n } from './i18n.js';
+import { applyVipTheme } from './VipThemeManager.js';
+
 
 const db = window.db;
 const auth = window.auth;
@@ -199,9 +201,9 @@ window.closeSessionImmediately = function () {
     const confirmBtn = document.getElementById('btnConfirmYes') || document.querySelector('.swal2-confirm');
 
     if (confirmBtn) {
-        confirmBtn.style.pointerEvents = 'auto'; 
-        confirmBtn.style.opacity = '1';        
-        confirmBtn.disabled = false;           
+        confirmBtn.style.pointerEvents = 'auto';
+        confirmBtn.style.opacity = '1';
+        confirmBtn.disabled = false;
     }
 
     const lang = localStorage.getItem('sys_lang') || 'ar';
@@ -971,6 +973,9 @@ window.startLiveSnapshotListener = function () {
     } else {
         targetRoomUID = sessionStorage.getItem('TARGET_DOCTOR_UID');
     }
+
+    applyVipTheme(targetRoomUID);
+
 
     if (!targetRoomUID) {
         return;
