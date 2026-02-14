@@ -1,4 +1,3 @@
-// VipThemeManager.js - النسخة الفنية (The Floral & Gradient Edition)
 
 const VIP_DOCTORS_LIST = [
     "oUCoiNiU5wNmSTbE92nI375FVhy1",
@@ -125,4 +124,5 @@ export function applyVipTheme(currentRoomUID) {
         }
     `;
     document.head.appendChild(style);
+
 }
