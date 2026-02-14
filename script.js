@@ -6717,3 +6717,119 @@ window.downloadSimpleSheet = function (subjectName) {
         alert("حدث خطأ أثناء إنشاء ملف الإكسيل.");
     }
 };
+
+(function () {
+    const indicator = document.getElementById('superWifiIndicator');
+    const statusText = indicator.querySelector('.wifi-text');
+    const slashIcon = document.getElementById('wifiSlashIcon');
+    let pingInterval = null;
+
+    const PING_URL = 'https://cp.cloudflare.com/generate_204';
+    const PING_INTERVAL_MS = 2000;
+    const TIMEOUT_MS = 3000;
+
+    const STATE = {
+        ONLINE: 'ONLINE',
+        OFFLINE: 'OFFLINE',
+        WEAK: 'WEAK',
+        LOADING: 'LOADING'
+    };
+
+    /**
+     * @param {string} state - One of the STATE constants.
+     */
+    function updateUI(state) {
+        indicator.classList.remove('state-loading', 'state-weak', 'wifi-status-hidden');
+
+        const iconBox = indicator.querySelector('.wifi-icon-box');
+
+        if (state !== STATE.LOADING && !iconBox.querySelector('.fa-wifi')) {
+            iconBox.innerHTML = '<i class="fa-solid fa-wifi fa-fade"></i><i class="fa-solid fa-slash wifi-slash" id="wifiSlashIcon"></i>';
+        }
+
+        const slashIcon = document.getElementById('wifiSlashIcon');
+
+        switch (state) {
+            case STATE.ONLINE:
+                if (document.readyState === 'complete') {
+                    indicator.classList.add('wifi-status-hidden');
+                }
+                if (slashIcon) slashIcon.style.display = 'none';
+                break;
+
+            case STATE.OFFLINE:
+                statusText.innerText = "CONNECTION TERMINATED";
+                if (slashIcon) slashIcon.style.display = 'block';
+                if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+                break;
+
+            case STATE.WEAK:
+                indicator.classList.add('state-weak'); 
+                statusText.innerText = "UNSTABLE NETWORK";
+                if (slashIcon) slashIcon.style.display = 'none';
+                break;
+
+            case STATE.LOADING:
+                indicator.classList.add('state-loading'); 
+                statusText.innerText = "CONNECTING...";
+                iconBox.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" style="font-size:16px;"></i>';
+                break;
+        }
+    }
+
+    async function performNetworkDiagnostic() {
+        if (document.readyState !== 'complete') {
+            updateUI(STATE.LOADING);
+        }
+
+        if (!navigator.onLine) {
+            updateUI(STATE.OFFLINE);
+            return;
+        }
+
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+            await fetch(PING_URL + '?' + Date.now(), {
+                mode: 'no-cors',
+                signal: controller.signal
+            });
+
+            clearTimeout(timeoutId);
+
+            const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+            if (conn) {
+                if (conn.effectiveType === 'slow-2g' || conn.effectiveType === '2g' || conn.rtt > 1000) {
+                    updateUI(STATE.WEAK);
+                } else {
+                    updateUI(STATE.ONLINE);
+                }
+            } else {
+                updateUI(STATE.ONLINE);
+            }
+
+        } catch (error) {
+            updateUI(STATE.OFFLINE);
+        }
+    }
+
+    window.addEventListener('online', performNetworkDiagnostic);
+    window.addEventListener('offline', () => updateUI(STATE.OFFLINE));
+
+    if (document.readyState !== 'complete') {
+        updateUI(STATE.LOADING);
+    }
+
+    window.addEventListener('load', () => {
+        console.log("System: Resources Loaded. Verifying Connectivity...");
+        performNetworkDiagnostic();
+    });
+
+    clearInterval(pingInterval);
+    pingInterval = setInterval(performNetworkDiagnostic, PING_INTERVAL_MS);
+
+    performNetworkDiagnostic();
+
+})();
+

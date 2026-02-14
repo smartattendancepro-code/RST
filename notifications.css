@@ -475,6 +475,7 @@
 #screenDataEntry .floating-back-btn {
     display: none !important;
 }
+
 #step1_search .header-content-center {
     width: 100%;
     display: flex;
@@ -482,31 +483,43 @@
 }
 
 #step1_search .auth-main-title {
-    font-size: 22px !important;       
-    white-space: nowrap !important;   
+    font-size: 22px !important;
+    white-space: nowrap !important;
     width: 100%;
     text-align: center;
-    margin-bottom: 15px;              
+    margin-bottom: 15px;
 }
+
 .btn-feedback-static {
-    background: #fffbeb;     
-    color: #d97706;          
+    background: #fffbeb;
+    color: #d97706;
     border: 1px solid #fcd34d;
-    position: relative;     
-    overflow: visible !important; 
+    position: relative;
+    overflow: visible !important;
 }
 
 .star-glowing {
     animation: goldPulseBorder 1.5s infinite;
-    background: #f59e0b !important; 
-    color: #fff !important;         
+    background: #f59e0b !important;
+    color: #fff !important;
     border-color: #fff !important;
 }
 
 @keyframes goldPulseBorder {
-    0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); transform: scale(1); }
-    70% { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); transform: scale(1.02); }
-    100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); transform: scale(1); }
+    0% {
+        box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+        transform: scale(1);
+    }
+
+    70% {
+        box-shadow: 0 0 0 10px rgba(245, 158, 11, 0);
+        transform: scale(1.02);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+        transform: scale(1);
+    }
 }
 
 .feedback-badge-static {
@@ -524,29 +537,30 @@
     align-items: center;
     justify-content: center;
     border: 2px solid #fff;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
     z-index: 10;
     animation: popIn 0.3s;
 }
+
 .floating-refresh-btn {
-    position: fixed; 
-    bottom: 25px;    
-    right: 25px;     
-    
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+
     width: 50px;
     height: 50px;
     background: rgba(255, 255, 255, 0.9);
     backdrop-filter: blur(5px);
     border-radius: 50%;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
     display: flex;
     align-items: center;
     justify-content: center;
-    
-    z-index: 2147483647; 
-    
+
+    z-index: 2147483647;
+
     cursor: pointer;
-    border: 1px solid rgba(0,0,0,0.1);
+    border: 1px solid rgba(0, 0, 0, 0.1);
     -webkit-tap-highlight-color: transparent;
     transition: transform 0.2s;
 }
@@ -560,18 +574,19 @@
     transform: scale(0.9) rotate(180deg);
     background: #f1f5f9;
 }
+
 #toastNotification {
-    z-index: 2147483650 !important; 
-    
+    z-index: 2147483650 !important;
+
     position: fixed;
     top: 30px;
     left: 50%;
     transform: translateX(-50%);
-    
-    background-color: rgba(30, 41, 59, 0.9) !important; 
-    backdrop-filter: blur(10px); 
+
+    background-color: rgba(30, 41, 59, 0.9) !important;
+    backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    
+
     color: #ffffff !important;
     font-weight: 800;
     font-family: 'Cairo', sans-serif;
@@ -579,10 +594,10 @@
     border-radius: 50px;
     border: 1px solid rgba(255, 255, 255, 0.2);
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-    
+
     text-align: center;
     min-width: 300px;
-    display: none; 
+    display: none;
     animation: slideDownFade 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
@@ -591,8 +606,59 @@
         top: -50px;
         opacity: 0;
     }
+
     100% {
         top: 30px;
         opacity: 1;
     }
+}
+
+#superWifiIndicator {
+    position: fixed;
+    top: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(38, 132, 220, 0.95);
+    color: white;
+    padding: 10px 25px;
+    border-radius: 50px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+    z-index: 9999999;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.5px;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    pointer-events: none;
+}
+
+.wifi-status-hidden {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-40px) !important;
+}
+
+#superWifiIndicator.state-loading {
+    background: rgba(79, 70, 229, 0.95) !important;
+    box-shadow: 0 8px 30px rgba(79, 70, 229, 0.3);
+}
+
+#superWifiIndicator.state-weak {
+    background: rgba(234, 88, 12, 0.95);
+    box-shadow: 0 8px 30px rgba(234, 88, 12, 0.3);
+}
+
+.wifi-icon-box {
+    position: relative;
+}
+
+.wifi-slash {
+    position: absolute;
+    font-size: 14px;
+    color: #fff;
+    text-shadow: 0 0 2px #000;
 }

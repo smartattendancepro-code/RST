@@ -197,6 +197,13 @@ window.confirmSessionStart = async function () {
 window.closeSessionImmediately = function () {
 
     const confirmBtn = document.getElementById('btnConfirmYes') || document.querySelector('.swal2-confirm');
+
+    if (confirmBtn) {
+        confirmBtn.style.pointerEvents = 'auto'; 
+        confirmBtn.style.opacity = '1';        
+        confirmBtn.disabled = false;           
+    }
+
     const lang = localStorage.getItem('sys_lang') || 'ar';
 
     const title = (lang === 'ar') ? "إنهاء الجلسة وحفظ الغياب" : "End Session";
@@ -1094,6 +1101,9 @@ window.startLiveSnapshotListener = function () {
 
     if (window.unsubscribeLiveSnapshot) window.unsubscribeLiveSnapshot();
 
+    const domCache = new Map();
+
+
     window.unsubscribeLiveSnapshot = onSnapshot(q, (snapshot) => {
 
         const activeDocs = snapshot.docs.filter(d => d.data().status === 'active');
@@ -1124,7 +1134,7 @@ window.startLiveSnapshotListener = function () {
         }
 
         if (grid) {
-            grid.innerHTML = '';
+            const currentIds = new Set();
             let sortedDocs = [];
             snapshot.forEach(doc => sortedDocs.push(doc));
 
@@ -1146,92 +1156,50 @@ window.startLiveSnapshotListener = function () {
                 });
             }
 
-            sortedDocs.forEach(docSnap => {
+            sortedDocs.forEach((docSnap, index) => {
                 const s = docSnap.data();
-                if (s.status === 'expelled') return;
+                currentIds.add(docSnap.id);
 
-                const card = document.createElement('div');
+                if (s.status === 'expelled') {
+                    if (domCache.has(docSnap.id)) {
+                        domCache.get(docSnap.id).element.remove();
+                        domCache.delete(docSnap.id);
+                    }
+                    return;
+                }
 
                 const isOnBreak = s.status === 'on_break';
                 const isLeft = s.status === 'left';
-
                 const opacityVal = (isLeft || isOnBreak) ? '0.5' : '1';
-
                 const borderStyle = isOnBreak ? '2px dashed #f59e0b' : '1px solid #e2e8f0';
-
                 const rawCount = s.segment_count;
                 const segCount = (rawCount && !isNaN(rawCount)) ? parseInt(rawCount) : 1;
 
                 let countBadge = '';
-
                 if (segCount > 1) {
                     let badgeColor = isOnBreak ? '#64748b' : '#0ea5e9';
-
-                    countBadge = `
-                        <div style="
-                            position: absolute; 
-                            top: -10px; 
-                            left: -10px; 
-                            background: ${badgeColor}; 
-                            color: white; 
-                            font-family: 'Outfit', sans-serif;
-                            font-size: 11px; 
-                            font-weight: 800; 
-                            width: 26px; 
-                            height: 26px; 
-                            border-radius: 50%; 
-                            display: flex; 
-                            align-items: center; 
-                            justify-content: center; 
-                            border: 3px solid #f8fafc; 
-                            z-index: 100; 
-                            box-shadow: 0 4px 6px rgba(0,0,0,0.15);
-                            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-                        ">
-                            ${segCount}
-                        </div>`;
+                    countBadge = `<div style="position: absolute; top: -10px; left: -10px; background: ${badgeColor}; color: white; font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 800; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid #f8fafc; z-index: 100; box-shadow: 0 4px 6px rgba(0,0,0,0.15); animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);">${segCount}</div>`;
                 }
 
                 const clickAction = "";
 
+                let finalInnerHTML = '';
+                let finalClassName = '';
+                let finalCSSText = '';
+
                 if (isDoctor || isDean) {
                     const trap = s.trap_report || { is_device_match: true, in_range: true, is_gps_success: true };
-
                     const deviceIcon = trap.is_device_match ? `<div title="جهاز أصلي" style="background:#dcfce7; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-mobile-screen" style="color:#16a34a; font-size:14px;"></i></div>` : `<div title="جهاز مختلف" style="background:#fee2e2; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; animation: shake 0.5s infinite;"><i class="fa-solid fa-mobile-screen-button" style="color:#dc2626; font-size:14px;"></i></div>`;
                     const rangeIcon = trap.in_range ? `<div title="داخل النطاق" style="background:#dcfce7; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-location-dot" style="color:#16a34a; font-size:14px;"></i></div>` : `<div title="خارج النطاق" style="background:#fee2e2; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-location-crosshairs" style="color:#dc2626; font-size:14px;"></i></div>`;
                     const isGpsOk = (trap.gps_success !== undefined) ? trap.gps_success : trap.is_gps_success;
-
-                    const gpsIcon = isGpsOk ?
-                        `<div title="GPS نشط" style="background:#dcfce7; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-satellite-dish" style="color:#16a34a; font-size:14px;"></i></div>`
-                        :
-                        `<div title="فشل GPS" style="background:#f1f5f9; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-satellite-dish" style="color:#94a3b8; font-size:14px;"></i></div>`;
+                    const gpsIcon = isGpsOk ? `<div title="GPS نشط" style="background:#dcfce7; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-satellite-dish" style="color:#16a34a; font-size:14px;"></i></div>` : `<div title="فشل GPS" style="background:#f1f5f9; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-satellite-dish" style="color:#94a3b8; font-size:14px;"></i></div>`;
                     const badgesHTML = `<div style="display:flex; justify-content:center; gap:8px; margin-top:6px; border-top:1px dashed #e2e8f0; padding-top:6px; width:100%;">${deviceIcon} ${rangeIcon} ${gpsIcon}</div>`;
                     const leaveIcon = isLeft ? 'fa-arrow-rotate-left' : 'fa-person-walking-arrow-right';
 
-                    card.className = `live-st-card admin-view-card`;
+                    finalClassName = `live-st-card admin-view-card`;
+                    finalCSSText = `background: #ffffff; border-radius: 18px; border: ${borderStyle}; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; gap: 5px; box-shadow: 0 4px 10px rgba(206, 99, 38, 0.03); height: auto; min-height: 220px; width: 100%; position: relative; overflow: visible !important; opacity: ${opacityVal}; transition: all 0.3s ease;`;
 
-                    card.style.cssText = `
-                            background: #ffffff; 
-                            border-radius: 18px; 
-                            border: ${borderStyle}; 
-                            padding: 16px; 
-                            display: flex; 
-                            flex-direction: column; 
-                            justify-content: space-between; 
-                            gap: 5px; 
-                            box-shadow: 0 4px 10px rgba(206, 99, 38, 0.03); 
-                            height: auto; 
-                            min-height: 220px; 
-                            
-                            width: 100%;  
-                            
-                            position: relative;
-                            overflow: visible !important; 
-                            opacity: ${opacityVal}; 
-                            transition: all 0.3s ease;
-                        `;
-
-                    card.innerHTML = `
+                    finalInnerHTML = `
                             ${countBadge}
                             <div style="display:flex; flex-direction:column; align-items:center;">
                                 <div ${clickAction} style="cursor:pointer; width:55px; height:55px; border-radius:50%; background:#f8fafc; display:flex; align-items:center; justify-content:center; font-size:24px; color:#0ea5e9; border:2.5px solid ${s.isUnruly ? '#ef4444' : (s.isUniformViolation ? '#f97316' : '#e2e8f0')};">
@@ -1242,7 +1210,6 @@ window.startLiveSnapshotListener = function () {
                                 ${badgesHTML}
                             </div>
                             <div style="display:flex; justify-content:center; gap:30px; border-top:1px solid #f1f5f9; padding-top:12px;">
-
                                 <button onclick="toggleStudentFlag('${docSnap.id}', 'isUniformViolation', ${s.isUniformViolation})" class="mini-action-btn" style="background:${s.isUniformViolation ? '#f97316' : '#fff7ed'}; color:${s.isUniformViolation ? 'white' : '#ea580c'};"><i class="fa-solid fa-shirt"></i></button>
                                 <button onclick="toggleStudentFlag('${docSnap.id}', 'isUnruly', ${s.isUnruly})" class="mini-action-btn" style="background:${s.isUnruly ? '#ef4444' : '#fef2f2'}; color:${s.isUnruly ? 'white' : '#ef4444'};"><i class="fa-solid fa-fire"></i></button>
                                 <button onclick="toggleStudentStatus('${docSnap.id}', '${s.status}')" class="mini-action-btn" style="background:#f8fafc; color:#64748b;"><i class="fa-solid ${leaveIcon}"></i></button>
@@ -1250,29 +1217,14 @@ window.startLiveSnapshotListener = function () {
                             </div>`;
                 } else {
                     const isMe = (user.uid === s.uid);
-                    if (isMe) card.classList.add('is-me-card');
-                    card.className = 'live-st-card student-view-card';
                     let statusColor = isLeft ? "#94a3b8" : (s.isUnruly ? "#ef4444" : (s.isUniformViolation ? "#f97316" : "#10b981"));
                     let statusText = isLeft ? "مغادر" : (s.isUnruly ? "مشاغب" : (s.isUniformViolation ? "مخالف" : "حاضر"));
+                    const meClass = isMe ? 'is-me-card' : '';
 
-                    card.style.cssText = `
-                            background:white; 
-                            border-radius:15px; 
-                            padding:20px; 
-                            display:flex; 
-                            flex-direction:column; 
-                            align-items:center; 
-                            opacity:${opacityVal}; 
-                            transition:0.3s; 
-                            width:100%; 
-                            max-width: 320px;
-                            margin: 0 auto;
-                            border: ${borderStyle}; 
-                            position: relative;
-                            overflow: visible !important; 
-                        `;
+                    finalClassName = `live-st-card student-view-card ${meClass}`;
+                    finalCSSText = `background:white; border-radius:15px; padding:20px; display:flex; flex-direction:column; align-items:center; opacity:${opacityVal}; transition:0.3s; width:100%; max-width: 320px; margin: 0 auto; border: ${borderStyle}; position: relative; overflow: visible !important;`;
 
-                    card.innerHTML = `
+                    finalInnerHTML = `
                         ${isMe ? '<div class="me-badge">أنت</div>' : ''}
                             ${countBadge}
                             <div ${clickAction} style="cursor:pointer; width:70px; height:70px; border-radius:50%; background:#f8fafc; border:3.5px solid ${statusColor}; display:flex; align-items:center; justify-content:center; font-size:30px; color:#0284c7; margin-bottom:10px; z-index:2;">
@@ -1281,31 +1233,65 @@ window.startLiveSnapshotListener = function () {
                             <div style="text-align:center;">
                                 <div ${clickAction} class="st-name" style="cursor:pointer; font-size:16px; font-weight:900; color:#1e293b; text-decoration:none;">${s.name.split(' ')[0]} ${s.name.split(' ')[1] || ''}</div>
                                 <div class="st-id en-font" style="font-size:12px; color:#64748b;">#${s.id}</div>
-                                
                             </div>
                             <div style="margin-top:12px; padding:4px 15px; border-radius:6px; font-size:11px; font-weight:800; border:1px solid ${statusColor}30; background:${statusColor}15; color:${statusColor};">
                                 ${statusText}
                             </div>`;
                 }
-                grid.appendChild(card);
+                const dataSignature = JSON.stringify({
+                    st: s.status, ur: s.isUnruly, uv: s.isUniformViolation,
+                    tr: s.trap_report, sg: segCount, nm: s.name, av: s.avatarClass
+                });
+
+                let cardElement;
+
+                if (domCache.has(docSnap.id)) {
+                    const cached = domCache.get(docSnap.id);
+                    cardElement = cached.element;
+
+                    if (cached.signature !== dataSignature) {
+                        if (cardElement.innerHTML !== finalInnerHTML) cardElement.innerHTML = finalInnerHTML;
+                        if (cardElement.className !== finalClassName) cardElement.className = finalClassName;
+                        if (cardElement.style.cssText !== finalCSSText) cardElement.style.cssText = finalCSSText;
+
+                        cached.signature = dataSignature;
+                    }
+                } else {
+                    cardElement = document.createElement('div');
+                    cardElement.id = `card-${docSnap.id}`;
+                    cardElement.className = finalClassName;
+                    cardElement.style.cssText = finalCSSText;
+                    cardElement.innerHTML = finalInnerHTML;
+
+                    domCache.set(docSnap.id, { element: cardElement, signature: dataSignature });
+                }
+
+                const currentChildAtIndex = grid.children[index];
+                if (currentChildAtIndex !== cardElement) {
+                    if (currentChildAtIndex) {
+                        grid.insertBefore(cardElement, currentChildAtIndex);
+                    } else {
+                        grid.appendChild(cardElement);
+                    }
+                }
+            });
+
+            domCache.forEach((value, key) => {
+                if (!currentIds.has(key)) {
+                    value.element.remove();
+                    domCache.delete(key);
+                }
             });
         }
         if (!isDoctor && !isDean) {
-            const noteDiv = document.createElement('div');
-            noteDiv.style.cssText = `
-                    margin-top: 50px; 
-                    text-align: center; 
-                    color: #070707; 
-                    font-size: 15px; 
-                    width: 100%;
-                    font-family: 'Tajawal', sans-serif;
-                    opacity: 1;
-                `;
-            noteDiv.innerHTML = `
-                    <i class="fa-solid fa-circle-info" style="margin-left:5px;"></i>
-                     سيتم إتاحة عرض قائمة الحضور الكاملة في التحديث القادم
-                `;
-            grid.appendChild(noteDiv);
+            const existingNote = grid.querySelector('.wait-note');
+            if (!existingNote && grid.children.length > 0) {
+                const noteDiv = document.createElement('div');
+                noteDiv.className = 'wait-note';
+                noteDiv.style.cssText = `margin-top: 50px; text-align: center; color: #070707; font-size: 15px; width: 100%; font-family: 'Tajawal', sans-serif; opacity: 1;`;
+                noteDiv.innerHTML = `<i class="fa-solid fa-circle-info" style="margin-left:5px;"></i> سيتم إتاحة عرض قائمة الحضور الكاملة في التحديث القادم`;
+                grid.appendChild(noteDiv);
+            }
         }
     });
 
