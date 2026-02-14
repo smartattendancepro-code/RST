@@ -6736,7 +6736,7 @@ window.downloadSimpleSheet = function (subjectName) {
     };
 
     /**
-     * @param {string} state - One of the STATE constants.
+     * @param {string} state 
      */
     function updateUI(state) {
         indicator.classList.remove('state-loading', 'state-weak', 'wifi-status-hidden');
@@ -6758,9 +6758,8 @@ window.downloadSimpleSheet = function (subjectName) {
                 break;
 
             case STATE.OFFLINE:
-                statusText.innerText = "CONNECTION TERMINATED";
+                statusText.innerText = "CONNECTION LOST";
                 if (slashIcon) slashIcon.style.display = 'block';
-                if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
                 break;
 
             case STATE.WEAK:

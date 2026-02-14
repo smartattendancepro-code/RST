@@ -684,7 +684,7 @@ window.closeDoorImmediately = async function () {
 
     const btn = document.getElementById('btnCloseDoor');
     if (btn) {
-        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${t('closing_door_loading', 'Closing Door...')}`;
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${t('closing_door_loading', 'Closing the Door...')}`;
         btn.style.pointerEvents = 'none';
     }
 
@@ -705,7 +705,7 @@ window.closeDoorImmediately = async function () {
         console.error("Error Closing Door:", e);
         showToast(`❌ ${t('close_door_error_toast', 'Error closing door')}`, 3000, "#ef4444");
         if (btn) {
-            btn.innerHTML = `⛔ ${t('close_door_btn', 'Close Door')}`;
+            btn.innerHTML = `⛔ ${t('close_door_btn', 'Close the Door')}`;
             btn.style.pointerEvents = 'auto';
         }
     }
@@ -870,7 +870,7 @@ window.openDoorActionModal = function () {
             </button>
 
              <button id="btnCloseDoor" onclick="closeDoorImmediately()" class="btn-close-door">
-                ⛔ (Close Door)
+                ⛔ (Close The Door)
             </button>
 
             <!-- زر الإلغاء -->
