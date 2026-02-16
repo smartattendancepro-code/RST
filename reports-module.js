@@ -195,6 +195,24 @@ window.exportDashboard = async function (type) {
 
 
 window.exportAttendanceSheet = async function (subjectName) {
+    const now = new Date();
+    const todayDate = now.toLocaleDateString('en-GB');
+    const storageKey = `last_official_download_${subjectName}_${todayDate}`;
+
+    if (now.getHours() < 17) {
+        const lang = localStorage.getItem('sys_lang') || 'ar';
+        const msg = (lang === 'ar') ? "⚠️ التقرير الرسمي متاح فقط بعد الساعة 5 عصراً." : "⚠️ Official report available only after 5:00 PM.";
+        if (typeof showToast === 'function') showToast(msg, 5000, "#ef4444"); else alert(msg);
+        return;
+    }
+
+    if (localStorage.getItem(storageKey)) {
+        const lang = localStorage.getItem('sys_lang') || 'ar';
+        const msg = (lang === 'ar') ? "🚫 مسموح بتحميل التقرير الرسمي مرة واحدة فقط في اليوم." : "🚫 Official report can only be downloaded once per day.";
+        if (typeof showToast === 'function') showToast(msg, 5000, "#f59e0b"); else alert(msg);
+        return;
+    }
+
     if (typeof playClick === 'function') playClick();
 
     const allSubjects = JSON.parse(localStorage.getItem('subjectsData_v4')) || window.subjectsData || {};
@@ -232,8 +250,8 @@ window.exportAttendanceSheet = async function (subjectName) {
 
             attendeesMap[a.uniID] = {
                 ...a,
-                isUnruly: a.isUnruly === true || hasUnrulyNote, 
-                isUniformViolation: a.isUniformViolation === true || hasUniformNote, 
+                isUnruly: a.isUnruly === true || hasUnrulyNote,
+                isUniformViolation: a.isUniformViolation === true || hasUniformNote,
                 sessionCount: a.segment_count || 1,
                 docName: a.doctorName || "غير محدد",
                 time: a.time || "--:--",
@@ -245,7 +263,7 @@ window.exportAttendanceSheet = async function (subjectName) {
         const cumulativeStats = {};
 
         if (studentIDs.length > 0) {
-            const chunkSize = 30; 
+            const chunkSize = 30;
             const chunks = [];
             for (let i = 0; i < studentIDs.length; i += chunkSize) {
                 chunks.push(studentIDs.slice(i, i + chunkSize));
@@ -281,20 +299,20 @@ window.exportAttendanceSheet = async function (subjectName) {
             const history = cumulativeStats[s.id] || { totalUnruly: 0, totalUniform: 0 };
 
             if (record) {
-                let statusColor = "#f0fdf4"; 
+                let statusColor = "#f0fdf4";
 
                 let disciplineText = "منضبط";
                 let currentTotalUnruly = history.totalUnruly + (record.isUnruly ? 1 : 0);
 
                 if (record.isUnruly) {
-                    statusColor = "#fef2f2"; 
+                    statusColor = "#fef2f2";
                     disciplineText = `⚠️ مشاغب (تراكمي: ${currentTotalUnruly})`;
                 } else if (history.totalUnruly > 0) {
                     disciplineText = `منضبط (سابقاً: ${history.totalUnruly})`;
                 }
 
                 if (currentTotalUnruly >= 5) {
-                    statusColor = "#b91c1c"; 
+                    statusColor = "#b91c1c";
                     disciplineText = `⛔ تجاوز الحد (${currentTotalUnruly} مخالفات)`;
                 }
 
@@ -302,7 +320,7 @@ window.exportAttendanceSheet = async function (subjectName) {
                 let currentTotalUniform = history.totalUniform + (record.isUniformViolation ? 1 : 0);
 
                 if (record.isUniformViolation) {
-                    if (statusColor === "#f0fdf4") statusColor = "#fffbeb"; 
+                    if (statusColor === "#f0fdf4") statusColor = "#fffbeb";
                     uniformText = `👕 مخالف (تراكمي: ${currentTotalUniform})`;
                 } else if (history.totalUniform > 0) {
                     uniformText = `ملتزم (سابقاً: ${history.totalUniform})`;
@@ -352,7 +370,7 @@ window.exportAttendanceSheet = async function (subjectName) {
             const intruder = attendeesMap[intruderID];
             const history = cumulativeStats[intruder.uniID] || { totalUnruly: 0, totalUniform: 0 };
 
-            let statusColor = "#fff9c4"; 
+            let statusColor = "#fff9c4";
             let currentTotalUnruly = history.totalUnruly + (intruder.isUnruly ? 1 : 0);
             let currentTotalUniform = history.totalUniform + (intruder.isUniformViolation ? 1 : 0);
 
@@ -464,6 +482,7 @@ window.exportAttendanceSheet = async function (subjectName) {
         link.click();
         document.body.removeChild(link);
 
+        localStorage.setItem(storageKey, "true");
         if (typeof playSuccess === 'function') playSuccess();
 
     } catch (error) {

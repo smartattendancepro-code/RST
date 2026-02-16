@@ -1754,90 +1754,127 @@ document.addEventListener('click', (e) => {
     window.startAuthScreenTimer = function (doctorUID) {
         const display = document.getElementById('authTimerDisplay');
         const pill = document.querySelector('.auth-timer-pill');
-
         const t = window.t || ((key, defaultText) => defaultText);
 
-        if (window.authScreenInterval) clearInterval(window.authScreenInterval);
+        if (window.authUnsubscribe) {
+            window.authUnsubscribe();
+            window.authUnsubscribe = null;
+        }
+        if (window.localTicker) {
+            clearInterval(window.localTicker);
+            window.localTicker = null;
+        }
+        if (window.authScreenInterval) {
+            clearInterval(window.authScreenInterval);
+            window.authScreenInterval = null;
+        }
 
-        window.authScreenInterval = setInterval(async () => {
-            try {
-                const sessionSnap = await getDoc(doc(db, "active_sessions", doctorUID));
+        console.log("🟢 Live Sync Timer Started: Listening for session updates...");
 
-                if (!sessionSnap.exists()) {
-                    clearInterval(window.authScreenInterval);
-                    return;
-                }
+        const sessionRef = doc(db, "active_sessions", doctorUID);
 
-                const data = sessionSnap.data();
-
-                if (!data.isActive || !data.isDoorOpen) {
-                    clearInterval(window.authScreenInterval);
-
-                    if (window.isJoiningProcessActive) return;
-
-                    showToast(
-                        t('toast_session_closed_manual', '🔒 Sorry, registration closed by the lecturer.'),
-                        4000,
-                        "#ef4444"
-                    );
-
-                    setTimeout(() => {
-                        location.reload();
-                    }, 3000);
-
-                    return;
-                }
-
-                if (data.duration === -1) {
-                    if (display) display.innerText = "OPEN";
-                    if (pill) {
-                        pill.style.background = "#ecfdf5";
-                        pill.style.color = "#10b981";
-                        pill.style.borderColor = "#a7f3d0";
-                        pill.classList.remove('urgent-mode');
-                    }
-                    return;
-                }
-
-                const now = Date.now();
-                const startMs = data.startTime.toMillis();
-                const deadline = startMs + (data.duration * 1000);
-                const remaining = Math.floor((deadline - now) / 1000);
-
-                if (remaining <= 0) {
-                    if (window.isJoiningProcessActive) {
-                        console.log("⏳ Timer ended but joining in progress.. allowing entry.");
-                        return;
-                    }
-
-                    clearInterval(window.authScreenInterval);
-
-                    showToast(
-                        t('toast_session_timer_ended', '⏰ Time is up! Entrance period has ended.'),
-                        4000,
-                        "#ef4444"
-                    );
-
-                    setTimeout(() => {
-                        location.reload();
-                    }, 3000);
-
-                    return;
-                }
-
-                if (display) display.innerText = remaining + "s";
-
-                if (remaining <= 10 && pill) {
-                    pill.classList.add('urgent-mode');
-                } else if (pill) {
-                    pill.classList.remove('urgent-mode');
-                }
-
-            } catch (err) {
-                console.error("Timer Sync Error:", err);
+        window.authUnsubscribe = onSnapshot(sessionRef, (docSnap) => {
+            if (!docSnap.exists()) {
+                handleSessionEnd(t, '⛔ Session ended by instructor.');
+                return;
             }
-        }, 1000);
+
+            const data = docSnap.data();
+
+            if (!data.isActive || !data.isDoorOpen) {
+                if (window.isJoiningProcessActive) {
+                    console.log("⏳ Session closed but user is joining... Holding connection.");
+                    return;
+                }
+                handleSessionEnd(t, '🔒 Registration closed by lecturer.');
+                return;
+            }
+
+            if (data.duration === -1) {
+                if (window.localTicker) clearInterval(window.localTicker);
+                updateTimerUI(display, pill, "OPEN", "normal");
+                return;
+            }
+
+
+            const serverReadTime = docSnap.readTime ? docSnap.readTime.toMillis() : Date.now();
+
+            const deviceTime = Date.now();
+
+            const timeOffset = serverReadTime - deviceTime;
+
+            const startMs = data.startTime ? data.startTime.toMillis() : serverReadTime;
+            const deadline = startMs + (data.duration * 1000);
+
+            if (window.localTicker) clearInterval(window.localTicker);
+
+            runSyncedTimer(deadline, timeOffset, display, pill, t);
+
+            window.localTicker = setInterval(() => {
+                runSyncedTimer(deadline, timeOffset, display, pill, t);
+            }, 1000);
+
+        }, (error) => {
+            console.error("🔥 Timer Listener Error:", error);
+        });
     };
+
+
+    function runSyncedTimer(deadline, offset, display, pill, t) {
+        const syncedNow = Date.now() + offset;
+
+        const remaining = Math.floor((deadline - syncedNow) / 1000);
+
+        if (remaining <= 0) {
+            if (window.localTicker) clearInterval(window.localTicker);
+            if (window.isJoiningProcessActive) return;
+
+            updateTimerUI(display, pill, "0s", "urgent");
+
+            if (window.authUnsubscribe) {
+                window.authUnsubscribe();
+                window.authUnsubscribe = null;
+            }
+
+            showToast(t('toast_session_timer_ended', '⏰ Time is up! Entrance period has ended.'), 4000, "#ef4444");
+
+            setTimeout(() => {
+                location.reload();
+            }, 3000);
+            return;
+        }
+
+        const mode = (remaining <= 10) ? "urgent" : "normal";
+        updateTimerUI(display, pill, remaining + "s", mode);
+    }
+
+    function updateTimerUI(display, pill, text, mode) {
+        if (display) display.innerText = text;
+
+        if (pill) {
+            pill.classList.remove('urgent-mode');
+            pill.style.cssText = "";
+
+            if (mode === "urgent") {
+                pill.classList.add('urgent-mode');
+            } else if (text === "OPEN") {
+                pill.style.background = "#ecfdf5";
+                pill.style.color = "#10b981";
+                pill.style.borderColor = "#a7f3d0";
+            }
+        }
+    }
+
+    function handleSessionEnd(t, msg) {
+        if (window.authUnsubscribe) window.authUnsubscribe();
+        if (window.localTicker) clearInterval(window.localTicker);
+
+        showToast(t('toast_session_closed_manual', msg), 4000, "#ef4444");
+
+        setTimeout(() => {
+            location.reload();
+        }, 2500);
+    }
     window.resetSearchSession = function () {
         const step1 = document.getElementById('step1_search');
         const step2 = document.getElementById('step2_auth');
@@ -5225,11 +5262,18 @@ document.addEventListener('click', (e) => {
     };
 
     window.exportTargetedAttendance = async function (subjectName) {
+        const cleanSubject = subjectName.trim();
+
+        const today = new Date().toLocaleDateString('en-GB');
+        const storageKey = `down_targeted_${cleanSubject}_${today}`;
+        if (localStorage.getItem(storageKey)) {
+            showToast("🚫 مسموح بتحميل التقرير  مرة واحدة يومياً.", 5000, "#f59e0b");
+            return;
+        }
         if (typeof playClick === 'function') playClick();
 
         const now = new Date();
         const dateStr = ('0' + now.getDate()).slice(-2) + '/' + ('0' + (now.getMonth() + 1)).slice(-2) + '/' + now.getFullYear();
-        const cleanSubject = subjectName.trim();
 
         showToast("⏳ جاري إعداد التقرير الملون...", 3000, "#f59e0b");
 
@@ -5350,8 +5394,11 @@ document.addEventListener('click', (e) => {
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "تقرير الحضور والغياب");
 
-            XLSX.writeFile(wb, `تقرير_ملون_${cleanSubject.replace(/\s/g, '_')}_${dateStr.replace(/\//g, '-')}.xlsx`);
-            showToast("✅ تم تصدير التقرير المفرز والملون", 4000, "#10b981");
+            XLSX.writeFile(wb, `تقرير_${cleanSubject.replace(/\s/g, '_')}_${dateStr.replace(/\//g, '-')}.xlsx`);
+            showToast("✅ تم تصدير التقرير  ", 4000, "#10b981");
+
+            localStorage.setItem(storageKey, "true");
+
 
         } catch (error) {
             console.error("Master Logic Error:", error);
@@ -6285,10 +6332,8 @@ window.startSmartSearch = async function () {
             };
 
             if (
-                dbDocName.includes(queryNormal) ||
                 dbSubject.includes(queryNormal) ||
-                isGroupMatch ||
-                (queryPhonetic.length > 2 && isPhoneticMatch(dbDocName, queryPhonetic))
+                isGroupMatch
             ) {
                 isMatch = true;
                 foundIds.add(doctorId);
@@ -6316,35 +6361,6 @@ window.startSmartSearch = async function () {
                 data.doctorId = doctorId;
                 resultsFound.push(data);
             }
-        }
-
-        if (isNaN(rawInput)) {
-            const facultyQ = query(collection(db, "faculty_members"));
-            const facultySnap = await getDocs(facultyQ);
-
-            facultySnap.forEach(doc => {
-                const facData = doc.data();
-                const facName = smartNormalize(facData.fullName || "");
-
-                const isPhoneticMatch = (source, target) => {
-                    const skeletonSource = source.replace(/[aeiou]/g, '');
-                    const skeletonTarget = target.replace(/[aeiou]/g, '');
-                    return skeletonSource.includes(skeletonTarget);
-                };
-
-                if (
-                    (facName.includes(queryNormal) || (queryPhonetic.length > 2 && isPhoneticMatch(facName, queryPhonetic)))
-                    && !foundIds.has(doc.id)
-                ) {
-                    resultsFound.push({
-                        matchType: "profile_only",
-                        doctorName: facData.fullName,
-                        doctorId: doc.id,
-                        jobTitle: facData.jobTitle || facData.role || "Faculty Member",
-                        avatar: facData.avatarClass || "fa-user-doctor"
-                    });
-                }
-            });
         }
 
         if (resultsFound.length === 0) {
@@ -6687,56 +6703,84 @@ window.submitManualStudent = async function () {
     }
 };
 window.downloadSimpleSheet = function (subjectName) {
-    if (!window.cachedReportData || window.cachedReportData.length === 0) {
-        alert("⚠️ لا توجد بيانات للتحميل!");
-        return;
-    }
-
     const cleanSubject = subjectName.trim();
-    const studentsList = window.cachedReportData.filter(s => s.subject === cleanSubject);
+    const today = new Date().toLocaleDateString('en-GB'); 
+    const storageKey = `down_simple_${cleanSubject}_${today}`;
+    const currentDr = window.currentDoctorName || ""; 
 
-    if (studentsList.length === 0) {
-        alert("⚠️ لا يوجد طلاب مسجلين في هذه المادة حالياً.");
+    if (localStorage.getItem(storageKey)) {
+        const lang = localStorage.getItem('sys_lang') || 'ar';
+        const msg = (lang === 'ar')
+            ? `🚫 تم تحميل كشف ${cleanSubject} مسبقاً اليوم. مسموح بمرة واحدة فقط.`
+            : `🚫 Attendance for ${cleanSubject} was already downloaded today.`;
+
+        if (typeof showToast === 'function') showToast(msg, 5000, "#f59e0b"); else alert(msg);
         return;
     }
 
-    studentsList.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+    if (!window.cachedReportData || window.cachedReportData.length === 0) {
+        alert("⚠️ لا توجد بيانات متاحة حالياً للتنزيل. يرجى تحديث السجل.");
+        return;
+    }
 
-    const excelData = studentsList.map((student, index) => ({
+    const filteredAttendees = window.cachedReportData.filter(student => {
+        const isSubjectMatch = student.subject.trim() === cleanSubject;
+        const isDoctorMatch = (currentDr === "" || student.doctorName === currentDr);
+        return isSubjectMatch && isDoctorMatch;
+    });
+
+    if (filteredAttendees.length === 0) {
+        alert(`⚠️ لم يتم العثور على طلاب مسجلين معك في مادة: ${cleanSubject}`);
+        return;
+    }
+
+    filteredAttendees.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+
+    const excelData = filteredAttendees.map((student, index) => ({
         "م": index + 1,
         "اسم الطالب": student.name,
         "الرقم الجامعي (ID)": student.uniID,
         "المجموعة": student.group || "--",
         "وقت التسجيل": student.time,
-        "الحالة": "حضور"
+        "المحاضر": student.doctorName || "غير محدد",
+        "القاعة": student.hall || "--",
+        "الحالة": "✅ حضور"
     }));
 
     try {
         const worksheet = XLSX.utils.json_to_sheet(excelData);
 
         const wscols = [
-            { wch: 5 },
-            { wch: 30 },
-            { wch: 15 },
-            { wch: 10 },
-            { wch: 15 },
-            { wch: 10 }
+            { wch: 6 },  
+            { wch: 35 }, 
+            { wch: 15 }, 
+            { wch: 10 }, 
+            { wch: 12 }, 
+            { wch: 20 }, 
+            { wch: 10 }, 
+            { wch: 10 }  
         ];
         worksheet['!cols'] = wscols;
 
+        if (!worksheet['!views']) worksheet['!views'] = [];
+        worksheet['!views'].push({ RTL: true });
+
         const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "الحاضرين");
+        XLSX.utils.book_append_sheet(workbook, worksheet, "كشف الحضور البسيط");
 
-        const fileName = `حضور_${cleanSubject.replace(/\s/g, '_')}_${new Date().toISOString().slice(0, 10)}.xlsx`;
-
+        const fileName = `حضور_دكتور_${currentDr.replace(/\s/g, '_')}_${cleanSubject.replace(/\s/g, '_')}_${today.replace(/\//g, '-')}.xlsx`;
         XLSX.writeFile(workbook, fileName);
 
+        localStorage.setItem(storageKey, "true");
+
+        if (typeof playSuccess === 'function') playSuccess();
         if (navigator.vibrate) navigator.vibrate(50);
-        console.log(`✅ تم تحميل ملف الحضور البسيط لـ: ${cleanSubject}`);
+
+        console.log(`✅ تم تحميل ملف الحضور الخاص بالدكتور: ${currentDr} بنجاح.`);
 
     } catch (error) {
         console.error("Excel Export Error:", error);
-        alert("حدث خطأ أثناء إنشاء ملف الإكسيل.");
+        alert("حدث خطأ تقني أثناء إنشاء ملف الإكسيل.");
     }
 };
 

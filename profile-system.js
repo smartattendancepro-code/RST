@@ -142,12 +142,29 @@ window.openPublicProfile = async function (targetUID, ignoredFlag = false) {
         if (userType === 'doctor' || userType === 'dean') {
             elLevel.innerText = userData.jobTitle || userData.subject || "Professor";
             elCode.innerText = "Faculty";
-            await analyzeDoctorStats(targetUID, statsContainer);
+            statsContainer.innerHTML = `<div style="grid-column: span 3; text-align:center; padding:10px; color:#64748b; font-size:12px;">نظام إدارة المحاضرات الذكي</div>`;
         } else {
-            elLevel.innerText = userData.level || userData.academic_level || "General";
+            const level = userData.level || userData.academic_level || "---";
+            const group = userData.group || userData.registrationInfo?.group || "عام";
+
+            elLevel.innerText = `الفرقة: ${level} | جروب: ${group}`;
             elCode.innerText = userData.studentID || userData.id || targetUID;
 
-            await calculateStudentStats(targetUID, userData.group, statsContainer);
+            const statsCacheKey = `st_stats_v2_${targetUID}`;
+            const cachedData = localStorage.getItem(statsCacheKey);
+            const CACHE_HOUR = 60 * 60 * 1000;
+
+            if (cachedData) {
+                const parsed = JSON.parse(cachedData);
+                if (Date.now() - parsed.timestamp < CACHE_HOUR) {
+                    console.log("♻️    ");
+                    statsContainer.innerHTML = parsed.html;
+                } else {
+                    await calculateStudentStats(targetUID, group, statsContainer);
+                }
+            } else {
+                await calculateStudentStats(targetUID, group, statsContainer);
+            }
         }
 
         statsContainer.style.opacity = '1';
@@ -158,7 +175,7 @@ window.openPublicProfile = async function (targetUID, ignoredFlag = false) {
             roleKey: roleKey,
             badgeColor: badgeColor,
             badgeTxtColor: badgeTxtColor,
-            level: elLevel.innerText,    // التصحيح: خذ القيمة من العنصر نفسه
+            level: elLevel.innerText,
             code: elCode.innerText,
             iconClass: iconClass,
             iconColor: iconColor,
@@ -173,98 +190,6 @@ window.openPublicProfile = async function (targetUID, ignoredFlag = false) {
     }
 };
 
-async function analyzeDoctorStats(doctorUID, container) {
-    container.innerHTML = `
-        <div style="grid-column: span 3; text-align:center; padding:10px; color:#64748b;">
-            <i class="fa-solid fa-calculator fa-fade"></i> Analyzing Feedback...
-        </div>
-    `;
-
-    try {
-        const q = query(collection(window.db, "feedback_reports"), where("doctorUID", "==", doctorUID));
-        const snapshot = await getDocs(q);
-
-        let totalRating = 0;
-        let count = 0;
-        let studentsMap = {};
-
-        if (snapshot.empty) {
-            container.innerHTML = `
-                <div class="stat-mini-card" style="grid-column: span 3; opacity:0.7;">
-                    <div class="stat-icon s-gray"><i class="fa-solid fa-inbox"></i></div>
-                    <div class="stat-num" style="font-size:14px;">No Ratings</div>
-                    <div class="stat-lbl">Not rated yet</div>
-                </div>
-            `;
-            return;
-        }
-
-        snapshot.forEach(doc => {
-            const d = doc.data();
-            const r = d.rating || 0;
-            totalRating += r;
-            count++;
-            const sKey = d.studentId ? `${d.studentId}|${d.studentName || 'Unknown'}` : 'Anonymous';
-            if (sKey !== 'Anonymous') {
-                studentsMap[sKey] = (studentsMap[sKey] || 0) + 1;
-            }
-        });
-
-        const average = (totalRating / count).toFixed(1);
-
-        let verdict = "Pending Review";
-        let colorClass = "s-orange";
-        let iconHtml = '<i class="fa-solid fa-clipboard-check"></i>';
-
-        if (average >= 4.5) {
-            verdict = "Excellent ⭐";
-            colorClass = "s-green";
-            iconHtml = '<i class="fa-solid fa-medal"></i>';
-        } else if (average >= 3.5) {
-            verdict = "Very Good ✨";
-            colorClass = "s-blue";
-            iconHtml = '<i class="fa-solid fa-thumbs-up"></i>';
-        }
-
-        let topFanName = "--";
-        let topFanCount = 0;
-
-        for (const [key, val] of Object.entries(studentsMap)) {
-            if (val > topFanCount) {
-                topFanCount = val;
-                topFanName = key.split('|')[1];
-            }
-        }
-
-        if (topFanName !== "--") {
-            topFanName = topFanName.split(' ').slice(0, 2).join(' ');
-        }
-
-        container.innerHTML = `
-            <div class="stat-mini-card">
-                <div class="stat-icon ${colorClass}">${iconHtml}</div>
-                <div class="stat-num">${average} <span style="font-size:10px; color:#94a3b8;">/5</span></div>
-                <div class="stat-lbl">${verdict}</div>
-            </div>
-
-            <div class="stat-mini-card">
-                <div class="stat-icon s-purple"><i class="fa-solid fa-users-viewfinder"></i></div>
-                <div class="stat-num">${count}</div>
-                <div class="stat-lbl">Total Ratings</div>
-            </div>
-
-            <div class="stat-mini-card">
-                <div class="stat-icon" style="background:#fef9c3; color:#ca8a04;"><i class="fa-solid fa-trophy"></i></div>
-                <div class="stat-num" style="font-size:12px; line-height:1.4;">${topFanName}</div>
-                <div class="stat-lbl">Top Student (${topFanCount})</div>
-            </div>
-        `;
-
-    } catch (err) {
-        console.error("Doctor Stats Error:", err);
-        container.innerHTML = "Analysis Error";
-    }
-}
 
 async function calculateStudentStats(studentUID, studentGroup, container) {
     container.innerHTML = `
@@ -364,10 +289,17 @@ async function calculateStudentStats(studentUID, studentGroup, container) {
 
         await displayStudentExams(studentUID, document.getElementById('publicExamsList'), document.getElementById('publicExamsSection'));
 
+        const statsToSave = {
+            html: container.innerHTML,
+            timestamp: Date.now()
+        };
+        localStorage.setItem(`st_stats_${studentUID}`, JSON.stringify(statsToSave));
+
     } catch (err) {
         console.error("Stats Error:", err);
         container.innerHTML = `<div style="grid-column:span 3; text-align:center; color:#ef4444; font-size:12px;">Calculation Error</div>`;
     }
+
 }
 
 async function displayStudentExams(studentUID, listContainer, sectionContainer) {

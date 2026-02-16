@@ -932,6 +932,7 @@ window.startLiveSnapshotListener = function () {
     if (window.studentCountInterval) clearInterval(window.studentCountInterval);
 
     const grid = document.getElementById('liveStudentsGrid');
+    if (grid) grid.innerHTML = '';
 
     const countEl = document.getElementById('livePresentCount');
     const extraEl = document.getElementById('liveExtraCount');
@@ -1079,6 +1080,13 @@ window.startLiveSnapshotListener = function () {
             } else {
                 maxLimit = 9999;
             }
+
+            if (!isDoctor && !isDean) {
+                const centralCount = data.active_count || 0;
+                currentCount = centralCount;
+                if (countEl) countEl.innerText = centralCount;
+            }
+
             updateCapacityUI();
 
             if (!data.isActive && !isDoctor && !isDean) {
@@ -1117,24 +1125,18 @@ window.startLiveSnapshotListener = function () {
             currentCount = activeDocs.length;
             if (countEl) countEl.innerText = currentCount;
             updateCapacityUI();
+
+            if (window.updateCounterTimeout) clearTimeout(window.updateCounterTimeout);
+            window.updateCounterTimeout = setTimeout(() => {
+                updateDoc(doc(db, "active_sessions", targetRoomUID), {
+                    active_count: currentCount
+                }).catch(err => console.log("Counter Sync Skip", err));
+            }, 2000);
         } else {
-            const fetchRealCount = async () => {
-                try {
-                    const countQuery = query(participantsRef, where("status", "==", "active"));
-                    const snapshotCount = await getCountFromServer(countQuery);
-                    currentCount = snapshotCount.data().count;
 
-                    if (countEl) countEl.innerText = currentCount;
-                    updateCapacityUI();
-                } catch (e) {
-                    console.error("Count Error:", e);
-                }
-            };
-
-            fetchRealCount();
-
-            if (!window.studentCountInterval) {
-                window.studentCountInterval = setInterval(fetchRealCount, 15000);
+            if (window.studentCountInterval) {
+                clearInterval(window.studentCountInterval);
+                window.studentCountInterval = null;
             }
         }
 
@@ -1236,7 +1238,9 @@ window.startLiveSnapshotListener = function () {
                                 <i class="fa-solid ${s.avatarClass || 'fa-user-graduate'}"></i>
                             </div>
                             <div style="text-align:center;">
-                                <div ${clickAction} class="st-name" style="cursor:pointer; font-size:16px; font-weight:900; color:#1e293b; text-decoration:none;">${s.name.split(' ')[0]} ${s.name.split(' ')[1] || ''}</div>
+                                <div ${clickAction} class="st-name notranslate" translate="no" style="cursor:pointer; font-size:16px; font-weight:900; color:#1e293b; text-decoration:none; text-align: center; direction: auto;">
+    ${s.name}
+</div>
                                 <div class="st-id en-font" style="font-size:12px; color:#64748b;">#${s.id}</div>
                             </div>
                             <div style="margin-top:12px; padding:4px 15px; border-radius:6px; font-size:11px; font-weight:800; border:1px solid ${statusColor}30; background:${statusColor}15; color:${statusColor};">
