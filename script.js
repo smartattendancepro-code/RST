@@ -130,7 +130,21 @@ onAuthStateChanged(auth, async (_0xUser) => {
         }
         await _0xUser[_0x(13)]();
 
-        if (_0xUser[_0x(14)]) {
+        let isManuallyVerified = false;
+        try {
+            const _stRef = doc(db, "user_registrations", _0xUser.uid);
+            const _stSnap = await getDoc(_stRef);
+            if (_stSnap.exists()) {
+                const _stData = _stSnap.data();
+                if (_stData.status === 'verified' || _stData.manual_verification === true) {
+                    isManuallyVerified = true;
+                }
+            }
+        } catch (err) {
+            console.log("Manual check warning:", err);
+        }
+
+        if (_0xUser[_0x(14)] || isManuallyVerified) {
             if (_0xSD) {
                 _0xSD[_0x(15)][_0x(16)](_0x(6));
                 setTimeout(() => _0xSD[_0x(7)][_0x(8)] = _0x(9), 300);
@@ -1415,9 +1429,20 @@ document.addEventListener('click', (e) => {
             if (pWrap) pWrap.style.background = "linear-gradient(135deg, #10b981, #059669)";
             if (pDot) { pDot.style.background = "#22c55e"; pDot.style.boxShadow = "0 0 10px #22c55e"; }
 
-            if (!user.emailVerified) {
-                await signOut(auth);
+            const userRef = doc(db, "user_registrations", user.uid);
+            const userSnap = await getDoc(userRef);
 
+            let isManuallyVerified = false;
+
+            if (userSnap.exists()) {
+                const data = userSnap.data();
+                if (data.status === 'verified') {
+                    isManuallyVerified = true;
+                }
+            }
+
+            if (!user.emailVerified && !isManuallyVerified) {
+                await signOut(auth);
 
                 const vModal = document.getElementById('verificationModal');
                 if (vModal) {
@@ -1430,9 +1455,6 @@ document.addEventListener('click', (e) => {
                 if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
                 return;
             }
-
-            const userRef = doc(db, "user_registrations", user.uid);
-            const userSnap = await getDoc(userRef);
 
             if (userSnap.exists()) {
                 const userData = userSnap.data();
@@ -6763,13 +6785,13 @@ window.downloadSimpleSheet = function (subjectName) {
                 break;
 
             case STATE.WEAK:
-                indicator.classList.add('state-weak'); 
+                indicator.classList.add('state-weak');
                 statusText.innerText = "UNSTABLE NETWORK";
                 if (slashIcon) slashIcon.style.display = 'none';
                 break;
 
             case STATE.LOADING:
-                indicator.classList.add('state-loading'); 
+                indicator.classList.add('state-loading');
                 statusText.innerText = "CONNECTING...";
                 iconBox.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" style="font-size:16px;"></i>';
                 break;
