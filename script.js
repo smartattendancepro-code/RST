@@ -6198,13 +6198,13 @@ window.autoFetchName = async function (studentId) {
             nameInput.style.color = "#0f172a";
             nameInput.placeholder = "";
         } else {
-            nameInput.value = "❌ كود غير مسجل بالكلية";
+            nameInput.value = "❌ كود غير مسجل ";
             nameInput.style.color = "#b91c1c";
         }
 
     } catch (error) {
         console.error("Fetch Error:", error);
-        nameInput.value = "⚠️ خطأ في الاتصال بالسيرفر";
+        nameInput.value = "⚠️ أعد المحاولة   ";
     } finally {
         if (typeof validateSignupForm === 'function') validateSignupForm();
     }
@@ -6897,4 +6897,5 @@ window.downloadSimpleSheet = function (subjectName) {
     performNetworkDiagnostic();
 
 })();
+
 
