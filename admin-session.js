@@ -13,6 +13,29 @@ import { applyVipTheme } from './VipThemeManager.js';
 const db = window.db;
 const auth = window.auth;
 
+window.globalTimeOffset = 0;
+
+
+async function syncServerTime() {
+    try {
+        const response = await fetch(window.location.href, { method: 'HEAD', cache: 'no-store' });
+
+        const serverDateStr = response.headers.get('Date');
+        if (!serverDateStr) return;
+
+        const serverTime = new Date(serverDateStr).getTime();
+        const localTime = Date.now();
+
+        window.globalTimeOffset = serverTime - localTime;
+
+        console.log("⏱️ Time Sync Offset:", window.globalTimeOffset, "ms");
+    } catch (e) {
+        console.warn("⚠️ Time Sync Failed, falling back to local time.", e);
+    }
+}
+
+syncServerTime();
+
 window.verifyAdminRole = async function () {
     const user = auth.currentUser;
     if (!user) return false;
@@ -613,13 +636,17 @@ window.handleSessionTimer = function (isActive, startTime, duration) {
     if (startTime && typeof startTime.toMillis === 'function') {
         startMs = startTime.toMillis();
     } else {
-        startMs = startTime || Date.now();
+        startMs = startTime || (Date.now() + (window.globalTimeOffset || 0));
     }
 
     const updateTick = () => {
-        const now = Date.now();
-        const elapsedSeconds = Math.floor((now - startMs) / 1000);
-        const remaining = duration - elapsedSeconds;
+        const currentServerTime = Date.now() + (window.globalTimeOffset || 0);
+
+        const elapsedSeconds = Math.floor((currentServerTime - startMs) / 1000);
+
+        let remaining = duration - elapsedSeconds;
+        if (remaining > duration) remaining = duration; 
+
 
         if (isAdmin) {
             if (doorStatus) {
@@ -632,6 +659,7 @@ window.handleSessionTimer = function (isActive, startTime, duration) {
                 } else {
                     clearInterval(sessionInterval);
                     const user = auth.currentUser;
+
                     updateDoc(doc(db, "active_sessions", user.uid), {
                         isDoorOpen: false,
                         sessionCode: "EXPIRED"
@@ -639,10 +667,11 @@ window.handleSessionTimer = function (isActive, startTime, duration) {
                         doorStatus.innerHTML = '<i class="fa-solid fa-door-closed"></i> CLOSED';
                         doorStatus.style.color = "#ef4444";
                         showToast("⏰ انتهى وقت الدخول وقُفل الباب", 4000, "#ef4444");
-                    });
+                    }).catch(err => console.error("Error closing door:", err));
                 }
             }
         }
+        
         else {
             if (floatTimer) {
                 if (duration == -1) {
@@ -651,7 +680,10 @@ window.handleSessionTimer = function (isActive, startTime, duration) {
                 } else if (remaining > 0) {
                     floatTimer.style.display = 'flex';
                     if (floatText) floatText.innerText = remaining + "s";
+
                     if (remaining <= 10) floatTimer.classList.add('urgent');
+                    else floatTimer.classList.remove('urgent');
+
                 } else {
                     clearInterval(sessionInterval);
                     floatTimer.style.display = 'none';

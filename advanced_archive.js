@@ -9,7 +9,7 @@ import {
 export class AdvancedArchiveManager {
 
     constructor() {
-        this.injectStyles(); 
+        this.injectStyles();
         this.injectModal();
         this.setupListeners();
     }
@@ -218,6 +218,7 @@ export class AdvancedArchiveManager {
         const db = window.db;
         if (!db) { alert("Error: Database not initialized. Please refresh."); return; }
 
+        // قراءة المدخلات
         const startDateVal = document.getElementById('advStartDate').value;
         const endDateVal = document.getElementById('advEndDate').value;
         const level = document.getElementById('advLevelSelect').value;
@@ -225,6 +226,7 @@ export class AdvancedArchiveManager {
         const statusLog = document.getElementById('advStatusLog');
         const btn = document.getElementById('btnGenerateExcel');
 
+        // التحقق من صحة البيانات
         if (!startDateVal || !endDateVal || !level || !subject) {
             statusLog.innerHTML = '<span style="color:#ef4444;">⚠️ Please fill in all fields.</span>';
             return;
@@ -240,14 +242,16 @@ export class AdvancedArchiveManager {
             return;
         }
 
+        // تغيير حالة الزر أثناء التحميل
         const originalBtnText = btn.innerHTML;
         btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> <span>Processing...</span>';
         btn.style.pointerEvents = 'none';
         btn.style.opacity = '0.8';
 
         try {
-            statusLog.innerText = "Scanning for active sessions...";
+            statusLog.innerText = "Scanning active sessions...";
 
+            // 1. جلب سجلات الحضور للمادة المختارة
             const attendanceQ = query(collection(db, "attendance"), where("subject", "==", subject));
             const attSnap = await getDocs(attendanceQ);
 
@@ -259,6 +263,7 @@ export class AdvancedArchiveManager {
             let attendanceRecords = [];
             let outsiderStudents = {};
 
+            // 2. تصفية السجلات حسب التاريخ
             attSnap.forEach(doc => {
                 const record = doc.data();
                 const parts = record.date.split('/');
@@ -268,16 +273,19 @@ export class AdvancedArchiveManager {
                     activeDatesSet.add(record.date);
                     attendanceRecords.push(record);
 
+                    // حفظ الطلاب من خارج الدفعة (Outsiders)
                     if (!outsiderStudents[record.id]) {
                         outsiderStudents[record.id] = {
                             id: record.id,
                             name: record.name,
+                            group: record.group || "غير محدد",
                             isOutsider: true
                         };
                     }
                 }
             });
 
+            // ترتيب تواريخ المحاضرات زمنياً
             let sortedActiveDates = Array.from(activeDatesSet).sort((a, b) => {
                 const da = a.split('/').reverse().join('');
                 const db = b.split('/').reverse().join('');
@@ -285,72 +293,109 @@ export class AdvancedArchiveManager {
             });
 
             if (sortedActiveDates.length === 0) {
-                statusLog.innerText = "No sessions found in this date range.";
+                statusLog.innerText = "No sessions found in range.";
                 return;
             }
 
-            statusLog.innerText = `Fetching Level ${level} students...`;
+            statusLog.innerText = `Fetching students...`;
+
+            // 3. جلب بيانات الطلاب الأساسية من قاعدة البيانات
             const studentsQ = query(collection(db, "students"), where("academic_level", "==", level));
             const studentsSnap = await getDocs(studentsQ);
 
             let masterStudentMap = {};
 
+            // تعبئة الخريطة بالطلاب الأساسيين
             studentsSnap.forEach(doc => {
                 const s = doc.data();
+                // محاولة التقاط اسم الجروب بأكثر من صيغة محتملة
+                const rawGroup = s.group || s.group_code || s.groupCode || "غير محدد";
+
                 masterStudentMap[s.id] = {
                     id: s.id,
                     name: s.name,
-                    status: 'Regular', 
+                    group: rawGroup,
+                    status: 'Regular',
                     logs: {},
+                    doctorsSeen: new Set(), // لتخزين أسماء الدكاترة الذين حضر لهم
                     presenceCount: 0
                 };
             });
 
+            // إضافة الطلاب الخارجيين للخريطة
             for (const [id, studentData] of Object.entries(outsiderStudents)) {
                 if (!masterStudentMap[id]) {
                     masterStudentMap[id] = {
                         id: studentData.id,
                         name: studentData.name,
-                        status: 'Carry-Over', 
+                        group: studentData.group,
+                        status: 'Carry-Over',
                         logs: {},
+                        doctorsSeen: new Set(),
                         presenceCount: 0
                     };
                 }
             }
 
-            statusLog.innerText = "Mapping attendance data...";
+            statusLog.innerText = "Mapping data...";
 
+            // 4. دمج بيانات الحضور مع الطلاب
             attendanceRecords.forEach(record => {
                 if (masterStudentMap[record.id]) {
                     masterStudentMap[record.id].logs[record.date] = true;
                     masterStudentMap[record.id].presenceCount++;
+
+                    // تسجيل اسم الدكتور
+                    if (record.doctorName) {
+                        masterStudentMap[record.id].doctorsSeen.add(record.doctorName);
+                    }
+
+                    // تحديث الجروب من سجل الحضور (لأنه الأدق)
+                    if (record.group && record.group !== "General" && record.group !== "UNKNOWN") {
+                        masterStudentMap[record.id].group = record.group;
+                    }
                 }
             });
 
-            statusLog.innerText = "Applying styles & sorting...";
+            statusLog.innerText = "Grouping by Doctor...";
 
-            let finalRows = [];
             let studentsArray = Object.values(masterStudentMap);
 
+            // 5. عملية الترتيب (Sorting)
+            // الأولوية لاسم الدكتور، ثم اسم الطالب
             studentsArray.sort((a, b) => {
-                if (b.presenceCount !== a.presenceCount) {
-                    return b.presenceCount - a.presenceCount;
+                // نستخدم "ZZZ" للطلاب الذين لم يحضروا أبداً ليظهروا في آخر القائمة
+                const docA = Array.from(a.doctorsSeen).sort().join(", ") || "ZZZ_No_Attendance";
+                const docB = Array.from(b.doctorsSeen).sort().join(", ") || "ZZZ_No_Attendance";
+
+                // أولاً: حسب الدكتور
+                if (docA !== docB) {
+                    return docA.localeCompare(docB, 'ar');
                 }
-                return a.name.localeCompare(b.name);
+
+                // ثانياً: حسب اسم الطالب أبجدياً
+                return a.name.localeCompare(b.name, 'ar');
             });
 
             const totalLectures = sortedActiveDates.length;
+            let finalRows = [];
 
+            // 6. بناء صفوف الإكسيل
             studentsArray.forEach(st => {
                 const presenceCount = st.presenceCount;
-                const absenceCount = totalLectures - presenceCount;
-                const presencePercentage = (presenceCount / totalLectures) * 100;
+                const absenceCount = totalLectures - presenceCount; // 🔥 حساب عدد مرات الغياب
 
-                let rowColor = { rgb: "FFFFFF" }; 
-                if (presencePercentage < 50) rowColor = { rgb: "FEE2E2" }; 
-                else if (presencePercentage < 75) rowColor = { rgb: "FEF3C7" }; 
-                else rowColor = { rgb: "DCFCE7" }; 
+                // تحويل قائمة الدكاترة لنص
+                const doctorsList = Array.from(st.doctorsSeen).join(", ") || "--";
 
+                // تحديد لون الصف بناءً على نسبة الحضور
+                let presencePercentage = totalLectures > 0 ? (presenceCount / totalLectures) * 100 : 0;
+                let rowColor = { rgb: "FFFFFF" };
+                if (presencePercentage < 50) rowColor = { rgb: "FEE2E2" }; // أحمر فاتح جداً
+                else if (presencePercentage < 75) rowColor = { rgb: "FEF3C7" }; // أصفر
+                else rowColor = { rgb: "DCFCE7" }; // أخضر فاتح
+
+                // تعريف الستايلات
                 const cellStyle = {
                     fill: { fgColor: rowColor },
                     border: {
@@ -360,26 +405,29 @@ export class AdvancedArchiveManager {
                         right: { style: "thin", color: { rgb: "CBD5E1" } }
                     },
                     alignment: { horizontal: "center", vertical: "center" },
-                    font: { name: "Arial", sz: 11 }
+                    font: { name: "Arial", sz: 10 }
                 };
 
-                const nameStyle = { ...cellStyle, alignment: { horizontal: "right" } }; 
-                const boldStyle = { ...cellStyle, font: { bold: true } };
+                const nameStyle = { ...cellStyle, alignment: { horizontal: "right" } };
 
+                // كائن البيانات للصف الواحد
                 let rowData = {
-                    "Student ID": { v: st.id, s: cellStyle },
-                    "Student Name": { v: st.name, s: nameStyle },
-                    "Status": { v: st.status, s: cellStyle },
-                    "Total Absence": { v: absenceCount, s: boldStyle },
+                    "Instructor (Group By)": { v: doctorsList, s: cellStyle }, // 1. الدكتور (للترتيب)
+                    "Student ID": { v: st.id, s: cellStyle },                 // 2. الكود
+                    "Student Name": { v: st.name, s: nameStyle },              // 3. الاسم
+                    "Group": { v: st.group, s: cellStyle },                    // 4. الجروب
+                    "Attended": { v: presenceCount, s: cellStyle },            // 5. عدد الحضور
+                    "Absence": { v: absenceCount, s: cellStyle },              // 6. 🔥 عدد الغياب (جديد)
                 };
 
+                // إضافة أعمدة التواريخ (حاضر / غائب)
                 sortedActiveDates.forEach(dateStr => {
                     const isPresent = st.logs[dateStr];
-                    const statusText = isPresent ? "Present" : "Absent";
+                    const statusText = isPresent ? "حاضر" : "غائب"; // 🔥 النص المطلوب
 
                     const dayStyle = { ...cellStyle };
                     dayStyle.font = {
-                        color: { rgb: isPresent ? "166534" : "991B1B" }, 
+                        color: { rgb: isPresent ? "166534" : "EF4444" }, // أخضر للحاضر، أحمر للغائب
                         bold: true
                     };
 
@@ -389,24 +437,29 @@ export class AdvancedArchiveManager {
                 finalRows.push(rowData);
             });
 
+            // 7. إنشاء ملف الإكسيل
             const ws = XLSX.utils.json_to_sheet(finalRows);
 
+            // ضبط عرض الأعمدة
             const wscols = [
-                { wch: 15 }, 
-                { wch: 35 }, 
-                { wch: 15 }, 
-                { wch: 15 }, 
+                { wch: 25 }, // Instructor
+                { wch: 15 }, // ID
+                { wch: 30 }, // Name
+                { wch: 10 }, // Group
+                { wch: 10 }, // Attended
+                { wch: 10 }, // Absence (New)
             ];
-            sortedActiveDates.forEach(() => wscols.push({ wch: 12 })); // Dates
+            // إضافة عرض لأعمدة التواريخ
+            sortedActiveDates.forEach(() => wscols.push({ wch: 12 }));
             ws['!cols'] = wscols;
 
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Smart Report");
+            XLSX.utils.book_append_sheet(wb, ws, "Attendance Report");
 
-            const fileName = `Report_${subject}_${sortedActiveDates.length}Lectures.xlsx`;
+            const fileName = `DoctorGrouped_${subject}_${sortedActiveDates.length}Lectures.xlsx`;
             XLSX.writeFile(wb, fileName);
 
-            statusLog.innerHTML = '<span style="color:#10b981;">✅ Report downloaded successfully!</span>';
+            statusLog.innerHTML = '<span style="color:#10b981;">✅ Report downloaded!</span>';
             if (window.playSuccess) window.playSuccess();
 
         } catch (error) {
