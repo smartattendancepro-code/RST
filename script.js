@@ -622,14 +622,14 @@ document.addEventListener('click', (e) => {
 
     const SEARCH_DB = ARCHIVE_SUBJECTS;
 
-    const COLLEGE_LAT = 30.38588267994032;
-    const COLLEGE_LNG = 30.488853271134253;
+    const COLLEGE_LAT = 30.4384186362123;
+    const COLLEGE_LNG = 30.83674722600172;
 
     const CONFIG = {
         gps: {
             targetLat: COLLEGE_LAT,
             targetLong: COLLEGE_LNG,
-            allowedDistanceKm: 1
+            allowedDistanceKm: 2.5
         },
         modelsUrl: './models'
     };
@@ -1025,8 +1025,9 @@ document.addEventListener('click', (e) => {
 
     window.updateUIForMode = updateUIForMode;
 
-    function detectFakeGPS(pos) { return (pos.coords.accuracy < 2 || (pos.coords.altitude === null && pos.coords.accuracy < 10)); }
-    function checkLocationStrict(onSuccess) {
+    function detectFakeGPS(pos) {
+        return false;
+    } function checkLocationStrict(onSuccess) {
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 (pos) => {
@@ -5080,11 +5081,15 @@ document.addEventListener('click', (e) => {
                 return;
             }
 
+
             const options = {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 0
+                enableHighAccuracy: false,
+
+                timeout: 3000,
+
+                maximumAge: 60000
             };
+
 
             navigator.geolocation.getCurrentPosition(
                 (pos) => {
@@ -6204,7 +6209,7 @@ window.autoFetchName = async function (studentId) {
 
     } catch (error) {
         console.error("Fetch Error:", error);
-        nameInput.value = "⚠️ أعد المحاولة   ";
+        nameInput.value = "⚠️ اعد المحاولة   ";
     } finally {
         if (typeof validateSignupForm === 'function') validateSignupForm();
     }
@@ -6704,9 +6709,9 @@ window.submitManualStudent = async function () {
 };
 window.downloadSimpleSheet = function (subjectName) {
     const cleanSubject = subjectName.trim();
-    const today = new Date().toLocaleDateString('en-GB'); 
+    const today = new Date().toLocaleDateString('en-GB');
     const storageKey = `down_simple_${cleanSubject}_${today}`;
-    const currentDr = window.currentDoctorName || ""; 
+    const currentDr = window.currentDoctorName || "";
 
     if (localStorage.getItem(storageKey)) {
         const lang = localStorage.getItem('sys_lang') || 'ar';
@@ -6751,14 +6756,14 @@ window.downloadSimpleSheet = function (subjectName) {
         const worksheet = XLSX.utils.json_to_sheet(excelData);
 
         const wscols = [
-            { wch: 6 },  
-            { wch: 35 }, 
-            { wch: 15 }, 
-            { wch: 10 }, 
-            { wch: 12 }, 
-            { wch: 20 }, 
-            { wch: 10 }, 
-            { wch: 10 }  
+            { wch: 6 },
+            { wch: 35 },
+            { wch: 15 },
+            { wch: 10 },
+            { wch: 12 },
+            { wch: 20 },
+            { wch: 10 },
+            { wch: 10 }
         ];
         worksheet['!cols'] = wscols;
 
@@ -6897,5 +6902,4 @@ window.downloadSimpleSheet = function (subjectName) {
     performNetworkDiagnostic();
 
 })();
-
 
