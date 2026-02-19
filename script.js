@@ -12,6 +12,7 @@ import {
     getDoc,
     getDocs,
     updateDoc,
+    getDocsFromServer,
     deleteDoc,
     onSnapshot,
     query,
@@ -1676,80 +1677,88 @@ document.addEventListener('click', (e) => {
         const codeInput = document.getElementById('attendanceCode').value.trim();
         const btn = document.getElementById('btnSearchSession');
 
+        if (!navigator.onLine) {
+            showToast("⚠️ لا يوجد اتصال بالإنترنت! تحقق من الشبكة.", 4000, "#ef4444");
+            return;
+        }
+
         if (!codeInput) {
-            showToast("⚠️ Please enter session PIN", 3000, "#f59e0b");
+            showToast("⚠️ يرجى كتابة كود المحاضرة", 3000, "#f59e0b");
             return;
         }
 
         const originalText = btn.innerHTML;
-        btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> SEARCHING...';
+
+        btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> جاري البحث...';
         btn.style.pointerEvents = 'none';
+        btn.style.opacity = '0.7';
 
         try {
-            const q = query(collection(db, "active_sessions"),
-                where("sessionCode", "==", codeInput),
-                where("isActive", "==", true),
-                where("isDoorOpen", "==", true));
+            const q = query(
+                collection(db, "active_sessions"),
+                where("sessionCode", "==", codeInput)
+            );
 
-            const querySnapshot = await getDocs(q);
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("SlowNetwork")), 10000)
+            );
+
+            const serverQueryPromise = getDocsFromServer(q);
+
+            const querySnapshot = await Promise.race([serverQueryPromise, timeoutPromise]);
 
             if (querySnapshot.empty) {
-                const checkQ = query(collection(db, "active_sessions"), where("sessionCode", "==", codeInput));
-                const checkSnap = await getDocs(checkQ);
+                showToast("❌ كود المحاضرة غير صحيح", 4000, "#ef4444");
+                if (navigator.vibrate) navigator.vibrate(200);
+            } else {
+                const sessionDoc = querySnapshot.docs[0];
+                const sessionData = sessionDoc.data();
+                const doctorUID = sessionDoc.id;
 
-                if (!checkSnap.empty) {
-                    showToast("🔒 Session is currently CLOSED", 4000, "#ef4444");
+                if (sessionData.isActive && sessionData.isDoorOpen) {
+                    sessionStorage.setItem('TEMP_DR_UID', doctorUID);
+
+                    const docNameEl = document.getElementById('foundDocName');
+                    const subjectNameEl = document.getElementById('foundSubjectName');
+                    const foundAvatar = document.getElementById('foundDocAvatar');
+
+                    if (docNameEl) docNameEl.innerText = "د. " + (sessionData.doctorName || "Unknown");
+                    if (subjectNameEl) subjectNameEl.innerText = sessionData.allowedSubject || "--";
+                    if (foundAvatar && sessionData.doctorAvatar) {
+                        foundAvatar.innerHTML = `<i class="fa-solid ${sessionData.doctorAvatar}"></i>`;
+                    }
+
+                    if (typeof startAuthScreenTimer === 'function') startAuthScreenTimer(doctorUID);
+
+                    const step1 = document.getElementById('step1_search');
+                    const step2 = document.getElementById('step2_auth');
+                    if (step1) step1.style.display = 'none';
+                    if (step2) {
+                        step2.style.display = 'block';
+                        step2.classList.add('active');
+                    }
+
+                    if (typeof playSuccess === 'function') playSuccess();
+
                 } else {
-                    showToast("❌ Invalid Session PIN", 4000, "#ef4444");
+                    showToast("🔒 المحاضرة مغلقة حالياً أو انتهت.", 4000, "#f59e0b");
                 }
-                btn.innerHTML = originalText;
-                btn.style.pointerEvents = 'auto';
-                return;
-            }
-
-            const sessionDoc = querySnapshot.docs[0];
-            const sessionData = sessionDoc.data();
-            const doctorUID = sessionDoc.id;
-
-            sessionStorage.setItem('TEMP_DR_UID', doctorUID);
-
-            const docNameEl = document.getElementById('foundDocName');
-            const subjectNameEl = document.getElementById('foundSubjectName');
-            const foundAvatar = document.getElementById('foundDocAvatar');
-
-            if (docNameEl) {
-                docNameEl.innerText = "Dr. " + (sessionData.doctorName || "Unknown");
-                docNameEl.style.fontFamily = "'Outfit', sans-serif";
-            }
-
-            if (subjectNameEl) {
-                subjectNameEl.innerText = sessionData.allowedSubject || "--";
-                subjectNameEl.style.fontFamily = "'Outfit', sans-serif";
-            }
-
-            if (foundAvatar && sessionData.doctorAvatar) {
-                foundAvatar.innerHTML = `<i class="fa-solid ${sessionData.doctorAvatar}"></i>`;
-            }
-
-            if (typeof startAuthScreenTimer === 'function') {
-                startAuthScreenTimer(doctorUID);
-            }
-
-            const step1 = document.getElementById('step1_search');
-            const step2 = document.getElementById('step2_auth');
-
-            if (step1) step1.style.display = 'none';
-            if (step2) {
-                step2.style.display = 'block';
-                step2.classList.add('active');
             }
 
         } catch (e) {
-            console.error("Critical Search Error:", e);
-            showToast("⚠️ Connection Error", 3000, "#ef4444");
+            console.error("Search Error:", e);
+
+            if (e.message === "SlowNetwork") {
+                showToast("⚠️ الاتصال بالإنترنت بطيء جداً، حاول مرة أخرى.", 5000, "#f59e0b");
+            } else if (e.code === 'unavailable' || e.message.includes("offline")) {
+                showToast("📡 فشل الاتصال  تأكد من الإنترنت.", 4000, "#ef4444");
+            } else {
+                showToast("⚠️ حدث خطأ غير متوقع، حاول تحديث الصفحة.", 3000, "#ef4444");
+            }
         } finally {
             btn.innerHTML = originalText;
             btn.style.pointerEvents = 'auto';
+            btn.style.opacity = '1';
         }
     };
     window.startAuthScreenTimer = function (doctorUID) {
@@ -6902,4 +6911,5 @@ window.downloadSimpleSheet = function (subjectName) {
     performNetworkDiagnostic();
 
 })();
+
 
