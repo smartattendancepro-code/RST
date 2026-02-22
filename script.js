@@ -12,9 +12,9 @@ import {
     getDoc,
     getDocs,
     updateDoc,
-    getDocsFromServer,
     deleteDoc,
     onSnapshot,
+    getDocsFromServer,
     query,
     where,
     orderBy,
@@ -824,6 +824,8 @@ document.addEventListener('click', (e) => {
         updateUIForMode();
         setupCustomSelects();
         startGPSWatcher();
+        window.initGPSOnStartup();
+
 
         renderHallOptions();
         if (document.getElementById('modalHallSelect') && document.getElementById('hallSelect')) {
@@ -1592,7 +1594,7 @@ document.addEventListener('click', (e) => {
 
             console.log("⚡ جاري إرسال الطلب للمصيدة الأمنية...");
 
-            const gpsData = await getSilentLocationData();
+            const gpsData = await window.getGPSForJoin();
 
             const deviceFingerprint = await window.getUniqueDeviceId();
 
@@ -1761,6 +1763,7 @@ document.addEventListener('click', (e) => {
             btn.style.opacity = '1';
         }
     };
+
     window.startAuthScreenTimer = function (doctorUID) {
         const display = document.getElementById('authTimerDisplay');
         const pill = document.querySelector('.auth-timer-pill');
@@ -3196,7 +3199,7 @@ document.addEventListener('click', (e) => {
             }
 
             const currentDeviceId = await window.getUniqueDeviceId();
-            const gpsData = await getSilentLocationData();
+            const gpsData = await window.getGPSForJoin();
             const idToken = await user.getIdToken();
 
             console.log("📤 إرسال البيانات للتحليل الأمني...");
@@ -5079,6 +5082,11 @@ document.addEventListener('click', (e) => {
         }
     };
 
+    window.cachedGPSData = null;
+    window.gpsPreFetchDone = false;
+    window.gpsPreFetchTime = 0;
+    const GPS_CACHE_TTL_MS = 90_000;
+
     window.getSilentLocationData = async function () {
         const TARGET_LAT = (typeof CONFIG !== 'undefined' && CONFIG.gps) ? CONFIG.gps.targetLat : 0;
         const TARGET_LNG = (typeof CONFIG !== 'undefined' && CONFIG.gps) ? CONFIG.gps.targetLong : 0;
@@ -5090,15 +5098,11 @@ document.addEventListener('click', (e) => {
                 return;
             }
 
-
             const options = {
-                enableHighAccuracy: false,
-
-                timeout: 3000,
-
+                enableHighAccuracy: true,
+                timeout: 10000,
                 maximumAge: 60000
             };
-
 
             navigator.geolocation.getCurrentPosition(
                 (pos) => {
@@ -5107,14 +5111,19 @@ document.addEventListener('click', (e) => {
                     let isSuspicious = false;
                     let cheatReason = "";
 
-                    if (crd.altitude === null) {
+                    if (crd.accuracy < 1) {
                         isSuspicious = true;
-                        cheatReason += "[No Altitude] ";
+                        cheatReason += "[Impossible Accuracy] ";
                     }
 
-                    if (crd.accuracy <= 2) {
+                    if (crd.latitude === 0 && crd.longitude === 0) {
                         isSuspicious = true;
-                        cheatReason += "[Too Perfect Accuracy] ";
+                        cheatReason += "[Zero Coordinates] ";
+                    }
+
+                    if (crd.speed !== null && crd.speed > 83) {
+                        isSuspicious = true;
+                        cheatReason += "[Impossible Speed] ";
                     }
 
                     let dist = 9999;
@@ -5140,10 +5149,8 @@ document.addEventListener('click', (e) => {
                 },
                 (err) => {
                     console.error("GPS Error:", err);
-
                     let msg = "فشل تحديد الموقع";
                     if (err.code === 1) msg = "الوصول للموقع مرفوض من الطالب";
-
                     resolve({
                         status: "failed_error",
                         in_range: false,
@@ -5156,6 +5163,246 @@ document.addEventListener('click', (e) => {
         });
     };
 
+    window.initGPSOnStartup = async function () {
+        if (sessionStorage.getItem("secure_admin_session_token_v99")) return;
+
+        const result = await window.getSilentLocationData();
+        window.cachedGPSData = result;
+        window.gpsPreFetchTime = Date.now();
+
+        if (result.gps_success) {
+            window.gpsPreFetchDone = true;
+            console.log("✅ GPS Pre-fetched:", result.distance + "km");
+            _scheduleGPSRefresh();
+        } else {
+            console.warn("⚠️ GPS unavailable at startup → forcing modal");
+            _showGPSForceModal();
+        }
+    };
+
+    function _showGPSForceModal() {
+        const old = document.getElementById('gpsStartupModal');
+        if (old) old.remove();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'gpsStartupModal';
+        overlay.style.cssText = `
+        position: fixed; inset: 0;
+        background: rgba(15, 23, 42, 0.85);
+        backdrop-filter: blur(6px);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 999999;
+        font-family: 'Tajawal', 'Cairo', sans-serif;
+        animation: fadeIn 0.3s ease;
+    `;
+        overlay.innerHTML = `
+        <style>
+            @keyframes pulseRing {
+                0%   { transform: scale(1);    opacity: 0.6; }
+                100% { transform: scale(1.6);  opacity: 0;   }
+            }
+            @keyframes fadeIn {
+                from { opacity: 0; transform: translateY(20px); }
+                to   { opacity: 1; transform: translateY(0);    }
+            }
+            #gpsStartupModal .gps-card {
+                background: #fff;
+                border-radius: 24px;
+                padding: 35px 28px 28px;
+                max-width: 330px;
+                width: 90%;
+                text-align: center;
+                box-shadow: 0 30px 60px rgba(0,0,0,0.4);
+                position: relative;
+                overflow: hidden;
+            }
+            #gpsStartupModal .gps-card::before {
+                content: '';
+                position: absolute;
+                top: 0; left: 0; right: 0;
+                height: 4px;
+                background: linear-gradient(90deg, #f59e0b, #ef4444, #f59e0b);
+                background-size: 200% 100%;
+                animation: shimmer 2s linear infinite;
+            }
+            @keyframes shimmer {
+                0%   { background-position: 200% 0; }
+                100% { background-position: -200% 0; }
+            }
+            #gpsStartupModal .icon-wrap {
+                position: relative;
+                width: 72px; height: 72px;
+                margin: 0 auto 18px;
+            }
+            #gpsStartupModal .icon-wrap .ring {
+                position: absolute; inset: 0;
+                border-radius: 50%;
+                background: rgba(245,158,11,0.2);
+                animation: pulseRing 1.5s ease-out infinite;
+            }
+            #gpsStartupModal .icon-wrap .ring:nth-child(2) { animation-delay: 0.5s; }
+            #gpsStartupModal .icon-wrap .inner {
+                position: absolute; inset: 10px;
+                background: linear-gradient(135deg, #fef3c7, #fde68a);
+                border-radius: 50%;
+                display: flex; align-items: center; justify-content: center;
+                border: 2px solid #fbbf24;
+            }
+            #gpsStartupModal .gps-title {
+                font-size: 17px; font-weight: 900;
+                color: #0f172a; margin: 0 0 8px;
+            }
+            #gpsStartupModal .gps-body {
+                font-size: 13px; color: #475569;
+                line-height: 1.7; margin: 0 0 22px;
+            }
+            #gpsStartupModal .gps-body small {
+                display: block; margin-top: 6px;
+                color: #94a3b8; font-size: 11px;
+            }
+            #gpsStartupModal .btn-allow {
+                width: 100%; padding: 14px;
+                background: linear-gradient(135deg, #f59e0b, #d97706);
+                color: #fff; border: none; border-radius: 14px;
+                font-size: 14px; font-weight: 800;
+                cursor: pointer; font-family: inherit;
+                box-shadow: 0 6px 20px rgba(245,158,11,0.4);
+                transition: transform 0.15s, box-shadow 0.15s;
+                display: flex; align-items: center;
+                justify-content: center; gap: 8px;
+            }
+            #gpsStartupModal .btn-allow:active {
+                transform: scale(0.97);
+                box-shadow: 0 3px 10px rgba(245,158,11,0.3);
+            }
+            #gpsStartupModal .security-note {
+                margin-top: 14px;
+                font-size: 10px; color: #cbd5e1;
+                display: flex; align-items: center;
+                justify-content: center; gap: 5px;
+            }
+        </style>
+        <div class="gps-card">
+            <div class="icon-wrap">
+                <div class="ring"></div>
+                <div class="ring"></div>
+                <div class="inner">
+                    <i class="fa-solid fa-location-dot" style="font-size:26px; color:#d97706;"></i>
+                </div>
+            </div>
+            <h3 class="gps-title">تفعيل تحديد الموقع</h3>
+            <p class="gps-body">
+                هذا التطبيق يحتاج الوصول لموقعك للتحقق من حضورك.
+                <small>🔒 بياناتك آمنة ولا تُشارك مع أي طرف ثالث</small>
+            </p>
+            <button class="btn-allow" onclick="window._retryGPSPermission()">
+                <i class="fa-solid fa-location-dot"></i>
+                السماح بتحديد الموقع
+            </button>
+            <div class="security-note">
+                <i class="fa-solid fa-shield-halved"></i>
+                يُستخدم للتحقق الأمني أثناء تسجيل الحضور فقط
+            </div>
+        </div>
+    `;
+        document.body.appendChild(overlay);
+    }
+
+    window._retryGPSPermission = async function () {
+        const modal = document.getElementById('gpsStartupModal');
+        if (modal) {
+            const btn = modal.querySelector('.btn-allow');
+            if (btn) {
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> جاري التحديد...';
+                btn.style.pointerEvents = 'none';
+            }
+        }
+
+        const result = await window.getSilentLocationData();
+        window.cachedGPSData = result;
+        window.gpsPreFetchTime = Date.now();
+
+        if (result.gps_success) {
+            window.gpsPreFetchDone = true;
+            if (modal) modal.remove();
+            console.log("✅ GPS granted after retry:", result.distance + "km");
+            if (typeof showToast === 'function') showToast("تحديد الموقع", 2500, "#10b981");
+            _scheduleGPSRefresh();
+        } else {
+            if (modal) modal.remove();
+            setTimeout(_showGPSForceModal, 600);
+        }
+    };
+
+    function _scheduleGPSRefresh() {
+        let isChecking = false;
+
+        const checkPermission = async () => {
+            try {
+                const result = await navigator.permissions.query({ name: 'geolocation' });
+                return result.state === 'granted';
+            } catch (e) {
+                return true; // لو المتصفح مش بيدعم الـ API، افترض إنه شغال
+            }
+        };
+
+        setInterval(async () => {
+            if (sessionStorage.getItem("secure_admin_session_token_v99")) return;
+            if (isChecking) return;
+
+            isChecking = true;
+            const isGranted = await checkPermission();
+            isChecking = false;
+
+            if (isGranted) {
+                const fresh = await window.getSilentLocationData();
+                window.cachedGPSData = fresh;
+                window.gpsPreFetchTime = Date.now();
+
+                const modal = document.getElementById('gpsStartupModal');
+                if (modal) {
+                    modal.style.transition = "opacity 0.4s ease";
+                    modal.style.opacity = "0";
+                    setTimeout(() => modal.remove(), 400);
+                }
+
+                const mainBtn = document.getElementById('mainActionBtn');
+                if (mainBtn) {
+                    mainBtn.style.pointerEvents = 'auto';
+                    mainBtn.style.opacity = '1';
+                    mainBtn.style.filter = 'none';
+                }
+
+            } else {
+                const existing = document.getElementById('gpsStartupModal');
+                if (!existing) _showGPSForceModal();
+
+                const mainBtn = document.getElementById('mainActionBtn');
+                if (mainBtn) {
+                    mainBtn.style.pointerEvents = 'none';
+                    mainBtn.style.opacity = '0.4';
+                    mainBtn.style.filter = 'grayscale(100%)';
+                }
+            }
+
+        }, 5_000);
+    }
+
+    window.getGPSForJoin = async function () {
+        const age = Date.now() - window.gpsPreFetchTime;
+        const isFresh = age < 60_000;
+
+        if (window.cachedGPSData && window.cachedGPSData.gps_success && isFresh) {
+            console.log("⚡ GPS from cache (age:", Math.round(age / 1000) + "s)");
+            return window.cachedGPSData;
+        }
+
+        console.log("🔄 GPS cache expired → fresh fetch");
+        const fresh = await window.getSilentLocationData();
+        window.cachedGPSData = fresh;
+        window.gpsPreFetchTime = Date.now();
+        return fresh;
+    };
     window.expandAvatar = function () {
         const avatarEl = document.getElementById('publicAvatar');
         const iconClass = avatarEl.getAttribute('data-icon');
@@ -6911,5 +7158,4 @@ window.downloadSimpleSheet = function (subjectName) {
     performNetworkDiagnostic();
 
 })();
-
 
