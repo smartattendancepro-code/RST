@@ -1185,8 +1185,8 @@ window.startLiveSnapshotListener = function () {
                     const trapA = sA.trap_report || { is_device_match: true, in_range: true };
                     const trapB = sB.trap_report || { is_device_match: true, in_range: true };
 
-                    const isRedA = (trapA.is_device_match === false) || (trapA.in_range === false);
-                    const isRedB = (trapB.is_device_match === false) || (trapB.in_range === false);
+                    const isRedA = (trapA.is_device_match === false) || (trapA.is_in_range === false);
+                    const isRedB = (trapB.is_device_match === false) || (trapA.is_in_range === false);
 
                     if (isRedA && !isRedB) return -1;
                     if (!isRedA && isRedB) return 1;
@@ -1229,7 +1229,7 @@ window.startLiveSnapshotListener = function () {
                 if (isDoctor || isDean) {
                     const trap = s.trap_report || { is_device_match: true, in_range: true, is_gps_success: true };
                     const deviceIcon = trap.is_device_match ? `<div title="جهاز أصلي" style="background:#dcfce7; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-mobile-screen" style="color:#16a34a; font-size:14px;"></i></div>` : `<div title="جهاز مختلف" style="background:#fee2e2; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; animation: shake 0.5s infinite;"><i class="fa-solid fa-mobile-screen-button" style="color:#dc2626; font-size:14px;"></i></div>`;
-                    const rangeIcon = trap.in_range ? `<div title="داخل النطاق" style="background:#dcfce7; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-location-dot" style="color:#16a34a; font-size:14px;"></i></div>` : `<div title="خارج النطاق" style="background:#fee2e2; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-location-crosshairs" style="color:#dc2626; font-size:14px;"></i></div>`;
+                    const rangeIcon = trap.is_in_range ? `<div title="داخل النطاق" style="background:#dcfce7; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-location-dot" style="color:#16a34a; font-size:14px;"></i></div>` : `<div title="خارج النطاق" style="background:#fee2e2; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-location-crosshairs" style="color:#dc2626; font-size:14px;"></i></div>`;
                     const isGpsOk = (trap.gps_success !== undefined) ? trap.gps_success : trap.is_gps_success;
                     const gpsIcon = isGpsOk ? `<div title="GPS نشط" style="background:#dcfce7; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-satellite-dish" style="color:#16a34a; font-size:14px;"></i></div>` : `<div title="فشل GPS" style="background:#f1f5f9; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-satellite-dish" style="color:#94a3b8; font-size:14px;"></i></div>`;
                     const badgesHTML = `<div style="display:flex; justify-content:center; gap:8px; margin-top:6px; border-top:1px dashed #e2e8f0; padding-top:6px; width:100%;">${deviceIcon} ${rangeIcon} ${gpsIcon}</div>`;

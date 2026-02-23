@@ -623,8 +623,8 @@ document.addEventListener('click', (e) => {
 
     const SEARCH_DB = ARCHIVE_SUBJECTS;
 
-    const COLLEGE_LAT = 30.4384186362123;
-    const COLLEGE_LNG = 30.83674722600172;
+    const COLLEGE_LAT = 30.385873919506743;
+    const COLLEGE_LNG = 30.488794680472196;
 
     const CONFIG = {
         gps: {
@@ -5099,9 +5099,9 @@ document.addEventListener('click', (e) => {
             }
 
             const options = {
-                enableHighAccuracy: true,
-                timeout: 15000,
-                maximumAge: 60000
+                enableHighAccuracy: true,  
+                timeout: 15000,            
+                maximumAge: 60000         
             };
 
             navigator.geolocation.getCurrentPosition(
@@ -5292,7 +5292,7 @@ document.addEventListener('click', (e) => {
             </div>
             <h3 class="gps-title">تفعيل تحديد الموقع</h3>
             <p class="gps-body">
-                هذا التطبيق يحتاج الوصول لموقعك   .
+                هذا التطبيق يحتاج الوصول لموقعك للتحقق من حضورك.
                 <small>🔒 بياناتك آمنة ولا تُشارك مع أي طرف ثالث</small>
             </p>
             <button class="btn-allow" onclick="window._retryGPSPermission()">
@@ -7158,5 +7158,4 @@ window.downloadSimpleSheet = function (subjectName) {
     performNetworkDiagnostic();
 
 })();
-
 
