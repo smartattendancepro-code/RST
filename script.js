@@ -5100,7 +5100,7 @@ document.addEventListener('click', (e) => {
 
             const options = {
                 enableHighAccuracy: true,
-                timeout: 10000,
+                timeout: 15000,
                 maximumAge: 60000
             };
 
@@ -5292,7 +5292,7 @@ document.addEventListener('click', (e) => {
             </div>
             <h3 class="gps-title">تفعيل تحديد الموقع</h3>
             <p class="gps-body">
-                هذا التطبيق يحتاج الوصول لموقعك للتحقق من حضورك.
+                هذا التطبيق يحتاج الوصول لموقعك   .
                 <small>🔒 بياناتك آمنة ولا تُشارك مع أي طرف ثالث</small>
             </p>
             <button class="btn-allow" onclick="window._retryGPSPermission()">
@@ -7158,4 +7158,5 @@ window.downloadSimpleSheet = function (subjectName) {
     performNetworkDiagnostic();
 
 })();
+
 
