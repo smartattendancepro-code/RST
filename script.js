@@ -5892,8 +5892,8 @@ window.closeModernConfirm = function () {
 
 const confirmBtn = document.getElementById('btnConfirmYes');
 if (confirmBtn) {
-    confirmBtn.onclick = function () {
-        if (window.pendingAction) window.pendingAction();
+    confirmBtn.onclick = async function () {
+        if (window.pendingAction) await window.pendingAction();
         closeModernConfirm();
     };
 }
@@ -7199,4 +7199,3 @@ window.downloadSimpleSheet = function (subjectName) {
     performNetworkDiagnostic();
 
 })();
-
