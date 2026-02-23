@@ -5099,9 +5099,9 @@ document.addEventListener('click', (e) => {
             }
 
             const options = {
-                enableHighAccuracy: true,  
-                timeout: 15000,            
-                maximumAge: 60000         
+                enableHighAccuracy: true,
+                timeout: 15000,
+                maximumAge: 60000
             };
 
             navigator.geolocation.getCurrentPosition(
@@ -5163,20 +5163,54 @@ document.addEventListener('click', (e) => {
         });
     };
 
-    window.initGPSOnStartup = async function () {
+    window.initGPSOnStartup = function () {
+        // تخطي المسؤولين والدكاترة (لا يحتاجون لتحديد الموقع الإجباري)
         if (sessionStorage.getItem("secure_admin_session_token_v99")) return;
 
-        const result = await window.getSilentLocationData();
-        window.cachedGPSData = result;
-        window.gpsPreFetchTime = Date.now();
+        // 1. تشغيل عملية جلب الموقع في الخلفية فوراً (بدون await لمنع تجميد الشاشة)
+        window.getSilentLocationData().then(result => {
+            window.cachedGPSData = result;
+            window.gpsPreFetchTime = Date.now();
 
-        if (result.gps_success) {
-            window.gpsPreFetchDone = true;
-            console.log("✅ GPS Pre-fetched:", result.distance + "km");
-            _scheduleGPSRefresh();
+            if (result.gps_success) {
+                window.gpsPreFetchDone = true;
+                console.log("✅ تم جلب الموقع في الخلفية بنجاح:", result.distance + "km");
+
+                // تشغيل التحديث التلقائي المستمر
+                if (typeof _scheduleGPSRefresh === 'function') {
+                    _scheduleGPSRefresh();
+                }
+            } else {
+                console.warn("⚠️ فشل مبدئي في جلب الموقع بالخلفية (يتم التجاهل بصمت).");
+            }
+        });
+
+        // 2. فحص الصلاحية فوراً وعرض النافذة كـ "تنبيه" فقط إذا لزم الأمر
+        if (navigator.permissions) {
+            navigator.permissions.query({ name: 'geolocation' }).then(function (permResult) {
+                // إذا كانت الصلاحية لم تُطلب بعد (prompt) أو مرفوضة (denied) نظهر النافذة للتنبيه
+                if (permResult.state === 'prompt' || permResult.state === 'denied') {
+                    console.warn("⚠️ الصلاحية غير ممنوحة → إظهار نافذة التنبيه الإرشادية");
+                    const existing = document.getElementById('gpsStartupModal');
+                    if (!existing && typeof _showGPSForceModal === 'function') {
+                        _showGPSForceModal();
+                    }
+                } else if (permResult.state === 'granted') {
+                    // إذا كانت الصلاحية ممنوحة بالفعل، نبدأ دورة التحديث التلقائي مباشرة
+                    if (typeof _scheduleGPSRefresh === 'function') {
+                        _scheduleGPSRefresh();
+                    }
+                }
+            }).catch(err => {
+                // كإجراء احتياطي إذا حدث خطأ في فحص الصلاحيات
+                console.log("تخطي فحص الصلاحيات المتقدم.");
+            });
         } else {
-            console.warn("⚠️ GPS unavailable at startup → forcing modal");
-            _showGPSForceModal();
+            // للمتصفحات القديمة جداً التي لا تدعم Permissions API
+            const existing = document.getElementById('gpsStartupModal');
+            if (!existing && typeof _showGPSForceModal === 'function') {
+                _showGPSForceModal();
+            }
         }
     };
 
@@ -5292,7 +5326,7 @@ document.addEventListener('click', (e) => {
             </div>
             <h3 class="gps-title">تفعيل تحديد الموقع</h3>
             <p class="gps-body">
-                هذا التطبيق يحتاج الوصول لموقعك للتحقق من حضورك.
+                هذا التطبيق يحتاج الوصول لموقعك   .
                 <small>🔒 بياناتك آمنة ولا تُشارك مع أي طرف ثالث</small>
             </p>
             <button class="btn-allow" onclick="window._retryGPSPermission()">
@@ -5308,30 +5342,44 @@ document.addEventListener('click', (e) => {
         document.body.appendChild(overlay);
     }
 
-    window._retryGPSPermission = async function () {
+    window._retryGPSPermission = function () {
+        // 1. التخلص من النافذة الإرشادية (المودال) فوراً بمجرد الضغط 
         const modal = document.getElementById('gpsStartupModal');
         if (modal) {
-            const btn = modal.querySelector('.btn-allow');
-            if (btn) {
-                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> جاري التحديد...';
-                btn.style.pointerEvents = 'none';
+            modal.style.transition = "opacity 0.2s ease"; // تأثير اختفاء سلس وسريع
+            modal.style.opacity = "0";
+            setTimeout(() => modal.remove(), 200); // إزالة العنصر تماماً من الشاشة
+        }
+
+        // 2. إظهار إشعار بسيط وغير مزعج أن العملية تتم في الخلفية
+        if (typeof showToast === 'function') {
+            showToast("⏳ يتم الآن تفعيل الموقع في الخلفية...", 2500, "#0ea5e9");
+        }
+
+        // 3. استدعاء تحديد الموقع في الخلفية 
+        // هذا سيجبر المتصفح على إظهار نافذته الأصلية (السماح / الرفض) دون تجميد شاشة التطبيق
+        window.getSilentLocationData().then(result => {
+            window.cachedGPSData = result;
+            window.gpsPreFetchTime = Date.now();
+
+            if (result.gps_success) {
+                window.gpsPreFetchDone = true;
+                console.log("✅ تم تفعيل وجلب الموقع بنجاح في الخلفية:", result.distance + "km");
+
+                if (typeof showToast === 'function') {
+                    showToast("✅ تم تحديد الموقع", 2500, "#10b981");
+                }
+
+                // تشغيل دورة التحديث التلقائي للموقع في الخلفية
+                if (typeof _scheduleGPSRefresh === 'function') {
+                    _scheduleGPSRefresh();
+                }
+            } else {
+                console.warn("⚠️ فشل جلب الموقع في الخلفية.");
+                // ملاحظة: قمنا بإزالة كود إعادة إظهار المودال (setTimeout(_showGPSForceModal, 600)) 
+                // لضمان عدم إزعاج الطالب مرة أخرى كما طلبت.
             }
-        }
-
-        const result = await window.getSilentLocationData();
-        window.cachedGPSData = result;
-        window.gpsPreFetchTime = Date.now();
-
-        if (result.gps_success) {
-            window.gpsPreFetchDone = true;
-            if (modal) modal.remove();
-            console.log("✅ GPS granted after retry:", result.distance + "km");
-            if (typeof showToast === 'function') showToast("تحديد الموقع", 2500, "#10b981");
-            _scheduleGPSRefresh();
-        } else {
-            if (modal) modal.remove();
-            setTimeout(_showGPSForceModal, 600);
-        }
+        });
     };
 
     function _scheduleGPSRefresh() {
@@ -5374,14 +5422,12 @@ document.addEventListener('click', (e) => {
                 }
 
             } else {
-                const existing = document.getElementById('gpsStartupModal');
-                if (!existing) _showGPSForceModal();
-
-                const mainBtn = document.getElementById('mainActionBtn');
-                if (mainBtn) {
-                    mainBtn.style.pointerEvents = 'none';
-                    mainBtn.style.opacity = '0.4';
-                    mainBtn.style.filter = 'grayscale(100%)';
+                try {
+                    const permResult = await navigator.permissions.query({ name: 'geolocation' });
+                    if (permResult.state !== 'granted') {
+                        console.warn("⚠️ الموقع غير مفعل (تم رصد ذلك في الخلفية بصمت دون إظهار النوافذ ).");
+                    }
+                } catch (e) {
                 }
             }
 
