@@ -5099,9 +5099,9 @@ document.addEventListener('click', (e) => {
             }
 
             const options = {
-                enableHighAccuracy: true,
-                timeout: 15000,
-                maximumAge: 60000
+                enableHighAccuracy: false, // سريع أولاً
+                timeout: 8000,
+                maximumAge: 30000
             };
 
             navigator.geolocation.getCurrentPosition(
@@ -5164,54 +5164,41 @@ document.addEventListener('click', (e) => {
     };
 
     window.initGPSOnStartup = function () {
-        // تخطي المسؤولين والدكاترة (لا يحتاجون لتحديد الموقع الإجباري)
         if (sessionStorage.getItem("secure_admin_session_token_v99")) return;
 
-        // 1. تشغيل عملية جلب الموقع في الخلفية فوراً (بدون await لمنع تجميد الشاشة)
+        // ابدأ جلب الموقع فوراً في الخلفية بدون انتظار أي permission check
         window.getSilentLocationData().then(result => {
             window.cachedGPSData = result;
             window.gpsPreFetchTime = Date.now();
+            window.gpsPreFetchDone = result.gps_success;
 
             if (result.gps_success) {
-                window.gpsPreFetchDone = true;
-                console.log("✅ تم جلب الموقع في الخلفية بنجاح:", result.distance + "km");
-
-                // تشغيل التحديث التلقائي المستمر
-                if (typeof _scheduleGPSRefresh === 'function') {
-                    _scheduleGPSRefresh();
-                }
+                console.log("✅ GPS جاهز عند بدء التشغيل:", result.distance + "km");
+                // أخفِ النافذة لو كانت ظاهرة
+                const modal = document.getElementById('gpsStartupModal');
+                if (modal) modal.remove();
             } else {
-                console.warn("⚠️ فشل مبدئي في جلب الموقع بالخلفية (يتم التجاهل بصمت).");
-            }
-        });
-
-        // 2. فحص الصلاحية فوراً وعرض النافذة كـ "تنبيه" فقط إذا لزم الأمر
-        if (navigator.permissions) {
-            navigator.permissions.query({ name: 'geolocation' }).then(function (permResult) {
-                // إذا كانت الصلاحية لم تُطلب بعد (prompt) أو مرفوضة (denied) نظهر النافذة للتنبيه
-                if (permResult.state === 'prompt' || permResult.state === 'denied') {
-                    console.warn("⚠️ الصلاحية غير ممنوحة → إظهار نافذة التنبيه الإرشادية");
+                console.warn("⚠️ GPS فشل عند البدء:", result.status);
+                // أظهر النافذة فقط لو الصلاحية مرفوضة
+                if (result.status === "failed_error") {
                     const existing = document.getElementById('gpsStartupModal');
                     if (!existing && typeof _showGPSForceModal === 'function') {
                         _showGPSForceModal();
                     }
-                } else if (permResult.state === 'granted') {
-                    // إذا كانت الصلاحية ممنوحة بالفعل، نبدأ دورة التحديث التلقائي مباشرة
-                    if (typeof _scheduleGPSRefresh === 'function') {
-                        _scheduleGPSRefresh();
-                    }
                 }
-            }).catch(err => {
-                // كإجراء احتياطي إذا حدث خطأ في فحص الصلاحيات
-                console.log("تخطي فحص الصلاحيات المتقدم.");
-            });
-        } else {
-            // للمتصفحات القديمة جداً التي لا تدعم Permissions API
-            const existing = document.getElementById('gpsStartupModal');
-            if (!existing && typeof _showGPSForceModal === 'function') {
-                _showGPSForceModal();
             }
-        }
+        });
+
+        // تحديث دوري كل 3 دقائق في الخلفية
+        setInterval(() => {
+            if (sessionStorage.getItem("secure_admin_session_token_v99")) return;
+            window.getSilentLocationData().then(result => {
+                if (result.gps_success) {
+                    window.cachedGPSData = result;
+                    window.gpsPreFetchTime = Date.now();
+                }
+            });
+        }, 180_000);
     };
 
     function _showGPSForceModal() {
@@ -5436,18 +5423,26 @@ document.addEventListener('click', (e) => {
 
     window.getGPSForJoin = async function () {
         const age = Date.now() - window.gpsPreFetchTime;
-        const isFresh = age < 60_000;
+        const isFresh = age < 300_000; // 5 دقائق بدل دقيقة
 
         if (window.cachedGPSData && window.cachedGPSData.gps_success && isFresh) {
             console.log("⚡ GPS from cache (age:", Math.round(age / 1000) + "s)");
             return window.cachedGPSData;
         }
 
-        console.log("🔄 GPS cache expired → fresh fetch");
-        const fresh = await window.getSilentLocationData();
-        window.cachedGPSData = fresh;
-        window.gpsPreFetchTime = Date.now();
-        return fresh;
+        // لو مفيش cache صالح، رجّع بيانات بدون انتظار
+        if (window.cachedGPSData) {
+            console.log("⚡ Using stale GPS cache to avoid delay");
+            return window.cachedGPSData;
+        }
+
+        return {
+            status: "no_cache",
+            in_range: true,
+            gps_success: false,
+            lat: 0,
+            lng: 0
+        };
     };
     window.expandAvatar = function () {
         const avatarEl = document.getElementById('publicAvatar');
