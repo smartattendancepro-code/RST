@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>سجل الحضور والغياب</title>
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Tajawal:wght@400;500;700;800&display=swap"
+    rel="stylesheet" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bg: #f0f4ff;
+      --surface: #ffffff;
+      --border: #e4eaf7;
+      --shadow: rgba(99, 102, 241, 0.08);
+      --shadow-md: rgba(99, 102, 241, 0.14);
+      --primary: #6366f1;
+      --green: #10b981;
+      --green-lt: #ecfdf5;
+      --green-mid: #d1fae5;
+      --red: #ef4444;
+      --red-lt: #fef2f2;
+      --red-mid: #fecaca;
+      --amber: #f59e0b;
+      --amber-lt: #fffbeb;
+      --text: #0f172a;
+      --text-2: #475569;
+      --text-3: #94a3b8;
+      --r: 16px;
+      --r-lg: 22px;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Cairo', 'Tajawal', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before,
+    body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    body::before {
+      width: 420px;
+      height: 420px;
+      top: -140px;
+      right: -140px;
+      background: radial-gradient(circle, rgba(99, 102, 241, 0.13) 0%, transparent 70%);
+    }
+
+    body::after {
+      width: 340px;
+      height: 340px;
+      bottom: -120px;
+      left: -120px;
+      background: radial-gradient(circle, rgba(16, 185, 129, 0.10) 0%, transparent 70%);
+    }
+
+    /* ─── LAYOUT ─── */
+    .page {
+      position: relative;
+      z-index: 1;
+      max-width: 500px;
+      margin: 0 auto;
+      padding-bottom: 80px;
+    }
+
+    /* ─── HERO ─── */
+    .hero {
+      background: linear-gradient(145deg, #6366f1 0%, #818cf8 55%, #a78bfa 100%);
+      padding: 56px 24px 88px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none'%3E%3Cg fill='%23ffffff' fill-opacity='0.06'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+
+    .btn-back {
+      position: absolute;
+      top: 18px;
+      left: 18px;
+      width: 40px;
+      height: 40px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(8px);
+      border: 1.5px solid rgba(255, 255, 255, 0.35);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 16px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.2s, transform 0.2s;
+    }
+
+    .btn-back:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: scale(1.06);
+    }
+
+    .hero-info {
+      text-align: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-avatar {
+      width: 76px;
+      height: 76px;
+      background: rgba(255, 255, 255, 0.25);
+      backdrop-filter: blur(10px);
+      border: 3px solid rgba(255, 255, 255, 0.5);
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 14px;
+      font-size: 30px;
+      color: #fff;
+    }
+
+    .hero-name {
+      font-size: 22px;
+      font-weight: 900;
+      color: #fff;
+      margin-bottom: 4px;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .hero-sub {
+      font-size: 12.5px;
+      color: rgba(255, 255, 255, 0.75);
+      letter-spacing: 0.4px;
+    }
+
+    /* ─── FLOATING STATS ─── */
+    .stats-float {
+      margin: -46px 20px 0;
+      background: var(--surface);
+      border-radius: var(--r-lg);
+      border: 1px solid var(--border);
+      box-shadow: 0 10px 36px var(--shadow-md), 0 2px 10px var(--shadow);
+      padding: 18px 10px;
+      display: grid;
+      grid-template-columns: 1fr 1px 1fr 1px 1fr;
+      align-items: center;
+      position: relative;
+      z-index: 10;
+    }
+
+    .divider-v {
+      width: 1px;
+      height: 40px;
+      background: var(--border);
+      justify-self: center;
+    }
+
+    .stat-item {
+      text-align: center;
+      padding: 0 6px;
+    }
+
+    .stat-icon-wrap {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 6px;
+      font-size: 15px;
+    }
+
+    .si-green {
+      background: var(--green-mid);
+      color: var(--green);
+    }
+
+    .si-red {
+      background: var(--red-mid);
+      color: var(--red);
+    }
+
+    .si-indigo {
+      background: #e0e7ff;
+      color: var(--primary);
+    }
+
+    .stat-val {
+      font-size: 26px;
+      font-weight: 900;
+      line-height: 1;
+      font-family: 'Tajawal', sans-serif;
+    }
+
+    .sv-green {
+      color: var(--green);
+    }
+
+    .sv-red {
+      color: var(--red);
+    }
+
+    .sv-indigo {
+      color: var(--primary);
+    }
+
+    .stat-desc {
+      font-size: 11px;
+      color: var(--text-3);
+      margin-top: 3px;
+      font-weight: 600;
+    }
+
+    /* ─── RATE BAR ─── */
+    .rate-card {
+      margin: 14px 20px 0;
+      background: var(--surface);
+      border-radius: var(--r);
+      border: 1px solid var(--border);
+      padding: 15px 18px;
+      box-shadow: 0 2px 12px var(--shadow);
+    }
+
+    .rate-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .rate-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-2);
+    }
+
+    .rate-pct {
+      font-size: 17px;
+      font-weight: 900;
+      font-family: 'Tajawal', sans-serif;
+    }
+
+    .rate-bar-bg {
+      height: 9px;
+      background: var(--border);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .rate-bar-fill {
+      height: 100%;
+      border-radius: 99px;
+      background: linear-gradient(90deg, var(--green) 0%, #34d399 100%);
+      transition: width 1.2s cubic-bezier(.4, 0, .2, 1);
+      width: 0%;
+    }
+
+    .rate-bar-fill.warning {
+      background: linear-gradient(90deg, var(--amber), #fcd34d);
+    }
+
+    .rate-bar-fill.danger {
+      background: linear-gradient(90deg, var(--red), #f87171);
+    }
+
+    /* ─── NOTE ─── */
+    .note-banner {
+      margin: 12px 20px 0;
+      background: var(--amber-lt);
+      border: 1px solid #fde68a;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: #92400e;
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      font-weight: 600;
+    }
+
+    .note-banner i {
+      color: var(--amber);
+      margin-top: 1px;
+      flex-shrink: 0;
+    }
+
+    /* ─── FILTER CHIPS ─── */
+    .filter-scroll {
+      display: flex;
+      gap: 8px;
+      padding: 12px 20px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .filter-scroll::-webkit-scrollbar {
+      display: none;
+    }
+
+    .filter-chip {
+      flex-shrink: 0;
+      padding: 6px 14px;
+      border-radius: 99px;
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      color: var(--text-2);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'Cairo', sans-serif;
+      white-space: nowrap;
+    }
+
+    .filter-chip.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+    }
+
+    /* ─── TABS ─── */
+    .tabs-wrap {
+      margin: 0 20px;
+      display: flex;
+      background: var(--surface);
+      border-radius: var(--r);
+      border: 1px solid var(--border);
+      padding: 5px;
+      gap: 4px;
+      box-shadow: 0 2px 10px var(--shadow);
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 11px 8px;
+      border: none;
+      border-radius: 12px;
+      background: transparent;
+      color: var(--text-3);
+      font-family: 'Cairo', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.25s cubic-bezier(.4, 0, .2, 1);
+    }
+
+    .t-badge {
+      min-width: 20px;
+      height: 20px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 5px;
+      background: var(--border);
+      color: var(--text-3);
+      transition: all 0.25s;
+    }
+
+    .tab-btn.tab-active-green {
+      background: var(--green-lt);
+      color: var(--green);
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
+    }
+
+    .tab-btn.tab-active-green .t-badge {
+      background: var(--green);
+      color: #fff;
+    }
+
+    .tab-btn.tab-active-red {
+      background: var(--red-lt);
+      color: var(--red);
+      box-shadow: 0 2px 8px rgba(239, 68, 68, 0.15);
+    }
+
+    .tab-btn.tab-active-red .t-badge {
+      background: var(--red);
+      color: #fff;
+    }
+
+    /* ─── PANEL ─── */
+    .panel {
+      display: none;
+      margin-top: 14px;
+    }
+
+    .panel.active {
+      display: block;
+    }
+
+    .sec-head {
+      margin: 0 20px 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sec-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .dot-green {
+      background: var(--green);
+    }
+
+    .dot-red {
+      background: var(--red);
+    }
+
+    .sec-title {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: var(--text-2);
+    }
+
+    .sec-line {
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ─── LECTURE CARD ─── */
+    .lec-list {
+      padding: 0 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .lec-card {
+      background: var(--surface);
+      border-radius: var(--r);
+      border: 1px solid var(--border);
+      padding: 14px 16px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      box-shadow: 0 2px 10px var(--shadow);
+      transition: transform 0.2s, box-shadow 0.2s;
+      animation: cardIn 0.35s ease both;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .lec-card:hover {
+      transform: translateY(-2px) translateX(-2px);
+      box-shadow: 0 8px 24px var(--shadow-md);
+    }
+
+    .lec-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 4px;
+      height: 100%;
+      border-radius: 0 var(--r) var(--r) 0;
+    }
+
+    .lc-present::before {
+      background: var(--green);
+    }
+
+    .lc-absent::before {
+      background: var(--red);
+    }
+
+    @keyframes cardIn {
+      from {
+        opacity: 0;
+        transform: translateY(14px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .lec-icon-wrap {
+      width: 46px;
+      height: 46px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .lic-present {
+      background: var(--green-lt);
+      color: var(--green);
+    }
+
+    .lic-absent {
+      background: var(--red-lt);
+      color: var(--red);
+    }
+
+    .lec-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .lec-subject {
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--text);
+      margin-bottom: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .lec-meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .meta-chip {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11.5px;
+      color: var(--text-2);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 3px 9px;
+      font-weight: 600;
+    }
+
+    .meta-chip i {
+      font-size: 10px;
+      color: var(--text-3);
+    }
+
+    .lec-status-pill {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 5px 12px;
+      border-radius: 20px;
+      white-space: nowrap;
+      align-self: flex-start;
+      flex-shrink: 0;
+    }
+
+    .sp-present {
+      background: var(--green-lt);
+      color: var(--green);
+    }
+
+    .sp-absent {
+      background: var(--red-lt);
+      color: var(--red);
+    }
+
+    /* ─── EMPTY / LOADER ─── */
+    .empty {
+      text-align: center;
+      padding: 50px 20px;
+      color: var(--text-3);
+    }
+
+    .empty-icon {
+      font-size: 52px;
+      margin-bottom: 14px;
+      opacity: 0.45;
+    }
+
+    .empty-msg {
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 1.6;
+    }
+
+    .loader-wrap {
+      text-align: center;
+      padding: 50px 20px;
+      color: var(--text-3);
+    }
+
+    .loader-spinner {
+      width: 44px;
+      height: 44px;
+      border: 3px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      margin: 0 auto 12px;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .loader-wrap p {
+      font-size: 14px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="page">
+
+    <!-- HERO -->
+    <div class="hero">
+      <a class="btn-back" href="#" onclick="history.back(); return false;">
+        <i class="fa-solid fa-arrow-right"></i>
+      </a>
+      <div class="hero-info">
+        <div class="hero-avatar"><i class="fa-solid fa-user-graduate"></i></div>
+        <div class="hero-name" id="heroName">جارٍ التحميل...</div>
+        <div class="hero-sub" id="heroSub">NURSING STUDENT</div>
+      </div>
+    </div>
+
+    <!-- FLOATING STATS -->
+    <div class="stats-float">
+      <div class="stat-item">
+        <div class="stat-icon-wrap si-green"><i class="fa-solid fa-circle-check"></i></div>
+        <div class="stat-val sv-green" id="countPresent">—</div>
+        <div class="stat-desc">حاضر</div>
+      </div>
+      <div class="divider-v"></div>
+      <div class="stat-item">
+        <div class="stat-icon-wrap si-red"><i class="fa-solid fa-circle-xmark"></i></div>
+        <div class="stat-val sv-red" id="countAbsent">—</div>
+        <div class="stat-desc">غائب</div>
+      </div>
+      <div class="divider-v"></div>
+      <div class="stat-item">
+        <div class="stat-icon-wrap si-indigo"><i class="fa-solid fa-chart-pie"></i></div>
+        <div class="stat-val sv-indigo" id="countRate">—</div>
+        <div class="stat-desc">نسبة الحضور</div>
+      </div>
+    </div>
+
+    <!-- RATE BAR -->
+    <div class="rate-card">
+      <div class="rate-header">
+        <span class="rate-label">نسبة الحضور الكلية</span>
+        <span class="rate-pct" id="ratePct">جارٍ الحساب...</span>
+      </div>
+      <div class="rate-bar-bg">
+        <div class="rate-bar-fill" id="rateBar"></div>
+      </div>
+    </div>
+
+    <!-- NOTE -->
+    <div class="note-banner">
+      <i class="fa-solid fa-circle-info"></i>
+      <span>ملاحظة: هذا النظام تجريبي. الأرقام للمراجعة فقط وليست رسمية بعد.</span>
+    </div>
+
+    <!-- SUBJECT FILTER -->
+    <div class="filter-scroll" id="filterChips"></div>
+
+    <!-- TABS -->
+    <div class="tabs-wrap">
+      <button class="tab-btn tab-active-green" id="tab-present-btn" onclick="switchTab('present')">
+        <i class="fa-solid fa-circle-check"></i>
+        <span>المحاضرات الحاضرة</span>
+        <span class="t-badge" id="badge-present">0</span>
+      </button>
+      <button class="tab-btn" id="tab-absent-btn" onclick="switchTab('absent')">
+        <i class="fa-solid fa-circle-xmark"></i>
+        <span>المحاضرات الغائبة</span>
+        <span class="t-badge" id="badge-absent">0</span>
+      </button>
+    </div>
+
+    <!-- PANEL: PRESENT -->
+    <div class="panel active" id="panel-present">
+      <div class="sec-head">
+        <div class="sec-dot dot-green"></div>
+        <div class="sec-title">المحاضرات التي حضرتها</div>
+        <div class="sec-line"></div>
+      </div>
+      <div class="lec-list" id="listPresent">
+        <div class="loader-wrap">
+          <div class="loader-spinner"></div>
+          <p>جارٍ جلب بيانات الحضور...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANEL: ABSENT -->
+    <div class="panel" id="panel-absent">
+      <div class="sec-head">
+        <div class="sec-dot dot-red"></div>
+        <div class="sec-title">المحاضرات التي غبتها</div>
+        <div class="sec-line"></div>
+      </div>
+      <div class="lec-list" id="listAbsent">
+        <div class="loader-wrap">
+          <div class="loader-spinner"></div>
+          <p>جارٍ جلب بيانات الغياب...</p>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /page -->
+
+  <!-- ══════════════════════════════════════════
+     FIREBASE MODULE  (نفس إصدار مشروعك 10.7.1)
+══════════════════════════════════════════ -->
+  <script type="module">
+    import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import {
+      getFirestore, doc, getDoc,
+      collection, query, where, getDocs, orderBy
+    } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import {
+      getAuth, onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+    const firebaseConfig = {
+      apiKey: "AIzaSyBQjD4FZKkhXQIL5FlyBs_VaEzW2GBBtGs",
+      authDomain: "attendance-system-pro-dbdf1.firebaseapp.com",
+      projectId: "attendance-system-pro-dbdf1",
+      storageBucket: "attendance-system-pro-dbdf1.firebasestorage.app",
+      messagingSenderId: "1094544109334",
+      appId: "1:1094544109334:web:a7395159d617b3e6e82a37"
+    };
+
+    // لو Firebase شغّال بالفعل في الصفحة الأم (window.db) → استخدمه
+    // لو لأ → نعمل instance جديد
+    let db;
+    if (window.db) {
+      db = window.db;
+    } else {
+      const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+      db = getFirestore(app);
+    }
+
+    /* ════════════════════════════════════════
+       اقرأ بيانات الطالب من URL أو الـ window
+       ════════════════════════════════════════
+       مثال لفتح الصفحة:
+         attendance-details.html?uid=ABC123&id=24060009
+       أو من داخل المشروع:
+         window.open(`attendance-details.html?uid=${uid}&id=${sid}`)
+    ════════════════════════════════════════ */
+    const params = new URLSearchParams(window.location.search);
+    const studentUID = params.get('uid') || window.currentStudentUID || null;
+    const studentID = params.get('id') || window.currentStudentID || "—";
+
+    // ── أيقونات حسب اسم المادة ──
+    const ICONS = {
+      "تشريح": "fa-bone", "أجهزة": "fa-lungs", "فسيولوج": "fa-heart-pulse",
+      "أحياء": "fa-bacterium", "كيمياء": "fa-flask", "تمريض": "fa-syringe",
+      "نفس": "fa-brain", "مجتمع": "fa-people-group", "أطفال": "fa-baby",
+      "جراح": "fa-scalpel", "قلب": "fa-heart-pulse", "باطن": "fa-stethoscope",
+      "طوارئ": "fa-truck-medical", "أساسيات": "fa-notes-medical"
+    };
+    const DEFAULT_ICON = "fa-book-open-reader";
+
+    function subjectIcon(name = "") {
+      for (const [k, v] of Object.entries(ICONS)) if (name.includes(k)) return v;
+      return DEFAULT_ICON;
+    }
+
+    function fmtDate(ts) {
+      if (!ts) return "—";
+      const d = ts.toDate ? ts.toDate() : new Date(ts);
+      return d.toLocaleDateString('ar-EG', { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' });
+    }
+    function fmtTime(ts) {
+      if (!ts) return "";
+      const d = ts.toDate ? ts.toDate() : new Date(ts);
+      return d.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    /* ════════════════════════════════════════
+       بناء بطاقة محاضرة
+    ════════════════════════════════════════ */
+    function buildCard(data, type, delay = 0) {
+      const isP = type === 'present';
+      const sub = data.subject || data.courseName || "مادة غير محددة";
+      const doc_ = data.doctor || data.instructorName || data.createdByName || "الدكتور";
+      const dateS = fmtDate(data.timestamp || data.date || data.sessionDate);
+      const timeS = fmtTime(data.timestamp || data.date || data.sessionDate);
+      const hall = data.hall || data.room || data.location || "";
+      const icon = subjectIcon(sub);
+
+      return `
+      <div class="lec-card ${isP ? 'lc-present' : 'lc-absent'}"
+           style="animation-delay:${delay}ms" data-subject="${sub}">
+        <div class="lec-icon-wrap ${isP ? 'lic-present' : 'lic-absent'}">
+          <i class="fa-solid ${icon}"></i>
+        </div>
+        <div class="lec-body">
+          <div class="lec-subject">${sub}</div>
+          <div class="lec-meta-row">
+            <span class="meta-chip"><i class="fa-regular fa-calendar"></i>${dateS}</span>
+            ${timeS ? `<span class="meta-chip"><i class="fa-regular fa-clock"></i>${timeS}</span>` : ''}
+            <span class="meta-chip"><i class="fa-solid fa-user-doctor"></i>${doc_}</span>
+            ${hall ? `<span class="meta-chip"><i class="fa-solid fa-door-open"></i>${hall}</span>` : ''}
+          </div>
+        </div>
+        <div class="lec-status-pill ${isP ? 'sp-present' : 'sp-absent'}">
+          ${isP ? '✅ حاضر' : '❌ غائب'}
+        </div>
+      </div>`;
+    }
+
+    /* ════════════════════════════════════════
+       MAIN
+    ════════════════════════════════════════ */
+    async function loadAttendance() {
+      if (!studentUID) {
+        renderAll([], [], true, "لم يتم تمرير UID الطالب.");
+        return;
+      }
+
+      try {
+        // ── 1. جلب بيانات الطالب والجروب ──
+        let name = "الطالب"; 
+        let group = "";
+        
+        const paths = [
+          doc(db, "user_registrations", studentUID),
+          doc(db, "students", studentUID)
+        ];
+        
+        for (const ref of paths) {
+          const snap = await getDoc(ref);
+          if (snap.exists()) {
+            const raw = snap.data();
+            const info = raw.registrationInfo || raw;
+            name = info.fullName || info.name || name;
+            group = (info.group || "").trim();
+            break;
+          }
+        }
+        
+        document.getElementById('heroName').textContent = name;
+        document.getElementById('heroSub').textContent = group ? `Group: ${group}` : 'Student';
+
+        // ── 2. جلب جدول الجروب (لتزيين البيانات فقط وليس للعد) ──
+        // سنستخدمه لنعرف اسم الدكتور والقاعة للمواد التي حضرتها
+        const myGroup = group.trim() || "General";
+        const cQ = query(
+          collection(db, "course_counters"), 
+          where("targetGroups", "array-contains", myGroup)
+        );
+        const cSnap = await getDocs(cQ);
+
+        // خريطة لتفاصيل المواد (اسم المادة -> بياناتها)
+        let groupDetailsMap = {};
+        
+        // دالة توحيد النصوص
+        const normalize = (str) => {
+            if (!str) return "unknown";
+            return str.toLowerCase().replace(/[^a-z0-9\u0600-\u06FF]/g, '').trim();
+        };
+
+        cSnap.forEach(doc => {
+            const d = doc.data();
+            const normKey = normalize(d.subject);
+            // نحفظ تفاصيل المادة لاستخدامها لاحقاً
+            groupDetailsMap[normKey] = {
+                doctor: d.instructorName || d.doctor || "الدكتور",
+                hall: d.hall || "--",
+                time: d.lastTimestamp || null,
+                totalHeld: parseInt(d.count || d.total || 1) // إجمالي ما عُقد للجروب (لحساب الغياب)
+            };
+        });
+
+        // ── 3. جلب سجل الطالب (المصدر الحقيقي للرقم 7) ──
+        const sRef = doc(db, "student_stats", studentUID);
+        const sSnap = await getDoc(sRef);
+        
+        // هذا هو الأوبجيكت اللي فيه { Anatomy: 3, ... } ومجموعهم 7
+        const myAttendedMap = sSnap.exists() ? (sSnap.data().attended || {}) : {};
+
+        const presentArr = [];
+        const absentArr = [];
+
+        // ── 4. بناء قائمة الحضور (الاعتماد الكلي على سجل الطالب) ──
+        for (const [subjectKey, countVal] of Object.entries(myAttendedMap)) {
+            // تجاهل أي مفاتيح ليست مواد (حماية إضافية)
+            if (["uid", "total", "score", "cumulative"].some(k => subjectKey.includes(k))) continue;
+
+            const count = parseInt(countVal);
+            const normKey = normalize(subjectKey);
+
+            // نحاول نلاقي تفاصيل المادة دي في جدول الجروب
+            const details = groupDetailsMap[normKey] || { 
+                doctor: "سجل إضافي", 
+                hall: "--", 
+                time: null 
+            };
+
+            // نضيف كروت بعدد مرات الحضور المسجلة
+            for(let i = 0; i < count; i++) {
+                presentArr.push({
+                    subject: subjectKey, // الاسم كما هو مسجل عند الطالب
+                    doctor: details.doctor,
+                    hall: details.hall,
+                    timestamp: details.time
+                });
+            }
+        }
+
+        // ── 5. حساب الغياب (الفرق بين جدول الجروب وحضور الطالب) ──
+        // بنلف على مواد الجروب، ونشوف الطالب حضر منها كام
+        for (const [normKey, details] of Object.entries(groupDetailsMap)) {
+            // كم مرة حضر الطالب هذه المادة؟ (نبحث في سجله)
+            // لازم نلف في سجل الطالب لأن المفتاح ممكن يختلف قليلاً
+            let studentAttendedCount = 0;
+            for (const [stKey, stVal] of Object.entries(myAttendedMap)) {
+                if (normalize(stKey) === normKey) {
+                    studentAttendedCount = parseInt(stVal);
+                    break;
+                }
+            }
+
+            // الغياب = إجمالي المفتوح - ما حضره الطالب
+            const absentCount = details.totalHeld - studentAttendedCount;
+
+            if (absentCount > 0) {
+                // نضيف كروت الغياب
+                for(let i = 0; i < absentCount; i++) {
+                    absentArr.push({
+                        subject: "محاضرة غائبة", // أو نجيب الاسم الأصلي لو متاح
+                        doctor: details.doctor,
+                        hall: details.hall,
+                        timestamp: null
+                    });
+                }
+            }
+        }
+
+        // ── 6. العرض النهائي ──
+        renderAll(presentArr, absentArr);
+
+      } catch (err) {
+        console.error("Logic Error:", err);
+        renderAll([], [], true, err.message);
+      }
+    }
+
+    /* ════════════════════════════════════════
+       RENDER ALL
+    ════════════════════════════════════════ */
+    function renderAll(pArr, aArr, isErr = false, errMsg = "") {
+      const total = pArr.length + aArr.length;
+      const pct = total ? Math.round(pArr.length / total * 100) : 0;
+
+      document.getElementById('countPresent').textContent = pArr.length;
+      document.getElementById('countAbsent').textContent = aArr.length;
+      document.getElementById('countRate').textContent = pct + "%";
+      document.getElementById('badge-present').textContent = pArr.length;
+      document.getElementById('badge-absent').textContent = aArr.length;
+
+      const ratePctEl = document.getElementById('ratePct');
+      const rateBar = document.getElementById('rateBar');
+      ratePctEl.textContent = isErr ? "خطأ في الاتصال" : pct + "%";
+      ratePctEl.style.color = pct >= 75 ? 'var(--green)' : pct >= 50 ? 'var(--amber)' : 'var(--red)';
+      setTimeout(() => {
+        rateBar.style.width = pct + "%";
+        rateBar.classList.remove('warning', 'danger');
+        if (pct < 50) rateBar.classList.add('danger');
+        else if (pct < 75) rateBar.classList.add('warning');
+      }, 400);
+
+      // Filter chips
+      const subjects = [...new Set([...pArr, ...aArr].map(l => l.subject || "").filter(Boolean))];
+      const fc = document.getElementById('filterChips');
+      fc.innerHTML = ['الكل', ...subjects].map((s, i) =>
+        `<button class="filter-chip ${i === 0 ? 'active' : ''}" onclick="filterBy('${s}')">${s}</button>`
+      ).join('');
+
+      renderList('listPresent', pArr, 'present', isErr, errMsg);
+      renderList('listAbsent', aArr, 'absent', isErr, errMsg);
+    }
+
+    function renderList(id, arr, type, isErr, errMsg) {
+      const el = document.getElementById(id);
+      if (isErr) {
+        el.innerHTML = `<div class="empty">
+        <div class="empty-icon"><i class="fa-solid fa-wifi-slash"></i></div>
+        <div class="empty-msg">تعذّر الاتصال بـ Firebase.<br><small style="font-size:11px;opacity:.6">${errMsg || ''}</small><br>تأكد من إعدادات المشروع.</div>
+      </div>`;
+        return;
+      }
+      if (!arr.length) {
+        const cfg = type === 'present'
+          ? { icon: 'fa-calendar-xmark', msg: 'لا توجد محاضرات حضور مسجلة.' }
+          : { icon: 'fa-party-horn', msg: 'لم تغب في أي محاضرة! 🎉' };
+        el.innerHTML = `<div class="empty">
+        <div class="empty-icon"><i class="fa-solid ${cfg.icon}"></i></div>
+        <div class="empty-msg">${cfg.msg}</div>
+      </div>`;
+        return;
+      }
+      el.innerHTML = arr.map((d, i) => buildCard(d, type, i * 50)).join('');
+    }
+
+    /* ════════════════════════════════════════
+       Filter
+    ════════════════════════════════════════ */
+    window.filterBy = (subject) => {
+      document.querySelectorAll('.filter-chip').forEach(c =>
+        c.classList.toggle('active', c.textContent === subject)
+      );
+      document.querySelectorAll('.lec-card').forEach(c => {
+        c.style.display = (subject === 'الكل' || c.dataset.subject === subject) ? 'flex' : 'none';
+      });
+    };
+
+    const auth = getAuth();
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        loadAttendance();
+      } else {
+        // مفيش user — حاول تسجيل دخول تلقائي من localStorage
+        document.getElementById('heroName').textContent = "يرجى تسجيل الدخول أولاً";
+        document.getElementById('listPresent').innerHTML = `
+        <div class="empty">
+          <div class="empty-icon"><i class="fa-solid fa-lock"></i></div>
+          <div class="empty-msg">يجب تسجيل الدخول لعرض البيانات.<br>افتح التطبيق الرئيسي أولاً.</div>
+        </div>`;
+        document.getElementById('listAbsent').innerHTML = document.getElementById('listPresent').innerHTML;
+      }
+    });</script>
+
+  <!-- ── Tab switch (plain scope) ── -->
+  <script>
+    function switchTab(tab) {
+      ['present', 'absent'].forEach(k => {
+        document.getElementById(`panel-${k}`).classList.toggle('active', k === tab);
+        const btn = document.getElementById(`tab-${k}-btn`);
+        btn.classList.remove('tab-active-green', 'tab-active-red');
+        if (k === tab) btn.classList.add(tab === 'present' ? 'tab-active-green' : 'tab-active-red');
+      });
+    }
+  </script>
+</body>
+
+</html>

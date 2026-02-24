@@ -529,9 +529,10 @@
         const container = document.getElementById('groupSearchResults');
 
         const groupCode = (input?.value || '').trim().toUpperCase();
+        const resolvedGroupCodes = window.resolveGroups ? window.resolveGroups(groupCode) : [groupCode];
         const targetDate = dateInput?.value ? fmtDate(dateInput.value) : todayStr();
 
-        const groupPattern = /^\dG\d{1,2}$/;
+        const groupPattern = /^\dG\d{1,2}$|^\dG\d{2,3}$/;
         if (!groupCode) {
             if (typeof showToast === 'function') showToast('⚠️ أدخل كود الجروب أولاً', 2500, '#f59e0b');
             input?.focus();
@@ -560,7 +561,8 @@
 
             const usersSnap = await getDocs(
                 query(collection(db, 'user_registrations'),
-                    where('registrationInfo.group', '==', groupCode))
+                    where('registrationInfo.group', 'in', resolvedGroupCodes))
+
             );
 
             const masterList = [];
@@ -578,7 +580,7 @@
             if (masterList.length === 0) {
                 const studentsSnap = await getDocs(
                     query(collection(db, 'students'),
-                        where('group_code', '==', groupCode))
+                        where('group_code', 'in', resolvedGroupCodes))
                 );
                 studentsSnap.forEach(d => {
                     const data = d.data();
@@ -597,7 +599,7 @@
             const attSnap = await getDocs(
                 query(collection(db, 'attendance'),
                     where('date', '==', targetDate),
-                    where('group', '==', groupCode))
+                    where('group', 'in', resolvedGroupCodes))
             );
 
             const attendanceMap = new Map();

@@ -121,6 +121,7 @@ window.confirmSessionStart = async function () {
     const hall = hallEl.value.replace("🕒 ", "").trim();
     let rawGroup = groupEl ? groupEl.value.replace(/\s+/g, '').toUpperCase() : "";
     let groupInput = "GENERAL";
+    let resolvedGroups = ["GENERAL"];
 
     if (rawGroup !== "") {
         const groupPattern = /^\d+G\d+$/;
@@ -136,6 +137,7 @@ window.confirmSessionStart = async function () {
             return;
         }
         groupInput = rawGroup;
+        resolvedGroups = window.resolveGroups ? window.resolveGroups(rawGroup) : [rawGroup];
     } const password = passEl ? passEl.value.trim() : "";
 
     const user = auth.currentUser;
@@ -180,7 +182,7 @@ window.confirmSessionStart = async function () {
             sessionCode: "------",
             allowedSubject: subject,
             hall: hall,
-            targetGroups: [groupInput],
+            targetGroups: resolvedGroups,
             sessionPassword: password,
             maxStudents: 9999,
             doctorName: doctorName,
@@ -407,6 +409,12 @@ window.closeSessionImmediately = function () {
                 actionBtn.innerHTML = (lang === 'ar') ? "إعادة المحاولة" : "Retry";
                 actionBtn.style.pointerEvents = 'auto';
                 actionBtn.style.opacity = '1';
+            }
+        } finally {
+            if (actionBtn) {
+                actionBtn.style.pointerEvents = 'auto';
+                actionBtn.style.opacity = '1';
+                actionBtn.disabled = false;
             }
         }
     });
@@ -645,7 +653,7 @@ window.handleSessionTimer = function (isActive, startTime, duration) {
         const elapsedSeconds = Math.floor((currentServerTime - startMs) / 1000);
 
         let remaining = duration - elapsedSeconds;
-        if (remaining > duration) remaining = duration; 
+        if (remaining > duration) remaining = duration;
 
 
         if (isAdmin) {
@@ -671,7 +679,7 @@ window.handleSessionTimer = function (isActive, startTime, duration) {
                 }
             }
         }
-        
+
         else {
             if (floatTimer) {
                 if (duration == -1) {

@@ -1676,7 +1676,8 @@ document.addEventListener('click', (e) => {
     let searchPageInterval = null;
 
     window.searchForSession = async function () {
-        const codeInput = document.getElementById('attendanceCode').value.trim();
+        const inputEl = document.getElementById('attendanceCode');
+        const codeInput = (inputEl.getRealValue ? inputEl.getRealValue() : inputEl.value).trim();
         const btn = document.getElementById('btnSearchSession');
 
         if (!navigator.onLine) {

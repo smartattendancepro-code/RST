@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rating Modal</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Cairo', sans-serif;
+    background: #0a0e1a;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  /* ===== OVERLAY ===== */
+  #modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    backdrop-filter: blur(4px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: overlayIn 0.4s ease;
+  }
+
+  @keyframes overlayIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  /* ===== MODAL CONTAINER - Irregular PUBG Shape ===== */
+  #modal {
+    position: relative;
+    width: 560px;
+    max-width: 95vw;
+    animation: modalDrop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+
+  @keyframes modalDrop {
+    from { transform: scale(0.5) translateY(-80px) rotate(-3deg); opacity: 0; }
+    to { transform: scale(1) translateY(0) rotate(0deg); opacity: 1; }
+  }
+
+  /* SVG Background for Irregular Shape */
+  .modal-bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .modal-content {
+    position: relative;
+    z-index: 2;
+    padding: 45px 50px 40px;
+    clip-path: polygon(
+      0% 8%,
+      4% 0%,
+      82% 0%,
+      86% 3%,
+      100% 3%,
+      100% 88%,
+      96% 100%,
+      18% 100%,
+      14% 97%,
+      0% 97%
+    );
+    background: linear-gradient(145deg, #0d1421 0%, #111827 40%, #0f1e30 100%);
+    border: 1px solid rgba(255,180,0,0.3);
+    box-shadow:
+      0 0 60px rgba(255,150,0,0.15),
+      0 0 120px rgba(255,100,0,0.08),
+      inset 0 1px 0 rgba(255,200,0,0.2);
+  }
+
+  /* ===== CORNER DECORATIONS ===== */
+  .corner {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border-color: #f5a623;
+    border-style: solid;
+    z-index: 3;
+  }
+  .corner-tl { top: 4px; left: 4px; border-width: 2px 0 0 2px; }
+  .corner-tr { top: 4px; right: 4px; border-width: 2px 2px 0 0; }
+  .corner-bl { bottom: 4px; left: 4px; border-width: 0 0 2px 2px; }
+  .corner-br { bottom: 4px; right: 4px; border-width: 0 2px 2px 0; }
+
+  /* ===== SCAN LINE EFFECT ===== */
+  .modal-content::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(255,255,255,0.01) 2px,
+      rgba(255,255,255,0.01) 4px
+    );
+    pointer-events: none;
+  }
+
+  /* ===== TOP BADGE ===== */
+  .top-badge {
+    position: absolute;
+    top: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(90deg, #f5a623, #ff6b00);
+    color: #000;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 3px;
+    padding: 5px 20px;
+    clip-path: polygon(8px 0%, calc(100% - 8px) 0%, 100% 50%, calc(100% - 8px) 100%, 8px 100%, 0% 50%);
+    white-space: nowrap;
+    z-index: 10;
+    animation: badgePulse 2s ease-in-out infinite;
+  }
+
+  @keyframes badgePulse {
+    0%, 100% { box-shadow: 0 0 10px rgba(245,166,35,0.5); }
+    50% { box-shadow: 0 0 25px rgba(245,166,35,0.9); }
+  }
+
+  /* ===== ICON AREA ===== */
+  .modal-icon {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+
+  .icon-ring {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 2px solid rgba(245,166,35,0.6);
+    background: radial-gradient(circle, rgba(245,166,35,0.15), transparent 70%);
+    position: relative;
+    animation: iconSpin 8s linear infinite;
+  }
+
+  @keyframes iconSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .icon-ring::before {
+    content: '';
+    position: absolute;
+    inset: 5px;
+    border-radius: 50%;
+    border: 1px dashed rgba(245,166,35,0.3);
+  }
+
+  .icon-emoji {
+    font-size: 36px;
+    animation: iconSpin 8s linear infinite reverse;
+    display: block;
+  }
+
+  /* ===== TITLE ===== */
+  .modal-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 22px;
+    font-weight: 900;
+    text-align: center;
+    color: #fff;
+    text-shadow: 0 0 20px rgba(245,166,35,0.5);
+    margin-bottom: 8px;
+    letter-spacing: 2px;
+  }
+
+  .title-accent {
+    display: block;
+    font-family: 'Cairo', sans-serif;
+    font-size: 14px;
+    color: #f5a623;
+    font-weight: 600;
+    letter-spacing: 1px;
+    margin-top: 4px;
+  }
+
+  /* ===== DIVIDER ===== */
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 18px 0;
+  }
+  .divider-line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(245,166,35,0.5), transparent);
+  }
+  .divider-diamond {
+    width: 8px;
+    height: 8px;
+    background: #f5a623;
+    transform: rotate(45deg);
+    flex-shrink: 0;
+  }
+
+  /* ===== DESCRIPTION ===== */
+  .modal-desc {
+    text-align: center;
+    color: rgba(200,210,230,0.8);
+    font-size: 14px;
+    line-height: 1.7;
+    margin-bottom: 28px;
+  }
+
+  /* ===== RATING BUTTONS ===== */
+  .rating-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .rating-btn {
+    position: relative;
+    padding: 18px 10px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    overflow: hidden;
+    transition: transform 0.2s ease;
+  }
+
+  .rating-btn:hover { transform: translateY(-3px); }
+  .rating-btn:active { transform: translateY(0) scale(0.97); }
+
+  .btn-inner {
+    position: relative;
+    z-index: 2;
+    clip-path: polygon(
+      12px 0%,
+      calc(100% - 6px) 0%,
+      100% 6px,
+      100% calc(100% - 12px),
+      calc(100% - 12px) 100%,
+      6px 100%,
+      0% calc(100% - 6px),
+      0% 12px
+    );
+    padding: 16px 20px;
+    transition: all 0.3s ease;
+  }
+
+  /* GOOD Button */
+  .btn-good .btn-inner {
+    background: linear-gradient(135deg, #1a2a4a 0%, #1e3558 100%);
+    border: 1px solid rgba(100,180,255,0.4);
+  }
+  .btn-good:hover .btn-inner {
+    background: linear-gradient(135deg, #1e3a6e 0%, #234070 100%);
+    border-color: rgba(100,180,255,0.8);
+    box-shadow: 0 0 20px rgba(100,180,255,0.3);
+  }
+  .btn-good.selected .btn-inner {
+    background: linear-gradient(135deg, #1565c0, #1e88e5);
+    border-color: #64b5f6;
+    box-shadow: 0 0 30px rgba(100,180,255,0.5);
+  }
+
+  /* VERY GOOD Button */
+  .btn-verygood .btn-inner {
+    background: linear-gradient(135deg, #2a1a0a 0%, #3d2508 100%);
+    border: 1px solid rgba(245,166,35,0.4);
+  }
+  .btn-verygood:hover .btn-inner {
+    background: linear-gradient(135deg, #4a2e0a 0%, #5a3810 100%);
+    border-color: rgba(245,166,35,0.9);
+    box-shadow: 0 0 20px rgba(245,166,35,0.3);
+  }
+  .btn-verygood.selected .btn-inner {
+    background: linear-gradient(135deg, #f57c00, #ff8f00);
+    border-color: #ffca28;
+    box-shadow: 0 0 30px rgba(245,166,35,0.6);
+  }
+
+  .btn-icon { font-size: 28px; display: block; margin-bottom: 6px; }
+  .btn-label {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: #fff;
+    display: block;
+  }
+  .btn-sub {
+    font-size: 11px;
+    color: rgba(200,200,200,0.6);
+    display: block;
+    margin-top: 2px;
+  }
+
+  /* Shine effect */
+  .rating-btn::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 30%;
+    height: 200%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+    transform: rotate(20deg);
+    transition: left 0.5s ease;
+    pointer-events: none;
+  }
+  .rating-btn:hover::after { left: 120%; }
+
+  /* ===== SUBMIT BUTTON ===== */
+  .submit-wrap {
+    text-align: center;
+  }
+
+  .submit-btn {
+    position: relative;
+    background: linear-gradient(90deg, #f5a623, #ff6b00, #f5a623);
+    background-size: 200% 100%;
+    color: #000;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: 3px;
+    padding: 14px 50px;
+    border: none;
+    cursor: pointer;
+    clip-path: polygon(15px 0%, calc(100% - 15px) 0%, 100% 50%, calc(100% - 15px) 100%, 15px 100%, 0% 50%);
+    transition: all 0.3s ease;
+    animation: shimmer 3s linear infinite;
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  .submit-btn.active {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  .submit-btn.active:hover {
+    background-size: 100% 100%;
+    transform: scale(1.05);
+    box-shadow: 0 0 30px rgba(245,166,35,0.6);
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* ===== SKIP LINK ===== */
+  .skip-link {
+    display: block;
+    text-align: center;
+    margin-top: 14px;
+    color: rgba(150,160,180,0.5);
+    font-size: 11px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: color 0.2s;
+  }
+  .skip-link:hover { color: rgba(150,160,180,0.9); }
+
+  /* ===== SUCCESS STATE ===== */
+  #success-screen {
+    display: none;
+    text-align: center;
+    padding: 20px 0;
+  }
+
+  .success-icon {
+    font-size: 60px;
+    display: block;
+    animation: successBounce 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    margin-bottom: 16px;
+  }
+
+  @keyframes successBounce {
+    from { transform: scale(0); }
+    to { transform: scale(1); }
+  }
+
+  .success-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 20px;
+    font-weight: 900;
+    color: #f5a623;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+  }
+
+  .success-sub {
+    color: rgba(200,210,230,0.7);
+    font-size: 13px;
+  }
+
+  /* ===== PARTICLES ===== */
+  .particle {
+    position: absolute;
+    pointer-events: none;
+    border-radius: 50%;
+    animation: float linear infinite;
+  }
+
+  @keyframes float {
+    0% { transform: translateY(0) rotate(0deg); opacity: 0.6; }
+    100% { transform: translateY(-100px) rotate(360deg); opacity: 0; }
+  }
+
+  /* ===== HEX DECORATIONS ===== */
+  .hex-deco {
+    position: absolute;
+    opacity: 0.08;
+    font-size: 100px;
+    color: #f5a623;
+    font-family: 'Orbitron', sans-serif;
+    pointer-events: none;
+    user-select: none;
+  }
+  .hex-deco.left { left: -30px; top: 50%; transform: translateY(-50%); }
+  .hex-deco.right { right: -30px; top: 50%; transform: translateY(-50%); }
+
+  /* Demo page bg */
+  .demo-text {
+    color: rgba(255,255,255,0.1);
+    font-family: 'Orbitron', sans-serif;
+    font-size: 12px;
+    letter-spacing: 3px;
+    text-align: center;
+    position: fixed;
+    bottom: 30px;
+    width: 100%;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<p class="demo-text">SYSTEM RATING MODULE v1.0</p>
+
+<div id="modal-overlay">
+  <div id="modal">
+    <div class="corner corner-tl"></div>
+    <div class="corner corner-tr"></div>
+    <div class="corner corner-bl"></div>
+    <div class="corner corner-br"></div>
+    <div class="hex-deco left">⬡</div>
+    <div class="hex-deco right">⬡</div>
+
+    <div class="modal-content">
+      <div class="top-badge">SYSTEM EVALUATION</div>
+
+      <!-- Main Rating Screen -->
+      <div id="rating-screen">
+        <div class="modal-icon">
+          <div class="icon-ring">
+            <span class="icon-emoji">⭐</span>
+          </div>
+        </div>
+
+        <h2 class="modal-title">
+          RATE THE SYSTEM
+          <span class="title-accent">قيّم تجربتك معنا</span>
+        </h2>
+
+        <div class="divider">
+          <div class="divider-line"></div>
+          <div class="divider-diamond"></div>
+          <div class="divider-line"></div>
+        </div>
+
+        <p class="modal-desc">
+          رأيك يهمنا! ساعدنا في تحسين تجربتك<br>
+          بتقييم صادق يعكس تجربتك الحقيقية
+        </p>
+
+        <div class="rating-grid">
+          <button class="rating-btn btn-good" onclick="selectRating(this, 'good')">
+            <div class="btn-inner">
+              <span class="btn-icon">👍</span>
+              <span class="btn-label">Very Good</span>
+              <span class="btn-sub">جيد جدا </span>
+            </div>
+          </button>
+          <button class="rating-btn btn-verygood" onclick="selectRating(this, 'verygood')">
+            <div class="btn-inner">
+              <span class="btn-icon">👍</span>
+              <span class="btn-label">Excellent</span>
+              <span class="btn-sub">ممتاز</span>
+            </div>
+          </button>
+        </div>
+
+        <div class="submit-wrap">
+          <button class="submit-btn" id="submitBtn" onclick="submitRating()">CONFIRM RATING</button>
+          <span class="skip-link" onclick="closeModal()">تخطي ← SKIP</span>
+        </div>
+      </div>
+
+      <!-- Success Screen -->
+      <div id="success-screen">
+        <span class="success-icon">🎯</span>
+        <div class="success-title">RATING CONFIRMED!</div>
+        <p class="success-sub">شكراً لتقييمك — رأيك يصنع الفرق</p>
+        <div class="divider" style="margin-top:20px"><div class="divider-line"></div><div class="divider-diamond"></div><div class="divider-line"></div></div>
+      </div>
+
+    </div><!-- end modal-content -->
+  </div><!-- end modal -->
+</div><!-- end overlay -->
+
+<script>
+  // ===== SHOW ONCE LOGIC =====
+  // Uncomment below for production use (hides permanently after first view)
+  /*
+  if (localStorage.getItem('ratingShown')) {
+    document.getElementById('modal-overlay').style.display = 'none';
+  } else {
+    localStorage.setItem('ratingShown', 'true');
+  }
+  */
+
+  let selectedRating = null;
+
+  function selectRating(btn, value) {
+    // Remove selected from all
+    document.querySelectorAll('.rating-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedRating = value;
+
+    // Activate submit button
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.classList.add('active');
+
+    // Spawn particles
+    spawnParticles(btn);
+  }
+
+  function submitRating() {
+    if (!selectedRating) return;
+
+    // Save to localStorage
+    localStorage.setItem('ratingShown', 'true');
+    localStorage.setItem('userRating', selectedRating);
+
+    // Show success
+    document.getElementById('rating-screen').style.display = 'none';
+    const success = document.getElementById('success-screen');
+    success.style.display = 'block';
+
+    // Close after 2.5s
+    setTimeout(() => {
+      closeModal();
+    }, 2500);
+  }
+
+  function closeModal() {
+    const overlay = document.getElementById('modal-overlay');
+    overlay.style.animation = 'overlayIn 0.3s ease reverse';
+    overlay.style.opacity = '0';
+    overlay.style.transition = 'opacity 0.3s ease';
+    setTimeout(() => overlay.remove(), 300);
+  }
+
+  function spawnParticles(btn) {
+    const rect = btn.getBoundingClientRect();
+    const overlay = document.getElementById('modal-overlay');
+    const colors = ['#f5a623', '#ff6b00', '#fff', '#64b5f6', '#ffca28'];
+
+    for (let i = 0; i < 12; i++) {
+      const p = document.createElement('div');
+      p.className = 'particle';
+      const size = Math.random() * 6 + 3;
+      p.style.cssText = `
+        width: ${size}px; height: ${size}px;
+        background: ${colors[Math.floor(Math.random() * colors.length)]};
+        left: ${rect.left + Math.random() * rect.width}px;
+        top: ${rect.top + Math.random() * rect.height}px;
+        animation-duration: ${Math.random() * 1 + 0.5}s;
+        animation-delay: ${Math.random() * 0.3}s;
+        position: fixed;
+      `;
+      document.body.appendChild(p);
+      setTimeout(() => p.remove(), 1500);
+    }
+  }
+
+  // ===== HOW TO INTEGRATE IN YOUR PROJECT =====
+  // Add this to your main JS file:
+  //
+  // function showRatingModal() {
+  //   if (!localStorage.getItem('ratingShown')) {
+  //     // Load and inject the modal HTML
+  //     fetch('rating-modal.html')
+  //       .then(r => r.text())
+  //       .then(html => {
+  //         document.body.insertAdjacentHTML('beforeend', html);
+  //       });
+  //   }
+  // }
+  // showRatingModal(); // Call on page load
+</script>
+</body>
+</html>
