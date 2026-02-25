@@ -33,6 +33,7 @@ import {
     signInWithEmailAndPassword, signOut, sendEmailVerification
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { i18n, t, changeLanguage, toggleSystemLanguage } from './i18n.js';
+import { AuditManager } from './AuditManager.js';
 
 window.HARDWARE_ID = null;
 const DEVICE_CACHE_KEY = "nursing_secure_device_v4";
@@ -1598,7 +1599,48 @@ document.addEventListener('click', (e) => {
 
             const deviceFingerprint = await window.getUniqueDeviceId();
 
+            // 🔐 [تعديل جراحي] نظام البصمة المزدوجة - الفرونت إند
+            let isDeviceMatch = true;
+            try {
+                const sensRef = doc(db, "user_registrations", user.uid, "sensitive_info", "main");
+                const sensSnap = await getDoc(sensRef);
+
+                if (sensSnap.exists()) {
+                    const sensData = sensSnap.data();
+                    // جلب البصمات المسجلة (دعم النظام القديم والجديد)
+                    let allowed = sensData.allowed_devices || (sensData.bound_device_id ? [sensData.bound_device_id] : []);
+
+                    if (!allowed.includes(deviceFingerprint)) {
+                        if (allowed.length < 2) {
+                            // الطالب عنده بصمة واحدة.. سجل التانية فوراً كبصمة قانونية
+                            allowed.push(deviceFingerprint);
+                            await setDoc(sensRef, {
+                                allowed_devices: allowed,
+                                second_device_added_at: serverTimestamp()
+                            }, { merge: true });
+                            console.log("✅ تم تسجيل بصمة الجهاز الثانية كجهاز موثوق.");
+                            isDeviceMatch = true;
+                        } else {
+                            // مسجل جهازين بالفعل وده جهاز تالت
+                            isDeviceMatch = false;
+                        }
+                    } else {
+                        isDeviceMatch = true; // الجهاز الحالي هو واحد من الاتنين
+                    }
+                }
+            } catch (e) {
+                console.error("Security Sync Error:", e);
+                isDeviceMatch = true; // نمررها في حالة الخطأ عشان الطالب ميعطلش
+            }
+
             const idToken = await user.getIdToken();
+
+            await AuditManager.sendSecretLog(db, user, sessionData, {
+                deviceFingerprint: deviceFingerprint,
+                isDeviceMatch: isDeviceMatch,
+                userIP: typeof userIP !== 'undefined' ? userIP : "Hidden",
+                gpsData: gpsData
+            });
 
             const response = await fetch('https://nursing-backend-rej8.vercel.app/joinSessionSecure', {
                 method: 'POST',
@@ -1612,6 +1654,7 @@ document.addEventListener('click', (e) => {
                     gpsLat: gpsData.lat || 0,
                     gpsLng: gpsData.lng || 0,
                     deviceFingerprint: deviceFingerprint,
+                    isDeviceMatch: isDeviceMatch, // النتيجة اللي الفرونت إند حسبها
                     codeInput: sessionData.sessionCode
                 })
             });

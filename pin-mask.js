@@ -1,6 +1,3 @@
-// pin-mask.js
-<div class="gs-student-id">${student.id}</div>
-
 
 document.addEventListener('DOMContentLoaded', function () {
     window.initPinMaskEffect = function () {
