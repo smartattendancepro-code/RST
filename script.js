@@ -141,6 +141,17 @@ onAuthStateChanged(auth, async (_0xUser) => {
                 if (_stData.status === 'verified' || _stData.manual_verification === true) {
                     isManuallyVerified = true;
                 }
+         } else {
+                // 2. 🟢 إضافة فحص جدول الدكاترة إذا لم يوجد في الطلاب
+                const _facRef = doc(db, "faculty_members", _0xUser.uid);
+                const _facSnap = await getDoc(_facRef);
+                if (_facSnap.exists()) {
+                    const _facData = _facSnap.data();
+                    // فحص الحقل اللي اتفقنا هنغيره في الباك إند
+                    if (_facData.isVerified === true || _facData.status === 'verified') {
+                        isManuallyVerified = true;
+                    }
+                }
             }
         } catch (err) {
             console.log("Manual check warning:", err);
@@ -7243,3 +7254,4 @@ window.downloadSimpleSheet = function (subjectName) {
     performNetworkDiagnostic();
 
 })();
+
