@@ -34,6 +34,9 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { i18n, t, changeLanguage, toggleSystemLanguage } from './i18n.js';
 import { AuditManager } from './AuditManager.js';
+import { getDeviceId, resolveDeviceMatch, clearDeviceCache } from './security/DeviceGuard.js';
+
+
 
 window.HARDWARE_ID = null;
 const DEVICE_CACHE_KEY = "nursing_secure_device_v4";
@@ -140,6 +143,17 @@ onAuthStateChanged(auth, async (_0xUser) => {
                 const _stData = _stSnap.data();
                 if (_stData.status === 'verified' || _stData.manual_verification === true) {
                     isManuallyVerified = true;
+                }
+            } else {
+                // 2. 🟢 إضافة فحص جدول الدكاترة إذا لم يوجد في الطلاب
+                const _facRef = doc(db, "faculty_members", _0xUser.uid);
+                const _facSnap = await getDoc(_facRef);
+                if (_facSnap.exists()) {
+                    const _facData = _facSnap.data();
+                    // فحص الحقل اللي اتفقنا هنغيره في الباك إند
+                    if (_facData.isVerified === true || _facData.status === 'verified') {
+                        isManuallyVerified = true;
+                    }
                 }
             }
         } catch (err) {
@@ -1480,7 +1494,7 @@ document.addEventListener('click', (e) => {
 
                 let currentDeviceId = "UNKNOWN_DEVICE";
                 if (typeof getUniqueDeviceId === 'function') {
-                    currentDeviceId = getUniqueDeviceId();
+                    currentDeviceId = await getDeviceId();
                 } else {
                     const key = "unique_device_id_v3";
                     currentDeviceId = localStorage.getItem(key);
@@ -1597,41 +1611,9 @@ document.addEventListener('click', (e) => {
 
             const gpsData = await window.getGPSForJoin();
 
-            const deviceFingerprint = await window.getUniqueDeviceId();
-
-            // 🔐 [تعديل جراحي] نظام البصمة المزدوجة - الفرونت إند
-            let isDeviceMatch = true;
-            try {
-                const sensRef = doc(db, "user_registrations", user.uid, "sensitive_info", "main");
-                const sensSnap = await getDoc(sensRef);
-
-                if (sensSnap.exists()) {
-                    const sensData = sensSnap.data();
-                    // جلب البصمات المسجلة (دعم النظام القديم والجديد)
-                    let allowed = sensData.allowed_devices || (sensData.bound_device_id ? [sensData.bound_device_id] : []);
-
-                    if (!allowed.includes(deviceFingerprint)) {
-                        if (allowed.length < 2) {
-                            // الطالب عنده بصمة واحدة.. سجل التانية فوراً كبصمة قانونية
-                            allowed.push(deviceFingerprint);
-                            await setDoc(sensRef, {
-                                allowed_devices: allowed,
-                                second_device_added_at: serverTimestamp()
-                            }, { merge: true });
-                            console.log("✅ تم تسجيل بصمة الجهاز الثانية كجهاز موثوق.");
-                            isDeviceMatch = true;
-                        } else {
-                            // مسجل جهازين بالفعل وده جهاز تالت
-                            isDeviceMatch = false;
-                        }
-                    } else {
-                        isDeviceMatch = true; // الجهاز الحالي هو واحد من الاتنين
-                    }
-                }
-            } catch (e) {
-                console.error("Security Sync Error:", e);
-                isDeviceMatch = true; // نمررها في حالة الخطأ عشان الطالب ميعطلش
-            }
+            const { deviceFingerprint, isDeviceMatch, fpResult } = await resolveDeviceMatch({
+                db, user, serverTimestamp, arrayUnion, doc, getDoc, setDoc
+            });
 
             const idToken = await user.getIdToken();
 
@@ -1639,9 +1621,11 @@ document.addEventListener('click', (e) => {
                 deviceFingerprint: deviceFingerprint,
                 isDeviceMatch: isDeviceMatch,
                 userIP: typeof userIP !== 'undefined' ? userIP : "Hidden",
-                gpsData: gpsData
+                gpsData: gpsData,
+                fp_score: fpResult ? Math.round(fpResult.score * 100) + '%' : '100%',
+                fp_changed: fpResult?.changed ?? false,
+                fp_diff: fpResult?.diff?.map(d => d.key) ?? [],
             });
-
             const response = await fetch('https://nursing-backend-rej8.vercel.app/joinSessionSecure', {
                 method: 'POST',
                 headers: {
