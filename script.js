@@ -1962,7 +1962,10 @@ document.addEventListener('click', (e) => {
         const codeInput = document.getElementById('attendanceCode');
 
         if (passInput) passInput.value = '';
-        if (codeInput) codeInput.value = '';
+        if (codeInput) {
+             if (codeInput.resetValue) codeInput.resetValue();
+             else codeInput.value = '';
+        }
 
         const errorContainer = document.getElementById('screenError');
         if (errorContainer) errorContainer.style.display = 'none';
@@ -7254,4 +7257,5 @@ window.downloadSimpleSheet = function (subjectName) {
     performNetworkDiagnostic();
 
 })();
+
 
