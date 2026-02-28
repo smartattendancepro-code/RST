@@ -58,18 +58,10 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         // ✅ منع اللصق إلا للأرقام
-        input.addEventListener('paste', function (e) {
-            e.preventDefault();
-            const pasted = (e.clipboardData || window.clipboardData)
-                .getData('text')
-                .replace(/[^0-9]/g, '')
-                .slice(0, 6);
-
-            if (pasted) {
-                realValue = pasted;
-                updateDisplay();
-            }
-        });
+        input.addEventListener('paste', function (e) { e.preventDefault(); });
+        input.addEventListener('drop', function (e) { e.preventDefault(); });
+        input.addEventListener('copy', function (e) { e.preventDefault(); });
+        input.addEventListener('cut', function (e) { e.preventDefault(); });
 
         // الدالة اللي بتستخدمها searchForSession
         input.getRealValue = () => realValue;
@@ -83,3 +75,4 @@ document.addEventListener('DOMContentLoaded', function () {
 
     window.initPinMaskEffect();
 });
+
