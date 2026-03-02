@@ -71,7 +71,7 @@
     overlay.innerHTML = `
         <div class="pubg-card">
             <div class="pubg-header"><h3 class="pubg-title">MAINTENANCE</h3></div>
-            <div class="pubg-text">النظام قيد التحديث، سيعود للعمل خلال:</div>
+            <div class="pubg-text">النظام خرج عن الخدمة ، سيعود للعمل خلال:</div>
             
             <div class="pubg-timer-container">
                 <div class="timer-box"><span id="p-hrs" class="timer-num">00</span><span class="timer-label">ساعة</span></div>
@@ -110,3 +110,4 @@
         setTimeout(() => { overlay.remove(); clearInterval(timerInterval); }, 200);
     };
 })();
+
