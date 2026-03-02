@@ -1,8 +1,17 @@
 (function () {
     const STORAGE_KEY = 'pubg_maintenance_alert_v1';
+    
+    // تحديد موعد الانتهاء: 2 مارس 2026 الساعة 10 صباحاً بتوقيت مصر (UTC+2)
+    const targetDate = new Date('2026-03-02T10:00:00+02:00').getTime();
 
-    if (localStorage.getItem(STORAGE_KEY) === 'true') {
-        return; 
+    function checkExpiry() {
+        const now = new Date().getTime();
+        return now >= targetDate;
+    }
+
+    // إذا انتهى الوقت أو أغلقها المستخدم سابقاً، لا تفعل شيئاً
+    if (checkExpiry() || localStorage.getItem(STORAGE_KEY) === 'true') {
+        return;
     }
 
     const style = document.createElement('style');
@@ -11,144 +20,93 @@
 
         .pubg-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(3px);
-            z-index: 2147483655;
-            display: flex; align-items: center; justify-content: center;
-            font-family: 'Cairo', sans-serif;
-            animation: fadeIn 0.3s ease;
+            background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(4px);
+            z-index: 2147483655; display: flex; align-items: center; justify-content: center;
+            font-family: 'Cairo', sans-serif; animation: fadeIn 0.3s ease;
         }
 
         .pubg-card {
             background: linear-gradient(180deg, #181d26 0%, #0d1116 100%);
-            width: 300px;
-            border: 2px solid #bfa05f; /* ذهبي باهت */
-            border-radius: 4px;
-            position: relative;
-            box-shadow: 0 0 20px rgba(191, 160, 95, 0.2), 0 10px 30px rgba(0,0,0,0.8);
-            overflow: hidden;
-            text-align: center;
-            padding: 2px;
-            transform: scale(0.9);
-            animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+            width: 320px; border: 2px solid #bfa05f; border-radius: 4px;
+            position: relative; box-shadow: 0 0 30px rgba(191, 160, 95, 0.3);
+            text-align: center; padding: 5px; animation: popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
-
-        /* زوايا الإطار الجمالية */
-        .pubg-card::before, .pubg-card::after {
-            content: ''; position: absolute; width: 10px; height: 10px;
-            border: 2px solid #ffcc00; transition: 0.3s;
-        }
-        .pubg-card::before { top: 0; left: 0; border-right: none; border-bottom: none; }
-        .pubg-card::after { bottom: 0; right: 0; border-left: none; border-top: none; }
 
         .pubg-header {
-            background: linear-gradient(90deg, rgba(191,160,95,0) 0%, rgba(191,160,95,0.2) 50%, rgba(191,160,95,0) 100%);
-            padding: 10px 0;
-            margin-bottom: 15px;
-            border-bottom: 1px solid rgba(191,160,95,0.3);
+            background: rgba(191, 160, 95, 0.1); padding: 12px 0;
+            border-bottom: 1px solid rgba(191, 160, 95, 0.3); margin-bottom: 15px;
         }
 
-        .pubg-title {
-            color: #f0e6d2;
-            font-size: 16px;
-            font-weight: 900;
-            text-transform: uppercase;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
-            margin: 0;
-        }
+        .pubg-title { color: #f0e6d2; font-size: 18px; font-weight: 900; margin: 0; text-transform: uppercase; }
 
-        .pubg-content {
-            padding: 0 15px 20px 15px;
+        /* تنسيق العداد التنازلي */
+        .pubg-timer-container {
+            display: flex; justify-content: center; gap: 10px; margin: 15px 0;
         }
-
-        .pubg-icon-warn {
-            color: #ffcc00;
-            font-size: 32px;
-            margin-bottom: 10px;
-            filter: drop-shadow(0 0 5px rgba(255, 204, 0, 0.5));
+        .timer-box {
+            background: rgba(255, 204, 0, 0.1); border: 1px solid #ffcc00;
+            min-width: 50px; padding: 5px; border-radius: 4px;
         }
+        .timer-num { color: #ffcc00; font-size: 20px; font-weight: 900; display: block; }
+        .timer-label { color: #a3a3a3; font-size: 10px; text-transform: uppercase; }
 
-        .pubg-text {
-            color: #a3a3a3;
-            font-size: 13px;
-            font-weight: 700;
-            line-height: 1.5;
-            margin-bottom: 15px;
-        }
-
-        .pubg-highlight {
-            color: #ffcc00;
-            font-size: 15px;
-            display: block;
-            margin-top: 5px;
-            background: rgba(255, 204, 0, 0.1);
-            padding: 5px;
-            border-radius: 4px;
-            border: 1px dashed rgba(255, 204, 0, 0.3);
-        }
-
+        .pubg-text { color: #a3a3a3; font-size: 14px; font-weight: 700; margin-bottom: 20px; padding: 0 10px; }
+        
         .pubg-btn {
             background: linear-gradient(180deg, #ffcc00 0%, #d4a000 100%);
-            border: 1px solid #ffe680;
-            color: #1a1a1a;
-            font-weight: 900;
-            font-size: 14px;
-            padding: 8px 0;
-            width: 100%;
-            cursor: pointer;
-            text-transform: uppercase;
+            border: 1px solid #ffe680; color: #1a1a1a; font-weight: 900;
+            width: 90%; padding: 10px; cursor: pointer; margin-bottom: 15px;
             clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
-            transition: all 0.2s;
-            box-shadow: 0 4px 0 #8a6800;
-            margin-top: 5px;
+            transition: 0.2s; box-shadow: 0 4px 0 #8a6800;
         }
+        .pubg-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #8a6800; }
 
-        .pubg-btn:active {
-            transform: translateY(2px);
-            box-shadow: 0 2px 0 #8a6800;
-        }
-
-        @keyframes popIn { to { transform: scale(1); } }
+        @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     `;
     document.head.appendChild(style);
 
     const overlay = document.createElement('div');
     overlay.className = 'pubg-overlay';
-
     overlay.innerHTML = `
         <div class="pubg-card">
-            <div class="pubg-header">
-                <h3 class="pubg-title">SYSTEM NOTICE</h3>
-            </div>
+            <div class="pubg-header"><h3 class="pubg-title">MAINTENANCE</h3></div>
+            <div class="pubg-text">النظام قيد التحديث، سيعود للعمل خلال:</div>
             
-            <div class="pubg-content">
-                <i class="fa-solid fa-triangle-exclamation pubg-icon-warn fa-beat" style="--fa-animation-duration: 2s;"></i>
-                
-                <div class="pubg-text">
-                    النظام خرج عن الخدمة مؤقتاً
-                    <span class="pubg-highlight">
-                        سيعود الساعة 10:00 صباحاً
-                    </span>
-                </div>
-
-                <button id="btnClosePubg" class="pubg-btn">
-                    إغـــلاق
-                </button>
+            <div class="pubg-timer-container">
+                <div class="timer-box"><span id="p-hrs" class="timer-num">00</span><span class="timer-label">ساعة</span></div>
+                <div class="timer-box"><span id="p-min" class="timer-num">00</span><span class="timer-label">دقيقة</span></div>
+                <div class="timer-box"><span id="p-sec" class="timer-num">00</span><span class="timer-label">ثانية</span></div>
             </div>
+
+            <button id="btnClosePubg" class="pubg-btn">إغلاق التنبيه</button>
         </div>
     `;
-
     document.body.appendChild(overlay);
+
+    // وظيفة تحديث العداد
+    const timerInterval = setInterval(function() {
+        const now = new Date().getTime();
+        const distance = targetDate - now;
+
+        if (distance < 0) {
+            clearInterval(timerInterval);
+            overlay.remove(); // تختفي تلقائياً عند انتهاء الوقت
+            return;
+        }
+
+        const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+        document.getElementById('p-hrs').innerText = hours.toString().padStart(2, '0');
+        document.getElementById('p-min').innerText = minutes.toString().padStart(2, '0');
+        document.getElementById('p-sec').innerText = seconds.toString().padStart(2, '0');
+    }, 1000);
 
     document.getElementById('btnClosePubg').onclick = function () {
         localStorage.setItem(STORAGE_KEY, 'true');
-
-        overlay.style.transition = 'opacity 0.2s ease';
         overlay.style.opacity = '0';
-        setTimeout(() => {
-            overlay.remove();
-        }, 200);
+        setTimeout(() => { overlay.remove(); clearInterval(timerInterval); }, 200);
     };
-
 })();
