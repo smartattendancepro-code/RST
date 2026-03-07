@@ -278,6 +278,29 @@
     background: #e2e8f0;
 }
 
+/* ── Section Divider ── */
+.gs-section-divider {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 18px;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+    border-bottom: 1px solid #e2e8f0;
+}
+.gs-section-divider-label {
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+.gs-section-divider-line {
+    flex: 1;
+    height: 1px;
+    background: #e2e8f0;
+}
+
 /* ── Student Row ── */
 .gs-student-row {
     display: flex;
@@ -567,20 +590,25 @@
     };
 
     // ── رسم تفاصيل ماده واحدة ──
-    const renderSingleSubject = (groupCode, targetDate, masterList, attendanceMap, subjectName, doctorName, multiSubject = false) => {
+    // masterList        = طلاب الجروب الأصلي
+    // attendanceMap     = حضور طلاب الجروب الأصلي فقط
+    // manualAttMap      = طلاب أضيفوا يدوي (مش في masterList ومش من جروب تاني)
+    // otherGroupAttMap  = طلاب من جروبات أخرى
+    const renderSingleSubject = (groupCode, targetDate, masterList, attendanceMap, subjectName, doctorName, multiSubject = false, manualAttMap = new Map(), otherGroupAttMap = new Map()) => {
         const container = document.getElementById('groupSearchResults');
         if (!container) return;
 
         const presentCount = masterList.filter(s => attendanceMap.has(s.id)).length;
         const absentCount = masterList.length - presentCount;
+        const totalAll = masterList.length + manualAttMap.size + otherGroupAttMap.size;
         const pct = masterList.length ? Math.round((presentCount / masterList.length) * 100) : 0;
         const barColor = pct >= 75 ? '#22c55e' : pct >= 50 ? '#f59e0b' : '#ef4444';
 
+        // ── القسم الأول: طلاب الجروب الأصلي ──
         let rowsHTML = '';
         masterList.forEach((student) => {
             const rec = attendanceMap.get(student.id);
             const isPresent = !!rec;
-
             rowsHTML += `
                 <div class="gs-student-row ${isPresent ? '' : 'absent'}">
                     <div class="gs-status-badge ${isPresent ? 'present' : 'absent'}">
@@ -592,33 +620,73 @@
                     </div>
                     <div class="gs-att-details">
                         ${isPresent
-                    ? `<div class="gs-att-time"><i class="fa-regular fa-clock" style="font-size:9px;"></i> ${rec.time_str || '--:--'}</div>
+                            ? `<div class="gs-att-time"><i class="fa-regular fa-clock" style="font-size:9px;"></i> ${rec.time_str || '--:--'}</div>
                                <div class="gs-att-hall"><i class="fa-solid fa-building-columns" style="font-size:9px;"></i> ${rec.hall || '--'}</div>`
-                    : `<div class="gs-absent-label">غائب</div>`
-                }
+                            : `<div class="gs-absent-label">غائب</div>`
+                        }
                     </div>
                 </div>`;
         });
 
-        const extraAttendees = [...attendanceMap.entries()].filter(
-            ([id]) => !masterList.find(s => s.id === id)
-        );
-        extraAttendees.forEach(([id, rec]) => {
+        // ── القسم الثاني: طلاب أضيفوا يدوي ──
+        if (manualAttMap.size > 0) {
             rowsHTML += `
-                <div class="gs-student-row" style="background:#fffbeb; border-left: 3px solid #f59e0b;">
-                    <div class="gs-status-badge present" style="background:#fef9c3; color:#ca8a04;">
-                        <i class="fa-solid fa-star" style="font-size:9px;"></i>
+                <div class="gs-section-divider">
+                    <div class="gs-section-divider-line"></div>
+                    <div class="gs-section-divider-label" style="color:#8b5cf6;">
+                        <i class="fa-solid fa-user-plus" style="margin-left:4px;"></i>
+                        طلاب أضيفوا يدوياً
                     </div>
-                    <div class="gs-student-info">
-                        <div class="gs-student-name">${rec.name || id}</div>
-                        <div class="gs-student-id">${id} <span style="color:#f59e0b; font-size:9px; font-weight:700;">(خارج النطاق)</span></div>
-                    </div>
-                    <div class="gs-att-details">
-                        <div class="gs-att-time"><i class="fa-regular fa-clock" style="font-size:9px;"></i> ${rec.time_str || '--:--'}</div>
-                        <div class="gs-att-hall"><i class="fa-solid fa-building-columns" style="font-size:9px;"></i> ${rec.hall || '--'}</div>
-                    </div>
+                    <div class="gs-section-divider-line"></div>
                 </div>`;
-        });
+
+            manualAttMap.forEach((rec, id) => {
+                rowsHTML += `
+                    <div class="gs-student-row" style="background:#faf5ff; border-left: 3px solid #8b5cf6;">
+                        <div class="gs-status-badge present" style="background:#ede9fe; color:#7c3aed;">
+                            <i class="fa-solid fa-user-plus" style="font-size:9px;"></i>
+                        </div>
+                        <div class="gs-student-info">
+                            <div class="gs-student-name">${rec.name || id}</div>
+                            <div class="gs-student-id">${id} <span style="color:#8b5cf6; font-size:9px; font-weight:700;">(يدوي)</span></div>
+                        </div>
+                        <div class="gs-att-details">
+                            <div class="gs-att-time"><i class="fa-regular fa-clock" style="font-size:9px;"></i> ${rec.time_str || '--:--'}</div>
+                            <div class="gs-att-hall"><i class="fa-solid fa-building-columns" style="font-size:9px;"></i> ${rec.hall || '--'}</div>
+                        </div>
+                    </div>`;
+            });
+        }
+
+        // ── القسم الثالث: طلاب من جروبات أخرى ──
+        if (otherGroupAttMap.size > 0) {
+            rowsHTML += `
+                <div class="gs-section-divider">
+                    <div class="gs-section-divider-line"></div>
+                    <div class="gs-section-divider-label" style="color:#f59e0b;">
+                        <i class="fa-solid fa-users-between-lines" style="margin-left:4px;"></i>
+                        طلاب من جروبات أخرى
+                    </div>
+                    <div class="gs-section-divider-line"></div>
+                </div>`;
+
+            otherGroupAttMap.forEach((rec, id) => {
+                rowsHTML += `
+                    <div class="gs-student-row" style="background:#fffbeb; border-left: 3px solid #f59e0b;">
+                        <div class="gs-status-badge present" style="background:#fef9c3; color:#ca8a04;">
+                            <i class="fa-solid fa-star" style="font-size:9px;"></i>
+                        </div>
+                        <div class="gs-student-info">
+                            <div class="gs-student-name">${rec.name || id}</div>
+                            <div class="gs-student-id">${id} <span style="color:#f59e0b; font-size:9px; font-weight:700;">(${rec.group || 'جروب آخر'})</span></div>
+                        </div>
+                        <div class="gs-att-details">
+                            <div class="gs-att-time"><i class="fa-regular fa-clock" style="font-size:9px;"></i> ${rec.time_str || '--:--'}</div>
+                            <div class="gs-att-hall"><i class="fa-solid fa-building-columns" style="font-size:9px;"></i> ${rec.hall || '--'}</div>
+                        </div>
+                    </div>`;
+            });
+        }
 
         // زر العودة لو في مواد متعددة
         const backBtnHTML = multiSubject ? `
@@ -639,7 +707,7 @@
 
                 <!-- Percentage Bar -->
                 <div style="padding: 10px 18px 4px; display:flex; align-items:center; gap:12px;">
-                    <div style="font-size:11px; font-weight:700; color:#64748b;">نسبة الحضور</div>
+                    <div style="font-size:11px; font-weight:700; color:#64748b;">نسبة حضور الجروب</div>
                     <div class="gs-percent-bar-wrap" style="flex:1; width:auto;">
                         <div class="gs-percent-bar-fill" id="gsBarFill_${Date.now()}" style="width:0%; background:${barColor};"></div>
                     </div>
@@ -647,10 +715,12 @@
                 </div>
 
                 <!-- Stats mini -->
-                <div style="padding: 4px 18px 8px; display:flex; gap:8px;">
+                <div style="padding: 4px 18px 8px; display:flex; gap:8px; flex-wrap:wrap;">
                     <div class="gs-stat-pill gs-stat-present"><i class="fa-solid fa-circle-check"></i> ${presentCount} حاضر</div>
                     <div class="gs-stat-pill gs-stat-absent"><i class="fa-solid fa-circle-xmark"></i> ${absentCount} غائب</div>
-                    <div class="gs-stat-pill gs-stat-total"><i class="fa-solid fa-users"></i> ${masterList.length + extraAttendees.length}</div>
+                    <div class="gs-stat-pill gs-stat-total"><i class="fa-solid fa-users"></i> ${masterList.length} أصلي</div>
+                    ${manualAttMap.size > 0 ? `<div class="gs-stat-pill" style="background:#ede9fe; color:#7c3aed;"><i class="fa-solid fa-user-plus"></i> ${manualAttMap.size} يدوي</div>` : ''}
+                    ${otherGroupAttMap.size > 0 ? `<div class="gs-stat-pill" style="background:#fef9c3; color:#ca8a04;"><i class="fa-solid fa-star"></i> ${otherGroupAttMap.size} جروبات أخرى</div>` : ''}
                 </div>
 
                 <!-- Rows -->
@@ -660,7 +730,7 @@
                 <div class="gs-download-bar">
                     <div class="gs-dl-info">
                         <i class="fa-solid fa-circle-info" style="color:#0ea5e9; margin-left:4px;"></i>
-                        ${masterList.length} طالب · ${presentCount} حاضر · ${absentCount} غائب
+                        ${masterList.length} أصلي · ${presentCount} حاضر · ${absentCount} غائب · ${manualAttMap.size} يدوي · ${otherGroupAttMap.size} جروب آخر
                     </div>
                     <button class="gs-btn-download gs-btn-csv" onclick="window.gsExportCSV('${groupCode}','${targetDate}','${subjectName.replace(/'/g, "\\'")}')">
                         <i class="fa-solid fa-file-csv"></i> CSV
@@ -672,17 +742,13 @@
             </div>`;
 
         if (multiSubject) {
-            // نضيف فقط الـ detail بعد الهيدر الموجود
             const existingHeader = container.querySelector('.gs-results-header');
             if (existingHeader) {
-                // نبني واجهة الديتيل فوق قائمة المواد
                 container.innerHTML = existingHeader.outerHTML + detailViewHTML;
             } else {
                 container.innerHTML = detailViewHTML;
             }
         } else {
-            // ماده واحدة - عرض مباشر مع الهيدر الكامل
-            const totalForSingle = masterList.length + extraAttendees.length;
             container.style.display = 'flex';
             container.innerHTML = `
                 <div class="gs-results-header">
@@ -693,7 +759,7 @@
                     <div class="gs-stats-row">
                         <div class="gs-stat-pill gs-stat-present"><i class="fa-solid fa-circle-check"></i> ${presentCount} حاضر</div>
                         <div class="gs-stat-pill gs-stat-absent"><i class="fa-solid fa-circle-xmark"></i> ${absentCount} غائب</div>
-                        <div class="gs-stat-pill gs-stat-total"><i class="fa-solid fa-users"></i> ${totalForSingle}</div>
+                        <div class="gs-stat-pill gs-stat-total"><i class="fa-solid fa-users"></i> ${totalAll} إجمالي</div>
                     </div>
                 </div>
                 ${detailViewHTML}`;
@@ -744,7 +810,7 @@
                 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js'
             );
 
-            // ── 1. جلب قائمة الطلاب ──
+            // ── 1. جلب قائمة طلاب الجروب الأصلي ──
             const usersSnap = await getDocs(
                 query(collection(db, 'user_registrations'),
                     where('registrationInfo.group', 'in', resolvedGroupCodes))
@@ -779,16 +845,29 @@
 
             masterList.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
 
-            // ── 2. جلب كل سجلات الحضور لهذا اليوم والجروب ──
+            const masterIDs = new Set(masterList.map(s => s.id));
+
+            // ── 2. جلب حضور الجروب الأصلي ──
             const attSnap = await getDocs(
                 query(collection(db, 'attendance'),
                     where('date', '==', targetDate),
                     where('group', 'in', resolvedGroupCodes))
             );
 
-            // ── 3. تقسيم الحضور حسب المادة ──
-            // subjectsMap = { subjectName: { attendanceMap: Map, doctorName: '' } }
+            // subjectsMap = { subjectName: { attendanceMap, doctorName, manualAttMap, otherGroupAttMap } }
             const subjectsMap = {};
+
+            // دالة مساعدة لإنشاء إدخال مادة جديدة
+            const ensureSubject = (subj, doctor) => {
+                if (!subjectsMap[subj]) {
+                    subjectsMap[subj] = {
+                        attendanceMap: new Map(),   // طلاب الجروب الأصلي الحاضرين
+                        manualAttMap: new Map(),     // طلاب يدوي
+                        otherGroupAttMap: new Map(), // طلاب جروبات أخرى
+                        doctorName: doctor
+                    };
+                }
+            };
 
             attSnap.forEach(d => {
                 const data = d.data();
@@ -796,25 +875,29 @@
                 const subj = (data.subject || '—').trim();
                 const doctor = data.doctorName || '—';
 
-                if (!subjectsMap[subj]) {
-                    subjectsMap[subj] = {
-                        attendanceMap: new Map(),
-                        doctorName: doctor
-                    };
-                }
+                ensureSubject(subj, doctor);
+
                 if (sid) {
-                    subjectsMap[subj].attendanceMap.set(sid, {
+                    const rec = {
                         name: data.name || '',
                         subject: subj,
                         doctorName: doctor,
                         time_str: data.time_str || '--:--',
                         hall: data.hall || '—',
                         group: data.group || groupCode
-                    });
+                    };
+                    // طالب من الجروب الأصلي
+                    if (masterIDs.has(sid)) {
+                        subjectsMap[subj].attendanceMap.set(sid, rec);
+                    }
+                    // مش من الجروب الأصلي → يدوي مؤقتاً (هنحدده بعدين)
+                    else {
+                        subjectsMap[subj].manualAttMap.set(sid, rec);
+                    }
                 }
             });
 
-            // Fallback: لو group field مش متسجل
+            // ── 3. Fallback لو group field مش متسجل ──
             if (Object.keys(subjectsMap).length === 0 && masterList.length > 0) {
                 const ids = masterList.map(s => s.id);
                 const chunks = [];
@@ -832,12 +915,8 @@
                         const subj = (data.subject || '—').trim();
                         const doctor = data.doctorName || '—';
 
-                        if (!subjectsMap[subj]) {
-                            subjectsMap[subj] = {
-                                attendanceMap: new Map(),
-                                doctorName: doctor
-                            };
-                        }
+                        ensureSubject(subj, doctor);
+
                         if (sid) {
                             subjectsMap[subj].attendanceMap.set(sid, {
                                 name: data.name || '',
@@ -852,10 +931,66 @@
                 }
             }
 
+            // ── 4. جلب طلاب الجروبات الأخرى اللي حضروا نفس المادة والدكتور ──
+            const subjectNames = Object.keys(subjectsMap);
+
+            for (const subj of subjectNames) {
+                const info = subjectsMap[subj];
+                const doctor = info.doctorName;
+
+                // جلب كل الحضور بنفس المادة والدكتور واليوم
+                let otherSnap;
+                try {
+                    otherSnap = await getDocs(
+                        query(collection(db, 'attendance'),
+                            where('date', '==', targetDate),
+                            where('subject', '==', subj),
+                            where('doctorName', '==', doctor))
+                    );
+                } catch (e) {
+                    // لو مفيش index، نجرب بالمادة واليوم بس
+                    otherSnap = await getDocs(
+                        query(collection(db, 'attendance'),
+                            where('date', '==', targetDate),
+                            where('subject', '==', subj))
+                    );
+                }
+
+                otherSnap.forEach(d => {
+                    const data = d.data();
+                    const sid = String(data.id || '').trim();
+                    if (!sid) return;
+
+                    // تجاهل اللي موجودين بالفعل في الجروب الأصلي
+                    if (masterIDs.has(sid)) return;
+                    // تجاهل اللي موجودين في الـ attendanceMap (نفس الجروب)
+                    if (info.attendanceMap.has(sid)) return;
+
+                    const rec = {
+                        name: data.name || '',
+                        subject: subj,
+                        doctorName: data.doctorName || doctor,
+                        time_str: data.time_str || '--:--',
+                        hall: data.hall || '—',
+                        group: data.group || '—'
+                    };
+
+                    // لو الجروب مش من الجروبات الأصلية → جروب آخر
+                    if (data.group && !resolvedGroupCodes.includes(data.group)) {
+                        info.otherGroupAttMap.set(sid, rec);
+                        // نشيله من manualAttMap لو كان فيه
+                        info.manualAttMap.delete(sid);
+                    } else if (!data.group) {
+                        // مش عارفين جروبه → يدوي
+                        if (!info.manualAttMap.has(sid)) {
+                            info.manualAttMap.set(sid, rec);
+                        }
+                    }
+                });
+            }
+
             // حفظ البيانات للاستخدام لاحقاً
             window._gsLastData = { groupCode, targetDate, masterList, subjectsMap };
-
-            const subjectNames = Object.keys(subjectsMap);
 
             if (masterList.length === 0 && subjectNames.length === 0) {
                 container.style.display = 'flex';
@@ -866,16 +1001,16 @@
                         <br><small style="color:#cbd5e1; font-size:11px;">تأكد من كود الجروب أو وجود طلاب مسجلين</small>
                     </div>`;
             } else if (subjectNames.length === 1) {
-                // ماده واحدة → عرض مباشر
                 const subj = subjectNames[0];
                 renderSingleSubject(
                     groupCode, targetDate, masterList,
                     subjectsMap[subj].attendanceMap,
                     subj, subjectsMap[subj].doctorName,
-                    false
+                    false,
+                    subjectsMap[subj].manualAttMap,
+                    subjectsMap[subj].otherGroupAttMap
                 );
             } else if (subjectNames.length === 0 && masterList.length > 0) {
-                // طلاب موجودين بس مفيش حضور النهارده
                 container.style.display = 'flex';
                 container.innerHTML = `
                     <div class="gs-results-header">
@@ -893,7 +1028,6 @@
                         <br><small style="color:#cbd5e1; font-size:11px;">الجروب مسجل بـ ${masterList.length} طالب</small>
                     </div>`;
             } else {
-                // مواد متعددة → قائمة للاختيار
                 renderSubjectSelector(groupCode, targetDate, masterList, subjectsMap);
             }
 
@@ -925,10 +1059,11 @@
             groupCode, targetDate, masterList,
             info.attendanceMap,
             subjectName, info.doctorName,
-            true  // multiSubject = true → اعرض زر "العودة"
+            true,
+            info.manualAttMap,
+            info.otherGroupAttMap
         );
 
-        // حفظ الماده المفتوحة للـ export
         window._gsLastData._activeSubject = subjectName;
     };
 
@@ -948,14 +1083,14 @@
 
         const { masterList, subjectsMap } = data;
 
-        // لو مفيش subjectFilter → خد الأول المتاح
         const subj = subjectFilter || (Object.keys(subjectsMap)[0]);
         const info = subjectsMap[subj];
         if (!info) return [];
 
-        const { attendanceMap } = info;
+        const { attendanceMap, manualAttMap, otherGroupAttMap } = info;
         const rows = [];
 
+        // القسم الأول: طلاب الجروب الأصلي
         masterList.forEach((student, idx) => {
             const rec = attendanceMap.get(student.id);
             rows.push({
@@ -973,22 +1108,38 @@
             });
         });
 
-        [...attendanceMap.entries()].forEach(([id, rec]) => {
-            if (!masterList.find(s => s.id === id)) {
-                rows.push({
-                    'م': rows.length + 1,
-                    'اسم الطالب': rec.name || id,
-                    'الرقم الجامعي': id,
-                    'المجموعة': groupCode + ' (إضافي)',
-                    'التاريخ': targetDate,
-                    'المادة': subj,
-                    'الحالة': '✅ حاضر إضافي',
-                    'وقت الحضور': rec.time_str || '--',
-                    'القاعة': rec.hall || '--',
-                    'المحاضر': rec.doctorName || '--',
-                    'ملاحظات': 'حضر من جروب آخر'
-                });
-            }
+        // القسم الثاني: طلاب يدوي
+        manualAttMap.forEach((rec, id) => {
+            rows.push({
+                'م': rows.length + 1,
+                'اسم الطالب': rec.name || id,
+                'الرقم الجامعي': id,
+                'المجموعة': groupCode + ' (يدوي)',
+                'التاريخ': targetDate,
+                'المادة': subj,
+                'الحالة': '✅ حاضر يدوي',
+                'وقت الحضور': rec.time_str || '--',
+                'القاعة': rec.hall || '--',
+                'المحاضر': rec.doctorName || '--',
+                'ملاحظات': 'أضيف يدوياً'
+            });
+        });
+
+        // القسم الثالث: طلاب جروبات أخرى
+        otherGroupAttMap.forEach((rec, id) => {
+            rows.push({
+                'م': rows.length + 1,
+                'اسم الطالب': rec.name || id,
+                'الرقم الجامعي': id,
+                'المجموعة': rec.group || 'جروب آخر',
+                'التاريخ': targetDate,
+                'المادة': subj,
+                'الحالة': '✅ حاضر من جروب آخر',
+                'وقت الحضور': rec.time_str || '--',
+                'القاعة': rec.hall || '--',
+                'المحاضر': rec.doctorName || '--',
+                'ملاحظات': `حضر من ${rec.group || 'جروب آخر'}`
+            });
         });
 
         return rows;
@@ -1028,9 +1179,11 @@
             const statusCell = XLSX.utils.encode_cell({ r: R, c: 6 });
             const statusVal = ws[statusCell] ? ws[statusCell].v : '';
             const isAbsent = statusVal.includes('غائب');
-            const isExtra = statusVal.includes('إضافي');
+            const isManual = statusVal.includes('يدوي');
+            const isOther  = statusVal.includes('جروب آخر');
+            const bgColor  = isAbsent ? 'FEE2E2' : isManual ? 'EDE9FE' : isOther ? 'FEFCE8' : 'F0FDF4';
             const rowStyle = {
-                fill: { patternType: 'solid', fgColor: { rgb: isAbsent ? 'FEE2E2' : isExtra ? 'FEFCE8' : 'F0FDF4' } },
+                fill: { patternType: 'solid', fgColor: { rgb: bgColor } },
                 alignment: { horizontal: 'center' }
             };
             for (let C = range.s.c; C <= range.e.c; C++) {
@@ -1113,7 +1266,7 @@
         const btn = document.getElementById('btnGroupSearch');
         if (btn) btn.addEventListener('click', performSearch);
 
-        console.log('✅ GroupSearchModule mounted (Multi-Subject Support)');
+        console.log('✅ GroupSearchModule mounted (Multi-Subject + Other Groups Support)');
     };
 
     const _originalOpenReportModal = window.openReportModal;
