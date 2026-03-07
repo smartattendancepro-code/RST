@@ -97,6 +97,7 @@ export class AdvancedArchiveManager {
                 transition: border-color 0.2s;
             }
             .adv-group-container:hover { border-color: #3b82f6; }
+            .adv-group-container.required-error { border-color: #ef4444 !important; box-shadow: 0 0 0 3px rgba(239,68,68,0.1); }
             .adv-group-placeholder { color: #94a3b8; font-size: 13px; }
 
             .adv-chip {
@@ -150,6 +151,18 @@ export class AdvancedArchiveManager {
                 font-size: 11px; color: #94a3b8;
                 margin-top: 5px; font-style: italic;
             }
+            .adv-hint.required { color: #ef4444; font-style: normal; font-weight: 600; }
+
+            /* OTHER GROUPS TOGGLE */
+            .adv-toggle-row {
+                display: flex; align-items: center; gap: 10px;
+                margin-top: 14px; padding: 10px 14px;
+                background: #fffbeb; border: 1px solid #fde68a;
+                border-radius: 10px; cursor: pointer;
+            }
+            .adv-toggle-row input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: #f59e0b; }
+            .adv-toggle-label { font-size: 12px; font-weight: 600; color: #92400e; flex: 1; }
+            .adv-toggle-label i { margin-left: 5px; color: #f59e0b; }
 
             .adv-btn-primary {
                 width: 100%; padding: 14px; border: none; border-radius: 14px;
@@ -225,17 +238,29 @@ export class AdvancedArchiveManager {
               <datalist id="advSubjectList"></datalist>
             </div>
 
-            <!-- Group Filter (hidden until subject chosen) -->
+            <!-- Group Filter (REQUIRED) -->
             <div class="adv-input-group" id="advGroupSection" style="display:none;">
               <label class="adv-label">
                 <i class="fa-solid fa-users" style="margin-right:5px;color:#64748b;"></i> Filter by Group
-                <span style="font-weight:400;color:#94a3b8;font-size:12px;"> (optional)</span>
+                <span style="color:#ef4444; font-size:12px; margin-right:4px;">* مطلوب</span>
               </label>
               <div class="adv-group-container" id="advGroupChipsContainer">
-                <span class="adv-group-placeholder" id="advGroupPlaceholder">Click to select groups...</span>
+                <span class="adv-group-placeholder" id="advGroupPlaceholder">اختر جروب أو أكثر...</span>
               </div>
               <div class="adv-group-dropdown" id="advGroupDropdown"></div>
-              <div class="adv-hint">* Leave empty to export all groups</div>
+              <div class="adv-hint required" id="advGroupHint" style="display:none;">
+                <i class="fa-solid fa-circle-exclamation" style="margin-left:4px;"></i>
+                يجب اختيار جروب واحد على الأقل
+              </div>
+
+              <!-- Toggle: include other groups -->
+              <label class="adv-toggle-row" for="advIncludeOthers">
+                <input type="checkbox" id="advIncludeOthers" checked>
+                <span class="adv-toggle-label">
+                  <i class="fa-solid fa-users-between-lines"></i>
+                  تضمين الطلاب من جروبات أخرى حضروا نفس المادة مع نفس الدكتور
+                </span>
+              </label>
             </div>
 
             <button id="btnGenerateExcel" class="adv-btn-primary">
@@ -288,6 +313,9 @@ export class AdvancedArchiveManager {
 
         document.getElementById('advGroupChipsContainer').addEventListener('click', () => {
             document.getElementById('advGroupDropdown').classList.toggle('open');
+            // إخفاء رسالة الخطأ لما يفتح الـ dropdown
+            document.getElementById('advGroupChipsContainer').classList.remove('required-error');
+            document.getElementById('advGroupHint').style.display = 'none';
         });
 
         document.addEventListener('click', (e) => {
@@ -306,14 +334,9 @@ export class AdvancedArchiveManager {
         dropdown.innerHTML = '';
 
         const specialGroups = [`${level}G1 GP`, `${level}G1`];
-
         const regularGroups = [];
-        for (let i = 2; i <= 19; i++) {
-            regularGroups.push(`${level}G${i}`);
-        }
-
+        for (let i = 2; i <= 19; i++) regularGroups.push(`${level}G${i}`);
         const twentyGroups = [`${level}G20`, `${level}G30`, `${level}G40`];
-
         const allGroups = [...specialGroups, ...regularGroups, ...twentyGroups];
 
         allGroups.forEach(g => {
@@ -340,6 +363,12 @@ export class AdvancedArchiveManager {
             el.querySelector('.adv-chk').textContent = '✓';
         }
         this._renderChips();
+
+        // لو فيه جروب متاختار، شيل رسالة الخطأ
+        if (this.selectedGroups.size > 0) {
+            document.getElementById('advGroupChipsContainer').classList.remove('required-error');
+            document.getElementById('advGroupHint').style.display = 'none';
+        }
     }
 
     _renderChips() {
@@ -370,11 +399,16 @@ export class AdvancedArchiveManager {
     _clearGroups() {
         this.selectedGroups = new Set();
         const c = document.getElementById('advGroupChipsContainer');
-        if (c) c.querySelectorAll('.adv-chip').forEach(x => x.remove());
+        if (c) {
+            c.querySelectorAll('.adv-chip').forEach(x => x.remove());
+            c.classList.remove('required-error');
+        }
         const ph = document.getElementById('advGroupPlaceholder');
         if (ph) ph.style.display = 'inline';
         const dd = document.getElementById('advGroupDropdown');
         if (dd) { dd.innerHTML = ''; dd.classList.remove('open'); }
+        const hint = document.getElementById('advGroupHint');
+        if (hint) hint.style.display = 'none';
     }
 
     open() {
@@ -391,26 +425,37 @@ export class AdvancedArchiveManager {
         if (!db) { alert("Error: Database not initialized."); return; }
 
         const startDateVal = document.getElementById('advStartDate').value;
-        const endDateVal = document.getElementById('advEndDate').value;
-        const level = document.getElementById('advLevelSelect').value;
-        const subject = document.getElementById('advSubjectInput').value.trim();
-        const statusLog = document.getElementById('advStatusLog');
-        const btn = document.getElementById('btnGenerateExcel');
+        const endDateVal   = document.getElementById('advEndDate').value;
+        const level        = document.getElementById('advLevelSelect').value;
+        const subject      = document.getElementById('advSubjectInput').value.trim();
+        const statusLog    = document.getElementById('advStatusLog');
+        const btn          = document.getElementById('btnGenerateExcel');
+        const includeOthers = document.getElementById('advIncludeOthers').checked;
 
+        // ── validation ──
         if (!startDateVal || !endDateVal || !level || !subject) {
             statusLog.innerHTML = '<span style="color:#ef4444;">⚠️ Please fill in all fields.</span>';
             return;
         }
 
+        // إجبار اختيار جروب
+        if (this.selectedGroups.size === 0) {
+            document.getElementById('advGroupChipsContainer').classList.add('required-error');
+            document.getElementById('advGroupHint').style.display = 'block';
+            document.getElementById('advGroupChipsContainer').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            statusLog.innerHTML = '<span style="color:#ef4444;">⚠️ يجب اختيار جروب واحد على الأقل.</span>';
+            return;
+        }
+
         const start = new Date(startDateVal); start.setHours(0, 0, 0, 0);
-        const end = new Date(endDateVal); end.setHours(23, 59, 59, 999);
+        const end   = new Date(endDateVal);   end.setHours(23, 59, 59, 999);
 
         if (start > end) {
             statusLog.innerHTML = '<span style="color:#ef4444;">⚠️ Start date cannot be after end date.</span>';
             return;
         }
 
-        const filterGroups = this.selectedGroups.size > 0 ? new Set(this.selectedGroups) : null;
+        const filterGroups = new Set(this.selectedGroups);
 
         const origBtn = btn.innerHTML;
         btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> <span>Processing...</span>';
@@ -420,15 +465,16 @@ export class AdvancedArchiveManager {
         try {
             statusLog.innerText = "Fetching attendance records...";
 
+            // ── 1. حضور الجروبات المختارة ──
             const attSnap = await getDocs(
-                query(collection(db, "attendance"), where("subject", "==", subject))
+                query(collection(db, "attendance"),
+                    where("subject", "==", subject))
             );
 
-            if (attSnap.empty) throw new Error("No records found for this subject.");
-
             let activeDatesSet = new Set();
+            // doctorsPerDate: { date → Set of doctorNames } لاستخدامها في جلب الجروبات الأخرى
+            let doctorsPerDate = {};
             let attendanceRecords = [];
-            let outsiderStudents = {};
 
             attSnap.forEach(doc => {
                 const r = doc.data();
@@ -436,16 +482,15 @@ export class AdvancedArchiveManager {
                 const recDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
                 if (recDate < start || recDate > end) return;
 
-                if (filterGroups) {
-                    const rg = (r.group || '').toUpperCase().trim();
-                    if (!filterGroups.has(rg)) return;
-                }
+                const rg = (r.group || '').toUpperCase().trim();
+                if (!filterGroups.has(rg)) return;
 
                 activeDatesSet.add(r.date);
                 attendanceRecords.push(r);
-                if (!outsiderStudents[r.id]) {
-                    outsiderStudents[r.id] = { id: r.id, name: r.name, group: r.group || '--' };
-                }
+
+                // تجميع الدكاترة لكل تاريخ
+                if (!doctorsPerDate[r.date]) doctorsPerDate[r.date] = new Set();
+                if (r.doctorName) doctorsPerDate[r.date].add(r.doctorName);
             });
 
             const sortedDates = Array.from(activeDatesSet).sort((a, b) =>
@@ -457,37 +502,59 @@ export class AdvancedArchiveManager {
                 return;
             }
 
+            // ── 2. جلب طلاب الجروبات المختارة ──
             statusLog.innerText = "Fetching students...";
 
             const stSnap = await getDocs(
                 query(collection(db, "students"), where("academic_level", "==", level))
             );
 
+            // masterMap: طلاب الجروبات المختارة
             let masterMap = {};
             stSnap.forEach(doc => {
                 const s = doc.data();
                 const rg = (s.group || s.group_code || s.groupCode || '--').toUpperCase().trim();
-                if (filterGroups && !filterGroups.has(rg)) return;
+                if (!filterGroups.has(rg)) return;
                 masterMap[s.id] = {
                     id: s.id, name: s.name, group: rg,
-                    status: 'Regular', logs: {}, doctorsSeen: new Set(), presenceCount: 0
+                    type: 'Regular',
+                    logs: {}, doctorsSeen: new Set(), presenceCount: 0
                 };
             });
 
-            for (const [id, d] of Object.entries(outsiderStudents)) {
-                if (!masterMap[id]) {
-                    masterMap[id] = {
-                        id, name: d.name, group: d.group,
-                        status: 'Carry-Over', logs: {}, doctorsSeen: new Set(), presenceCount: 0
+            // fallback: user_registrations
+            if (Object.keys(masterMap).length === 0) {
+                const urSnap = await getDocs(
+                    query(collection(db, "user_registrations"),
+                        where("registrationInfo.group", "in", Array.from(filterGroups)))
+                );
+                urSnap.forEach(doc => {
+                    const info = doc.data().registrationInfo || doc.data();
+                    if (!info.studentID) return;
+                    const rg = (info.group || '--').toUpperCase().trim();
+                    masterMap[String(info.studentID).trim()] = {
+                        id: String(info.studentID).trim(),
+                        name: info.fullName || 'Unknown',
+                        group: rg,
+                        type: 'Regular',
+                        logs: {}, doctorsSeen: new Set(), presenceCount: 0
                     };
-                }
+                });
             }
 
-            statusLog.innerText = "Mapping data...";
+            // ── 3. تسجيل حضور طلاب الجروبات المختارة ──
+            statusLog.innerText = "Mapping attendance data...";
 
             attendanceRecords.forEach(r => {
-                if (!masterMap[r.id]) return;
-                masterMap[r.id].logs[r.date] = true;
+                if (!masterMap[r.id]) {
+                    // طالب حضر بس مش في قائمة الجروب → يدوي
+                    masterMap[r.id] = {
+                        id: r.id, name: r.name || r.id, group: (r.group || '--').toUpperCase().trim(),
+                        type: 'Manual',
+                        logs: {}, doctorsSeen: new Set(), presenceCount: 0
+                    };
+                }
+                masterMap[r.id].logs[r.date] = { time: r.time_str || '--', hall: r.hall || '--', doctor: r.doctorName || '--' };
                 masterMap[r.id].presenceCount++;
                 if (r.doctorName) masterMap[r.id].doctorsSeen.add(r.doctorName);
                 if (r.group && r.group !== 'General' && r.group !== 'UNKNOWN') {
@@ -495,52 +562,129 @@ export class AdvancedArchiveManager {
                 }
             });
 
-            const students = Object.values(masterMap).sort((a, b) => {
+            // ── 4. جلب طلاب الجروبات الأخرى (نفس المادة + نفس الدكتور + نفس اليوم) ──
+            let otherGroupMap = {};
+
+            if (includeOthers && sortedDates.length > 0) {
+                statusLog.innerText = "Fetching students from other groups...";
+
+                // نجيب كل حضور نفس المادة واليوم بدون تقييد الجروب
+                const otherSnap = await getDocs(
+                    query(collection(db, "attendance"),
+                        where("subject", "==", subject))
+                );
+
+                otherSnap.forEach(doc => {
+                    const r = doc.data();
+                    const sid = String(r.id || '').trim();
+                    if (!sid) return;
+
+                    // بس في نفس نطاق التواريخ
+                    const parts = r.date.split('/');
+                    const recDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                    if (recDate < start || recDate > end) return;
+
+                    // تجاهل لو من الجروبات المختارة أصلاً
+                    const rg = (r.group || '').toUpperCase().trim();
+                    if (filterGroups.has(rg)) return;
+
+                    // تجاهل لو موجود بالفعل في masterMap
+                    if (masterMap[sid]) return;
+
+                    // تحقق إن الدكتور في نفس اليوم هو نفسه دكتور الجروب الأصلي
+                    const dateDoctors = doctorsPerDate[r.date];
+                    if (!dateDoctors) return; // اليوم ده مفيش محاضرة للجروب الأصلي أصلاً
+                    if (r.doctorName && !dateDoctors.has(r.doctorName)) return; // دكتور مختلف
+
+                    if (!otherGroupMap[sid]) {
+                        otherGroupMap[sid] = {
+                            id: sid, name: r.name || sid, group: rg || '—',
+                            type: 'OtherGroup',
+                            logs: {}, doctorsSeen: new Set(), presenceCount: 0
+                        };
+                    }
+                    otherGroupMap[sid].logs[r.date] = { time: r.time_str || '--', hall: r.hall || '--', doctor: r.doctorName || '--' };
+                    otherGroupMap[sid].presenceCount++;
+                    if (r.doctorName) otherGroupMap[sid].doctorsSeen.add(r.doctorName);
+                });
+            }
+
+            // ── 5. دمج الكل وترتيب ──
+            statusLog.innerText = "Building Excel...";
+
+            const allStudents = [
+                // أولاً: طلاب الجروبات المختارة (Regular ثم Manual)
+                ...Object.values(masterMap).filter(s => s.type === 'Regular'),
+                ...Object.values(masterMap).filter(s => s.type === 'Manual'),
+                // أخيراً: طلاب الجروبات الأخرى
+                ...Object.values(otherGroupMap)
+            ].sort((a, b) => {
+                // ترتيب داخل كل نوع حسب الرقم
+                if (a.type !== b.type) {
+                    const order = { Regular: 0, Manual: 1, OtherGroup: 2 };
+                    return order[a.type] - order[b.type];
+                }
                 const nA = parseInt(a.id), nB = parseInt(b.id);
                 if (!isNaN(nA) && !isNaN(nB)) return nA - nB;
                 return String(a.id).localeCompare(String(b.id));
             });
 
-            statusLog.innerText = "Building Excel...";
             const total = sortedDates.length;
             const rows = [];
 
-            students.forEach((st, idx) => {
+            // ألوان حسب النوع والحضور
+            const typeColors = {
+                Regular:    null,     // هيتحدد حسب نسبة الحضور
+                Manual:     'EDE9FE', // بنفسجي فاتح
+                OtherGroup: 'FEFCE8'  // أصفر فاتح
+            };
+
+            allStudents.forEach((st, idx) => {
                 const present = st.presenceCount;
-                const absent = total - present;
-                const pct = total > 0 ? (present / total) * 100 : 0;
+                const absent  = total - present;
+                const pct     = total > 0 ? (present / total) * 100 : 0;
                 const doctors = Array.from(st.doctorsSeen).join(', ') || '--';
 
-                let rowRgb = 'FFFFFF';
-                if (pct < 50) rowRgb = 'FEE2E2';
-                else if (pct < 75) rowRgb = 'FEF3C7';
-                else rowRgb = 'DCFCE7';
+                // لون الصف
+                let rowRgb;
+                if (st.type === 'Manual') {
+                    rowRgb = 'EDE9FE';
+                } else if (st.type === 'OtherGroup') {
+                    rowRgb = 'FEFCE8';
+                } else {
+                    rowRgb = pct < 50 ? 'FEE2E2' : pct < 75 ? 'FEF3C7' : 'DCFCE7';
+                }
 
                 const base = {
                     fill: { fgColor: { rgb: rowRgb } },
                     border: {
-                        top: { style: 'thin', color: { rgb: 'CBD5E1' } },
+                        top:    { style: 'thin', color: { rgb: 'CBD5E1' } },
                         bottom: { style: 'thin', color: { rgb: 'CBD5E1' } },
-                        left: { style: 'thin', color: { rgb: 'CBD5E1' } },
-                        right: { style: 'thin', color: { rgb: 'CBD5E1' } }
+                        left:   { style: 'thin', color: { rgb: 'CBD5E1' } },
+                        right:  { style: 'thin', color: { rgb: 'CBD5E1' } }
                     },
                     alignment: { horizontal: 'center', vertical: 'center' },
                     font: { name: 'Arial', sz: 10 }
                 };
                 const nameStyle = { ...base, alignment: { horizontal: 'right', vertical: 'center' } };
 
+                // label النوع
+                const typeLabel = st.type === 'Manual' ? '🟣 يدوي' : st.type === 'OtherGroup' ? '🟡 جروب آخر' : '🟢 أصلي';
+
                 const row = {
-                    '#': { v: idx + 1, s: base },
-                    'Student ID': { v: st.id, s: base },
-                    'Student Name': { v: st.name, s: nameStyle },
-                    'Group': { v: st.group, s: base },
-                    'Attended': { v: present, s: base },
-                    'Absence': { v: absent, s: base },
-                    'Instructor': { v: doctors, s: base },
+                    '#':             { v: idx + 1, s: base },
+                    'Student ID':    { v: st.id,   s: base },
+                    'Student Name':  { v: st.name, s: nameStyle },
+                    'Group':         { v: st.group, s: base },
+                    'Type':          { v: typeLabel, s: base },
+                    'Attended':      { v: present,  s: base },
+                    'Absence':       { v: absent,   s: base },
+                    'Instructor':    { v: doctors,  s: base },
                 };
 
                 sortedDates.forEach(d => {
-                    const here = !!st.logs[d];
+                    const log  = st.logs[d];
+                    const here = !!log;
                     row[d] = {
                         v: here ? 'حاضر' : 'غائب',
                         s: {
@@ -556,20 +700,29 @@ export class AdvancedArchiveManager {
 
             const ws = XLSX.utils.json_to_sheet(rows);
             const cols = [
-                { wch: 5 }, { wch: 15 }, { wch: 30 }, { wch: 10 },
-                { wch: 10 }, { wch: 10 }, { wch: 25 }
+                { wch: 5 }, { wch: 15 }, { wch: 30 }, { wch: 12 },
+                { wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 25 }
             ];
             sortedDates.forEach(() => cols.push({ wch: 12 }));
             ws['!cols'] = cols;
+            ws['!views'] = [{ RTL: true }];
 
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'Attendance Report');
 
-            const safeSubj = subject.replace(/[/\\?*\[\]]/g, '_').substring(0, 25);
-            const grpSuffix = filterGroups ? `_${Array.from(filterGroups).sort().join('-')}` : '_AllGroups';
+            const safeSubj  = subject.replace(/[/\\?*\[\]]/g, '_').substring(0, 25);
+            const grpSuffix = `_${Array.from(filterGroups).sort().join('-')}`;
             XLSX.writeFile(wb, `Archive_${safeSubj}${grpSuffix}_${startDateVal}_to_${endDateVal}.xlsx`);
 
-            statusLog.innerHTML = `<span style="color:#10b981;">✅ Done! ${students.length} students · ${sortedDates.length} sessions.</span>`;
+            const regularCount    = Object.values(masterMap).filter(s => s.type === 'Regular').length;
+            const manualCount     = Object.values(masterMap).filter(s => s.type === 'Manual').length;
+            const otherCount      = Object.values(otherGroupMap).length;
+
+            statusLog.innerHTML = `
+                <span style="color:#10b981;">✅ Done!</span>
+                ${regularCount} أصلي · ${manualCount} يدوي · ${otherCount} جروب آخر
+                · ${sortedDates.length} محاضرة
+            `;
             if (window.playSuccess) window.playSuccess();
 
         } catch (err) {
@@ -586,4 +739,4 @@ export class AdvancedArchiveManager {
 if (!window.advancedArchiveSystem) {
     window.advancedArchiveSystem = new AdvancedArchiveManager();
 }
-console.log('Advanced Archive v3 Loaded 🚀');
+console.log('Advanced Archive v4 Loaded 🚀');
