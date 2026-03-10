@@ -3774,7 +3774,7 @@ document.addEventListener('click', (e) => {
     };
 
 
-    window.performFacultySignup = async function () {
+   window.performFacultySignup = async function () {
         const lang = localStorage.getItem('sys_lang') || 'ar';
         const _t = (typeof t === 'function') ? t : (key, def) => def;
 
@@ -3789,15 +3789,28 @@ document.addEventListener('click', (e) => {
         const masterKeyInput = document.getElementById('facMasterKey').value.trim();
 
         if (!name || !gender || !jobTitle || !email || !pass || !masterKeyInput) {
-            showToast(_t('msg_missing_data', "⚠️ Please fill all fields"), 3000, "#f59e0b");
+            showToast(_t('msg_missing_data', "⚠️ يرجى ملء جميع الحقول المطلوبة"), 3000, "#f59e0b");
             return;
         }
+
         if (email !== emailConfirm) {
-            showToast(_t('error_email_match', "❌ Emails do not match"), 3000, "#ef4444");
+            showToast(_t('error_email_match', "❌ البريد الإلكتروني غير متطابق"), 3000, "#ef4444");
             return;
         }
+
         if (pass !== passConfirm) {
-            showToast(_t('error_pass_match', "❌ Passwords do not match"), 3000, "#ef4444");
+            showToast(_t('error_pass_match', "❌ كلمة المرور غير متطابقة"), 3000, "#ef4444");
+            return;
+        }
+
+        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#]).{8,}$/;
+        if (!passwordRegex.test(pass)) {
+            const passNotice = lang === 'ar'
+                ? "⚠️ كلمة المرور ضعيفة! يجب أن تكون 8 خانات على الأقل، وتحتوي على حرف كبير، حرف صغير، رقم، ورمز خاص واحد على الأقل (مثل @$!%*?&#)."
+                : "⚠️ Weak Password! Must be at least 8 characters, including uppercase, lowercase, a number, and a symbol (e.g., @$!%*?&#).";
+
+            showToast(passNotice, 7000, "#ef4444");
+            if (typeof playBeep === 'function') playBeep();
             return;
         }
 
@@ -3812,9 +3825,7 @@ document.addEventListener('click', (e) => {
 
             const response = await fetch(`${BACKEND_BASE_URL}/api/registerFaculty`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     email: email,
                     password: pass,
@@ -3843,18 +3854,16 @@ document.addEventListener('click', (e) => {
                 };
 
                 await sendEmailVerification(userCredential.user, actionCodeSettings);
-
                 console.log("✅ Verification email sent successfully!");
 
                 await signOut(auth);
 
             } catch (emailError) {
                 console.error("⚠️ Warning: Account created but email failed to send:", emailError);
-                showToast("تم إنشاء الحساب، ولكن حدثت مشكلة في إرسال الإيميل.", 5000, "#f59e0b");
+                showToast("تم إنشاء الحساب، ولكن تعذر إرسال إيميل التفعيل تلقائياً.", 5000, "#f59e0b");
             }
 
             document.getElementById('facultyGateModal').style.display = 'none';
-
             if (typeof switchFacultyTab === 'function') switchFacultyTab('login');
 
             document.getElementById('facLoginEmail').value = email;
@@ -3869,11 +3878,7 @@ document.addEventListener('click', (e) => {
 
             let roleDisplay = "";
             if (lang === 'ar') {
-                if (role === 'dean') {
-                    roleDisplay = (gender === 'Female') ? "العميدة" : "العميد";
-                } else {
-                    roleDisplay = (gender === 'Female') ? "الدكتورة" : "الدكتور";
-                }
+                roleDisplay = (role === 'dean') ? (gender === 'Female' ? "العميدة" : "العميد") : (gender === 'Female' ? "الدكتورة" : "الدكتور");
             } else {
                 roleDisplay = (role === 'dean') ? "Dean" : "Dr.";
             }
@@ -3882,9 +3887,9 @@ document.addEventListener('click', (e) => {
                 ? `🎉 أهلاً بك يا ${roleDisplay} ${name.split(' ')[0]}!`
                 : `🎉 Welcome, ${roleDisplay} ${firstName}!`;
 
-            const txtPosition = _t('label_official_position', 'Official Position');
-            const txtLinkSent = _t('msg_verify_link_sent', 'Verification link sent to your email.');
-            const txtVerifyMsg = _t('msg_verify_before_login', 'Please verify via email before logging in.');
+            const txtPosition = _t('label_official_position', 'المنصب الرسمي');
+            const txtLinkSent = _t('msg_verify_link_sent', 'تم إرسال رابط التفعيل إلى بريدك الإلكتروني.');
+            const txtVerifyMsg = _t('msg_verify_before_login', 'يرجى تفعيل الحساب من البريد قبل تسجيل الدخول.');
 
             if (modalTitle) modalTitle.innerText = welcomeMsg;
 
@@ -3904,10 +3909,7 @@ document.addEventListener('click', (e) => {
 
             if (successModal) {
                 const modalBtn = successModal.querySelector('button');
-
-                if (!window.originalSuccessBtnOnClick) {
-                    window.originalSuccessBtnOnClick = modalBtn.onclick;
-                }
+                if (!window.originalSuccessBtnOnClick) window.originalSuccessBtnOnClick = modalBtn.onclick;
 
                 modalBtn.onclick = function () {
                     successModal.style.display = 'none';
@@ -3921,23 +3923,22 @@ document.addEventListener('click', (e) => {
             }
 
         } catch (error) {
-
             console.error("Signup Error:", error);
-
-            let msg = "❌ Error during registration";
+            let msg = lang === 'ar' ? "❌ فشل التسجيل" : "❌ Registration Failed";
             let errMsg = error.message || "";
 
             if (errMsg.includes("Master Key")) {
-                msg = _t('error_master_key', "🚫 Invalid Master Key!");
+                msg = lang === 'ar' ? "🚫 الماستر كي غير صحيح!" : "🚫 Invalid Master Key!";
             } else if (errMsg.includes("email-already-in-use")) {
-                msg = _t('error_email_exists', "⚠️ Email already registered!");
+                msg = lang === 'ar' ? "⚠️ هذا البريد مسجل بالفعل!" : "⚠️ Email already registered!";
             } else if (errMsg.includes("Failed to fetch")) {
-                msg = _t('error_network', "📡 Server connection failed. Check Backend.");
+                msg = lang === 'ar' ? "📡 مشكلة في الاتصال بالسيرفر" : "📡 Server connection failed.";
             } else {
                 msg = "⚠️ " + errMsg;
             }
 
             showToast(msg, 4000, "#ef4444");
+            if (typeof playBeep === 'function') playBeep();
 
         } finally {
             btn.innerHTML = originalText;
@@ -7246,6 +7247,7 @@ window.downloadSimpleSheet = function (subjectName) {
     performNetworkDiagnostic();
 
 })();
+
 
 
 
