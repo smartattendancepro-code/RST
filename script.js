@@ -1302,7 +1302,8 @@ document.addEventListener('click', (e) => {
             if (passErr) passErr.style.display = isPassMatch ? 'none' : 'block';
         }
 
-        const groupPattern = /^[1-4]G\d{1,2}$/;
+        const groupPattern = /^[1-4][GPNCDTBH]\d{1,2}$/;
+
         const isGroupFormatValid = groupPattern.test(groupRaw);
 
         let isGroupLevelMatch = true;
@@ -6973,7 +6974,8 @@ document.addEventListener('DOMContentLoaded', () => {
         groupInput.addEventListener('input', function (e) {
             let val = this.value.toUpperCase();
 
-            val = val.replace(/[^0-9G]/g, '');
+            val = val.replace(/[^0-9GPNCDTBH]/g, '');
+
 
             this.value = val;
 
@@ -7247,7 +7249,6 @@ window.downloadSimpleSheet = function (subjectName) {
     performNetworkDiagnostic();
 
 })();
-
 
 
 
