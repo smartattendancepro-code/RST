@@ -8,7 +8,6 @@ const auth = window.auth;
 let cachedAttendance = [];
 let cachedAbsence = [];
 
-// كل الـ collections الممكنة
 const ATTENDANCE_COLLECTIONS = [
     "attendance_NURS",
     "attendance_PT",
@@ -16,10 +15,19 @@ const ATTENDANCE_COLLECTIONS = [
 ];
 
 // ========================================================
-// جيب بيانات الطالب من كل الـ collections
+// مفتاح فريد لكل record لمنع التكرار
+// ========================================================
+function getUniqueKey(item) {
+    // مفتاح مكون من: الكود + الماده + التاريخ + الدكتور
+    return `${item.id}_${item.subject}_${item.date}_${item.doctorName}`.toLowerCase().replace(/\s+/g, '');
+}
+
+// ========================================================
+// جيب بيانات الطالب من كل الـ collections بدون تكرار
 // ========================================================
 async function fetchAllAttendance(studentID, status) {
     const results = [];
+    const seenKeys = new Set(); // تتبع المفاتيح الفريدة
 
     await Promise.all(
         ATTENDANCE_COLLECTIONS.map(async (col) => {
@@ -29,7 +37,17 @@ async function fetchAllAttendance(studentID, status) {
                     where("id", "==", String(studentID)),
                     where("status", "==", status)
                 ));
-                snap.docs.forEach(d => results.push(d.data()));
+                snap.docs.forEach(d => {
+                    const data = d.data();
+                    const key = getUniqueKey(data);
+
+                    if (!seenKeys.has(key)) {
+                        seenKeys.add(key);
+                        results.push(data);
+                    } else {
+                        console.warn(`⚠️ Duplicate skipped [${col}]:`, data.subject, data.date);
+                    }
+                });
             } catch (e) {
                 console.warn(`Skipped collection [${col}]:`, e.message);
             }
@@ -59,7 +77,6 @@ window.openAcademicRecord = async function () {
     document.getElementById('absenceTabCount').innerText = '0';
 
     try {
-        // جيب بيانات الطالب
         const userSnap = await getDoc(doc(db, "user_registrations", user.uid));
         if (!userSnap.exists()) {
             showError("User data not found.");
@@ -67,7 +84,7 @@ window.openAcademicRecord = async function () {
         }
 
         const userData = userSnap.data();
-        const regInfo = userData.registrationInfo || {};
+        const regInfo  = userData.registrationInfo || {};
         const studentID = regInfo.studentID || userData.studentID;
 
         if (!studentID) {
@@ -75,17 +92,16 @@ window.openAcademicRecord = async function () {
             return;
         }
 
-        // جيب الحضور والغياب من كل الـ collections بالتوازي
         const [attendanceData, absenceData] = await Promise.all([
             fetchAllAttendance(studentID, "ATTENDED"),
             fetchAllAttendance(studentID, "ABSENT")
         ]);
 
         cachedAttendance = attendanceData;
-        cachedAbsence = absenceData;
+        cachedAbsence    = absenceData;
 
         document.getElementById('attendanceTabCount').innerText = cachedAttendance.length;
-        document.getElementById('absenceTabCount').innerText = cachedAbsence.length;
+        document.getElementById('absenceTabCount').innerText    = cachedAbsence.length;
 
         switchAcademicTab('attendance');
 
@@ -111,24 +127,24 @@ function showError(msg) {
 // ========================================================
 window.switchAcademicTab = function (tab) {
     const tabAttendance = document.getElementById('tabAttendance');
-    const tabAbsence = document.getElementById('tabAbsence');
-    const lang = localStorage.getItem('sys_lang') || 'en';
+    const tabAbsence    = document.getElementById('tabAbsence');
+    const lang          = localStorage.getItem('sys_lang') || 'en';
 
     if (tab === 'attendance') {
-        tabAttendance.style.color = '#10b981';
+        tabAttendance.style.color        = '#10b981';
         tabAttendance.style.borderBottom = '3px solid #10b981';
-        tabAttendance.style.background = 'white';
-        tabAbsence.style.color = '#94a3b8';
-        tabAbsence.style.borderBottom = 'none';
-        tabAbsence.style.background = '#f8fafc';
+        tabAttendance.style.background   = 'white';
+        tabAbsence.style.color           = '#94a3b8';
+        tabAbsence.style.borderBottom    = 'none';
+        tabAbsence.style.background      = '#f8fafc';
         renderList(cachedAttendance, 'attendance', lang);
     } else {
-        tabAbsence.style.color = '#ef4444';
-        tabAbsence.style.borderBottom = '3px solid #ef4444';
-        tabAbsence.style.background = 'white';
-        tabAttendance.style.color = '#94a3b8';
+        tabAbsence.style.color           = '#ef4444';
+        tabAbsence.style.borderBottom    = '3px solid #ef4444';
+        tabAbsence.style.background      = 'white';
+        tabAttendance.style.color        = '#94a3b8';
         tabAttendance.style.borderBottom = 'none';
-        tabAttendance.style.background = '#f8fafc';
+        tabAttendance.style.background   = '#f8fafc';
         renderList(cachedAbsence, 'absence', lang);
     }
 };
@@ -142,7 +158,7 @@ function renderList(data, type, lang) {
     if (!data || data.length === 0) {
         const emptyMsg = type === 'attendance'
             ? (lang === 'ar' ? 'لا توجد محاضرات حضور مسجلة' : 'No attendance records found')
-            : (lang === 'ar' ? 'لا توجد غيابات مسجلة' : 'No absence records found');
+            : (lang === 'ar' ? 'لا توجد غيابات مسجلة'       : 'No absence records found');
 
         content.innerHTML = `
             <div style="text-align: center; padding: 30px; color: #94a3b8;">
@@ -152,15 +168,15 @@ function renderList(data, type, lang) {
         return;
     }
 
-    // ترتيب بالتاريخ الأحدث أولاً — يدعم DD/MM/YYYY
+    // ترتيب بالتاريخ الأحدث أولاً
     const sorted = [...data].sort((a, b) => {
         const toKey = d => d?.date ? d.date.split('/').reverse().join('') : '';
         return toKey(b).localeCompare(toKey(a));
     });
 
     const color = type === 'attendance' ? '#10b981' : '#ef4444';
-    const icon = type === 'attendance' ? 'fa-circle-check' : 'fa-circle-xmark';
-    const bg = type === 'attendance' ? '#dcfce7' : '#fee2e2';
+    const icon  = type === 'attendance' ? 'fa-circle-check' : 'fa-circle-xmark';
+    const bg    = type === 'attendance' ? '#dcfce7' : '#fee2e2';
 
     content.innerHTML = sorted.map(item => `
         <div style="
