@@ -4,7 +4,7 @@ export const i18n = {
         dir: "rtl",
         font: "'Cairo', sans-serif",
         app_title: "نظام كشف الحضور - كلية التمريض",
-        college_name: "جامعة الريادة - كلية التمريض",
+        college_name: "جامعة الريادة للعلوم والتكنولوجيا",
         sys_title: "نظام كشف الحضور",
         welcome_subtitle: "مرحباً بك. يرجى الضغط بالأسفل لتسجيل حضور المحاضرة الحالية.",
         admin_badge_text: "وضع المسؤول مفعل",
@@ -347,7 +347,7 @@ export const i18n = {
         already_registered: "مسجل بالفعل؟",
 
         loading_user: "جاري التحميل...",
-        student_role: "طالب تمريض",
+        student_role: "طالب",
         academic_level_label: "المستوى الأكاديمي",
         gender_label: "النوع",
         university_id_label: "الكود الجامعي",
@@ -545,7 +545,7 @@ export const i18n = {
         start_new_session_btn: "Start New Lecture",
 
         app_title: "Attendance System - Nursing",
-        college_name: "Al-Ryada University - Faculty of Nursing",
+        college_name: "Al-Ryada University for Science and Technology",
         sys_title: "Attendance System",
         welcome_subtitle: "Welcome! Please join the current session below.",
         admin_badge_text: "Admin Mode Active",
@@ -949,7 +949,7 @@ export const i18n = {
         already_registered: "Already Registered?",
 
         loading_user: "Loading User...",
-        student_role: "Nursing Student",
+        student_role: "Student",
         academic_level_label: "Academic Level",
         gender_label: "Gender",
         university_id_label: "University ID",
