@@ -141,7 +141,7 @@ onAuthStateChanged(auth, async (_0xUser) => {
                 if (_stData.status === 'verified' || _stData.manual_verification === true) {
                     isManuallyVerified = true;
                 }
-         } else {
+            } else {
                 // 2. 🟢 إضافة فحص جدول الدكاترة إذا لم يوجد في الطلاب
                 const _facRef = doc(db, "faculty_members", _0xUser.uid);
                 const _facSnap = await getDoc(_facRef);
@@ -1483,6 +1483,7 @@ document.addEventListener('click', (e) => {
                     studentID: info.studentID,
                     level: info.level,
                     gender: info.gender,
+                    group: info.group || "",
                     avatarClass: userData.avatarClass || info.avatarClass || "fa-user-graduate",
                     status_message: userData.status_message || "",
                     uid: user.uid,
@@ -1955,7 +1956,7 @@ document.addEventListener('click', (e) => {
 
         if (passInput) passInput.value = '';
         if (codeInput) codeInput.value = '';
-        
+
 
         const errorContainer = document.getElementById('screenError');
         if (errorContainer) errorContainer.style.display = 'none';
@@ -3490,6 +3491,24 @@ document.addEventListener('click', (e) => {
                 if (cData.uid === user.uid) {
                     document.getElementById('profFullName').innerText = cData.fullName || "--";
                     document.getElementById('profStudentID').innerText = cData.studentID || "--";
+                    const COLLEGE_NAME_MAP = {
+                        'N': 'Nursing', 'P': 'Physical Therapy', 'C': 'Pharmacy',
+                        'D': 'Dentistry', 'T': 'Computer Science', 'B': 'Business Admin', 'H': 'Health Sciences'
+                    };
+                    const grp = cData.group || "";
+                    const letter = grp.length >= 2 ? grp[1].toUpperCase() : 'N';
+                    const roleEl = document.querySelector('.pro-role');
+                    if (roleEl) {
+                        roleEl.innerHTML = `
+        <span style="font-size:13px; font-weight:800;">
+            ${COLLEGE_NAME_MAP[letter] || 'Nursing'} Student
+        </span><br>
+        <span style="font-size:13px; color:#0ea5e9; font-weight:900; 
+                     background:#e0f2fe; padding:2px 10px; border-radius:20px; 
+                     display:inline-block; margin-top:4px;">
+            ${grp || "--"}
+        </span>`;
+                    }
                     document.getElementById('profLevel').innerText = `الفرقة ${cData.level || '?'}`;
                     document.getElementById('profGender').innerText = cData.gender || "--";
                     document.getElementById('profEmail').innerText = cData.email || user.email;
@@ -3775,7 +3794,7 @@ document.addEventListener('click', (e) => {
     };
 
 
-   window.performFacultySignup = async function () {
+    window.performFacultySignup = async function () {
         const lang = localStorage.getItem('sys_lang') || 'ar';
         const _t = (typeof t === 'function') ? t : (key, def) => def;
 
@@ -7249,6 +7268,5 @@ window.downloadSimpleSheet = function (subjectName) {
     performNetworkDiagnostic();
 
 })();
-
 
 
