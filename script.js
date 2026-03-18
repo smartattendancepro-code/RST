@@ -3496,7 +3496,14 @@ document.addEventListener('click', (e) => {
                         'D': 'Dentistry', 'T': 'Computer Science', 'B': 'Business Admin', 'H': 'Health Sciences'
                     };
                     const grp = cData.group || "";
-                    const letter = grp.length >= 2 ? grp[1].toUpperCase() : 'N';
+                    const COLLEGE_CODE_MAP = {
+                        'NURS': 'N', 'PT': 'P', 'PHARM': 'C',
+                        'DENT': 'D', 'CS': 'T', 'BA': 'B', 'HS': 'H'
+                    };
+                    const collegeCode = cData.college || "";
+                    const letter = collegeCode
+                        ? (COLLEGE_CODE_MAP[collegeCode] || grp[1]?.toUpperCase() || 'N')
+                        : (grp.length >= 2 ? grp[1].toUpperCase() : 'N');
                     const roleEl = document.querySelector('.pro-role');
                     if (roleEl) {
                         roleEl.innerHTML = `
@@ -3563,6 +3570,32 @@ document.addEventListener('click', (e) => {
 
             document.getElementById('profFullName').innerText = info.fullName || "--";
             document.getElementById('profStudentID').innerText = info.studentID || "--";
+            const COLLEGE_NAME_MAP = {
+                'N': 'Nursing', 'P': 'Physical Therapy', 'C': 'Pharmacy',
+                'D': 'Dentistry', 'T': 'Computer Science', 'B': 'Business Admin', 'H': 'Health Sciences'
+            };
+            const COLLEGE_CODE_MAP = {
+                'NURS': 'N', 'PT': 'P', 'PHARM': 'C',
+                'DENT': 'D', 'CS': 'T', 'BA': 'B', 'HS': 'H'
+            };
+            const studentGroup = info.group || "";
+            const collegeCode = data.college || info.college || "";
+            const letter = collegeCode
+                ? (COLLEGE_CODE_MAP[collegeCode] || studentGroup[1]?.toUpperCase() || 'N')
+                : (studentGroup.length >= 2 ? studentGroup[1].toUpperCase() : 'N');
+
+            const roleEl = document.querySelector('.pro-role');
+            if (roleEl) {
+                roleEl.innerHTML = `
+        <span style="font-size:13px; font-weight:800;">
+            ${COLLEGE_NAME_MAP[letter] || 'Nursing'} Student
+        </span><br>
+        <span style="font-size:13px; color:#0ea5e9; font-weight:900; 
+                     background:#e0f2fe; padding:2px 10px; border-radius:20px; 
+                     display:inline-block; margin-top:4px;">
+            ${studentGroup || "--"}
+        </span>`;
+            }
             document.getElementById('profLevel').innerText = `الفرقة ${info.level || '?'}`;
             document.getElementById('profGender').innerText = info.gender || "--";
 
