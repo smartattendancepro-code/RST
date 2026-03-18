@@ -1,10 +1,12 @@
 /**
  * ╔══════════════════════════════════════════════════════════════╗
- * ║          GROUP SEARCH MODULE  ·  v2.0  ·  ENHANCED          ║
+ * ║          GROUP SEARCH MODULE  ·  v2.1  ·  BUG-FIXED         ║
  * ║  ✅ Sorted by ID (asc)  ✅ Parallel Firestore queries        ║
- * ║  ✅ Smart caching       ✅ Robust error handling             ║
+ * ║  ✅ Smart caching (30s) ✅ Robust error handling             ║
  * ║  ✅ Accurate classification (manual / other-group)           ║
  * ║  ✅ Input sanitisation  ✅ Rate-limiting guard               ║
+ * ║  🔒 Bug1: Fallback filter  🔒 Bug2: doctorName guard        ║
+ * ║  🔒 Bug3: cross-group dedup 🔒 Bug4: forced refresh btn     ║
  * ╚══════════════════════════════════════════════════════════════╝
  */
 (function () {
@@ -14,7 +16,7 @@
        CONSTANTS & UTILITIES
     ═══════════════════════════════════════════════ */
     const MODULE_ID     = 'groupSearchModule';
-    const CACHE_TTL_MS  = 60_000; // 1 minute cache per query
+    const CACHE_TTL_MS  = 30_000; // 30s — shorter to reduce stale attendance risk (Bug 4)
     const MAX_REQUESTS  = 10;     // max parallel Firestore requests
     const BATCH_SIZE    = 10;     // Firestore `in` operator limit
 
@@ -28,8 +30,10 @@
             if (Date.now() - entry.ts > CACHE_TTL_MS) { _queryCache.delete(key); return null; }
             return entry.data;
         },
-        set(key, data) { _queryCache.set(key, { ts: Date.now(), data }); },
-        clear()        { _queryCache.clear(); }
+        set(key, data)      { _queryCache.set(key, { ts: Date.now(), data }); },
+        invalidate(key)     { _queryCache.delete(key); },            // Bug-4 fix: force-refresh
+        invalidateAll()     { _queryCache.clear(); },
+        clear()             { _queryCache.clear(); }
     };
 
     /** Format ISO date → DD/MM/YYYY */
@@ -332,6 +336,9 @@
                     <button id="btnGroupSearch">
                         <i class="fa-solid fa-magnifying-glass"></i> بحث
                     </button>
+                    <button id="btnGroupRefresh" title="تحديث فوري (تجاوز الكاش)" style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:10px;padding:8px 10px;cursor:pointer;font-size:12px;color:#64748b;transition:all .15s;flex-shrink:0;">
+                        <i class="fa-solid fa-rotate-right"></i>
+                    </button>
                 </div>
                 <div style="display:flex;align-items:center;gap:8px;background:#fff;border:1.5px solid #e2e8f0;border-radius:10px;padding:8px 12px;">
                     <i class="fa-regular fa-calendar-days" style="color:#64748b;font-size:14px;"></i>
@@ -630,7 +637,7 @@
     /* ═══════════════════════════════════════════════
        MAIN SEARCH
     ═══════════════════════════════════════════════ */
-    const performSearch = async () => {
+    const performSearch = async (forceRefresh = false) => {
         // ── Throttle guard ────────────────────────────────────────────
         const now = Date.now();
         if (now - _lastSearchTs < THROTTLE_MS) return;
@@ -659,6 +666,7 @@
 
         // ── Cache check ───────────────────────────────────────────────
         const cacheKey = `${resolvedCodes.sort().join('|')}::${targetDate}`;
+        if (forceRefresh) cache.invalidate(cacheKey); // Bug-4 fix
         const cached   = cache.get(cacheKey);
         if (cached) {
             window._gsLastData = cached;
@@ -800,6 +808,11 @@
             attByGroup.forEach(d => classifyRecord(d.data()));
 
             /* ── STEP 3: Fallback by student IDs (for old records without `group` field) ── */
+            // Bug-1 fix: after getting docs by ID, we still call classifyRecord which checks
+            // masterIDs — so a student from another group with the same ID won't be in masterIDs
+            // and will go to manualAttMap rather than attendanceMap.
+            // Additional safety: after classifying, remove any manualAttMap entry whose ID
+            // belongs to masterIDs (should never happen, but guards against Firestore anomalies).
             if (Object.keys(subjectsMap).length === 0 && masterList.length > 0) {
                 const idChunks  = chunkArray(masterList.map(s => s.id), BATCH_SIZE);
                 const snapshots = await parallelBatch(
@@ -810,6 +823,17 @@
                     )))
                 );
                 snapshots.forEach(snap => snap.forEach(d => classifyRecord(d.data())));
+
+                // Bug-1 safety pass: any record that ended up in manualAttMap but IS in masterIDs
+                // must be moved to attendanceMap (edge case: doc has no `group` field but ID matches)
+                Object.values(subjectsMap).forEach(info => {
+                    info.manualAttMap.forEach((rec, sid) => {
+                        if (masterIDs.has(sid)) {
+                            if (!info.attendanceMap.has(sid)) info.attendanceMap.set(sid, rec);
+                            info.manualAttMap.delete(sid);
+                        }
+                    });
+                });
             }
 
             /* ── STEP 4: Fetch students from other groups (same subject+doctor+date) ─── */
@@ -836,13 +860,18 @@
                 const otherSnaps = await parallelBatch(otherQueries);
 
                 otherSnaps.forEach((snap, i) => {
-                    const subj = subjectNames[i];
-                    const info = subjectsMap[subj];
+                    const subj     = subjectNames[i];
+                    const info     = subjectsMap[subj];
+                    const expected = info.doctorName; // Bug-2 fix: remember which doctor we want
 
                     snap.forEach(d => {
                         const data = d.data();
                         const sid  = String(data.id || '').trim();
                         if (!sid) return;
+
+                        // Bug-2 fix: if query fell back (no doctorName filter), enforce it here
+                        if (expected && expected !== '—' &&
+                            data.doctorName && data.doctorName !== expected) return;
 
                         // Skip already-classified students
                         if (masterIDs.has(sid))               return;
@@ -869,7 +898,28 @@
                 });
             }
 
-            /* ── STEP 5: Cache & render ────────────────────────────── */
+            /* ── STEP 5: Cross-map deduplication (Bug-3 fix) ──────── */
+            // A student from a resolved group who appears in otherGroupAttMap or manualAttMap
+            // (due to a Firestore doc having a different group field or resolveGroups overlap)
+            // must be moved to attendanceMap and removed from the other maps.
+            Object.values(subjectsMap).forEach(info => {
+                info.otherGroupAttMap.forEach((rec, sid) => {
+                    if (masterIDs.has(sid)) {
+                        if (!info.attendanceMap.has(sid)) info.attendanceMap.set(sid, rec);
+                        info.otherGroupAttMap.delete(sid);
+                    }
+                });
+                info.manualAttMap.forEach((rec, sid) => {
+                    if (masterIDs.has(sid)) {
+                        if (!info.attendanceMap.has(sid)) info.attendanceMap.set(sid, rec);
+                        info.manualAttMap.delete(sid);
+                    }
+                    // Also: a student can't be in both manualAttMap and otherGroupAttMap
+                    if (info.otherGroupAttMap.has(sid)) info.manualAttMap.delete(sid);
+                });
+            });
+
+            /* ── STEP 6: Cache & render ────────────────────────────── */
             const resultData = { groupCode, targetDate, masterList, subjectsMap };
             cache.set(cacheKey, resultData);
             window._gsLastData = resultData;
@@ -1159,9 +1209,13 @@
         }
 
         const btn = document.getElementById('btnGroupSearch');
-        if (btn) btn.addEventListener('click', performSearch);
+        if (btn) btn.addEventListener('click', () => performSearch(false));
 
-        console.log('✅ [GroupSearchModule v2] mounted — sorted by ID · parallel queries · caching enabled');
+        // Bug-4 fix: refresh button bypasses cache
+        const refreshBtn = document.getElementById('btnGroupRefresh');
+        if (refreshBtn) refreshBtn.addEventListener('click', () => performSearch(true));
+
+        console.log('✅ [GroupSearchModule v2.1] mounted — Bug-1/2/3/4 fixed');
     };
 
     /* ── Hook into openReportModal ── */
