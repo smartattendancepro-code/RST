@@ -1400,11 +1400,7 @@
 
                     <div
                         style="height: 110px; background: linear-gradient(135deg, #0ea5e9, #3b82f6); position: relative;">
-                        <button
-                            onclick="document.getElementById('infoBtn').style.display='flex'; document.getElementById('studentProfileModal').classList.remove('active'); setTimeout(()=>document.getElementById('studentProfileModal').style.display='none', 300);"
-                            style="position: absolute; top: 15px; right: 15px; background: rgba(255,255,255,0.2); border: none; width: 32px; height: 32px; border-radius: 50%; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(5px);">
-                            <i class="fa-solid fa-xmark"></i>
-                        </button>
+
                     </div>
 
                     <div style="text-align: center; margin-top: -55px; padding-bottom: 10px;">
@@ -1540,6 +1536,13 @@
                                 <span id="profUID" class="en-font" style="opacity: 0.7;">--</span>
                             </div>
                         </div>
+
+                        <button
+                            onclick="document.getElementById('infoBtn').style.display='flex'; document.getElementById('studentProfileModal').classList.remove('active'); setTimeout(()=>document.getElementById('studentProfileModal').style.display='none', 300);"
+                            style="margin-top: 20px; width: 100%; padding: 12px; background: #f1f5f9; color: #64748b; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <i class="fa-solid fa-xmark"></i>
+                            <span>Close</span>
+                        </button>
 
                         <button onclick="performLogout()"
                             style="margin-top: 20px; width: 100%; padding: 12px; background: #fee2e2; color: #ef4444; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s;">
