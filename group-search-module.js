@@ -1,735 +1,403 @@
+/**
+ * ╔══════════════════════════════════════════════════════════════╗
+ * ║          GROUP SEARCH MODULE  ·  v2.0  ·  ENHANCED          ║
+ * ║  ✅ Sorted by ID (asc)  ✅ Parallel Firestore queries        ║
+ * ║  ✅ Smart caching       ✅ Robust error handling             ║
+ * ║  ✅ Accurate classification (manual / other-group)           ║
+ * ║  ✅ Input sanitisation  ✅ Rate-limiting guard               ║
+ * ╚══════════════════════════════════════════════════════════════╝
+ */
 (function () {
-    const MODULE_ID = 'groupSearchModule';
+    'use strict';
 
-    // ================================
-    // 1. حقن الأنماط (CSS)
-    // ================================
+    /* ═══════════════════════════════════════════════
+       CONSTANTS & UTILITIES
+    ═══════════════════════════════════════════════ */
+    const MODULE_ID     = 'groupSearchModule';
+    const CACHE_TTL_MS  = 60_000; // 1 minute cache per query
+    const MAX_REQUESTS  = 10;     // max parallel Firestore requests
+    const BATCH_SIZE    = 10;     // Firestore `in` operator limit
+
+    /** Simple in-memory query cache  { cacheKey → { ts, data } } */
+    const _queryCache = new Map();
+
+    const cache = {
+        get(key) {
+            const entry = _queryCache.get(key);
+            if (!entry) return null;
+            if (Date.now() - entry.ts > CACHE_TTL_MS) { _queryCache.delete(key); return null; }
+            return entry.data;
+        },
+        set(key, data) { _queryCache.set(key, { ts: Date.now(), data }); },
+        clear()        { _queryCache.clear(); }
+    };
+
+    /** Format ISO date → DD/MM/YYYY */
+    const fmtDate = (iso) => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; };
+
+    /** Today as DD/MM/YYYY */
+    const todayStr = () => {
+        const n = new Date();
+        return `${String(n.getDate()).padStart(2,'0')}/${String(n.getMonth()+1).padStart(2,'0')}/${n.getFullYear()}`;
+    };
+
+    /** Today as YYYY-MM-DD */
+    const todayISO = () => {
+        const n = new Date();
+        return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+    };
+
+    /** Sanitise & normalise Arabic text for comparison */
+    const norm = (s) =>
+        (s || '')
+            .replace(/[أإآ]/g, 'ا')
+            .replace(/ة/g, 'ه')
+            .replace(/ى/g, 'ي')
+            .trim()
+            .toLowerCase();
+
+    /** Split an array into chunks of `size` */
+    const chunkArray = (arr, size) => {
+        const out = [];
+        for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+        return out;
+    };
+
+    /** Validate group code format: 1G2, 2G15, 3G100 etc. */
+    const isValidGroupCode = (code) => /^\dG\d{1,3}$/.test(code);
+
+    /** Throttle / last-search guard */
+    let _lastSearchTs = 0;
+    const THROTTLE_MS = 800;
+
+    /* ═══════════════════════════════════════════════
+       CSS INJECTION
+    ═══════════════════════════════════════════════ */
     const injectCSS = () => {
         if (document.getElementById('groupSearchCSS')) return;
         const style = document.createElement('style');
         style.id = 'groupSearchCSS';
         style.textContent = `
-/* ── نفس الأنماط السابقة مع إضافة تحسينات بسيطة ── */
+/* ── Wrapper Bar ── */
 #groupSearchBar {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
-    border: 1.5px solid #bae6fd;
-    border-radius: 16px;
-    padding: 12px 16px;
-    margin: 0 0 14px 0;
-    box-shadow: 0 2px 10px rgba(14,165,233,0.08);
-    transition: box-shadow 0.2s;
+    display:flex; flex-direction:column; gap:8px;
+    background:linear-gradient(135deg,#f0f9ff,#e0f2fe);
+    border:1.5px solid #bae6fd; border-radius:16px;
+    padding:12px 16px; margin:0 0 14px;
+    box-shadow:0 2px 10px rgba(14,165,233,.08);
+    transition:box-shadow .2s;
 }
-#groupSearchBar:focus-within {
-    box-shadow: 0 0 0 3px rgba(14,165,233,0.18);
-    border-color: #0ea5e9;
-}
-#groupSearchBar .gsb-icon { color: #0ea5e9; font-size: 18px; flex-shrink: 0; }
-#groupCodeInput {
-    flex: 1;
-    border: none;
-    background: transparent;
-    font-size: 15px;
-    font-weight: 700;
-    color: #0f172a;
-    font-family: 'Outfit', 'Cairo', sans-serif;
-    outline: none;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    direction: ltr;
-}
-#groupCodeInput::placeholder {
-    color: #94a3b8;
-    font-weight: 500;
-    text-transform: none;
-    letter-spacing: 0;
-}
-#btnGroupSearch {
-    background: linear-gradient(135deg, #0ea5e9, #0284c7);
-    color: #fff;
-    border: none;
-    border-radius: 10px;
-    padding: 8px 16px;
-    font-size: 12px;
-    font-weight: 800;
-    cursor: pointer;
-    font-family: inherit;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    transition: transform 0.15s, box-shadow 0.15s;
-    box-shadow: 0 3px 10px rgba(14,165,233,0.3);
-    white-space: nowrap;
-}
-#btnGroupSearch:active { transform: scale(0.96); box-shadow: 0 1px 5px rgba(14,165,233,0.2); }
-#btnGroupSearch:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-#groupSearchDate {
-    border: none;
-    background: transparent;
-    font-size: 13px;
-    font-weight: 700;
-    color: #0f172a;
-    cursor: pointer;
-    font-family: 'Courier New', monospace;
-    outline: none;
-    flex: 1;
-}
-#groupSearchDate:focus { border-color: #0ea5e9; }
+#groupSearchBar:focus-within { box-shadow:0 0 0 3px rgba(14,165,233,.18); border-color:#0ea5e9; }
 
-/* نتائج البحث */
+.gsb-icon { color:#0ea5e9; font-size:18px; flex-shrink:0; }
+
+#groupCodeInput {
+    flex:1; border:none; background:transparent;
+    font-size:15px; font-weight:700; color:#0f172a;
+    font-family:'Outfit','Cairo',sans-serif; outline:none;
+    text-transform:uppercase; letter-spacing:1px; direction:ltr;
+}
+#groupCodeInput::placeholder { color:#94a3b8; font-weight:500; text-transform:none; letter-spacing:0; }
+
+#btnGroupSearch {
+    background:linear-gradient(135deg,#0ea5e9,#0284c7);
+    color:#fff; border:none; border-radius:10px;
+    padding:8px 16px; font-size:12px; font-weight:800; cursor:pointer;
+    font-family:inherit; display:flex; align-items:center; gap:6px;
+    transition:transform .15s,box-shadow .15s;
+    box-shadow:0 3px 10px rgba(14,165,233,.3); white-space:nowrap;
+}
+#btnGroupSearch:active { transform:scale(.96); box-shadow:0 1px 5px rgba(14,165,233,.2); }
+#btnGroupSearch:disabled { opacity:.6; cursor:not-allowed; transform:none; }
+
+#groupSearchDate {
+    border:none; background:transparent; font-size:13px; font-weight:700;
+    color:#0f172a; cursor:pointer; font-family:'Courier New',monospace;
+    outline:none; flex:1;
+}
+
+/* ── Results Container ── */
 #groupSearchResults {
-    display: none;
-    flex-direction: column;
-    gap: 0;
-    background: #fff;
-    border: 1.5px solid #e2e8f0;
-    border-radius: 16px;
-    overflow: hidden;
-    margin-bottom: 14px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
-    animation: gsFadeIn 0.25s ease;
+    display:none; flex-direction:column; gap:0;
+    background:#fff; border:1.5px solid #e2e8f0; border-radius:16px;
+    overflow:hidden; margin-bottom:14px;
+    box-shadow:0 4px 20px rgba(0,0,0,.06);
+    animation:gsFadeIn .25s ease;
 }
-@keyframes gsFadeIn {
-    from { opacity: 0; transform: translateY(8px); }
-    to   { opacity: 1; transform: translateY(0); }
-}
+@keyframes gsFadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+/* ── Header ── */
 .gs-results-header {
-    background: linear-gradient(135deg, #0f172a, #1e293b);
-    color: #fff;
-    padding: 14px 18px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
+    background:linear-gradient(135deg,#0f172a,#1e293b); color:#fff;
+    padding:14px 18px; display:flex; justify-content:space-between;
+    align-items:center; gap:10px; flex-wrap:wrap;
 }
 .gs-results-header .gs-group-name {
-    font-size: 18px;
-    font-weight: 900;
-    letter-spacing: 1px;
-    font-family: 'Outfit', sans-serif;
-    color: #38bdf8;
+    font-size:18px; font-weight:900; letter-spacing:1px;
+    font-family:'Outfit',sans-serif; color:#38bdf8;
 }
-.gs-results-header .gs-stats-row {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    flex-wrap: wrap;
-}
-.gs-stat-pill {
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 11px;
-    font-weight: 800;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
-.gs-stat-present { background: #dcfce7; color: #166534; }
-.gs-stat-absent  { background: #fee2e2; color: #991b1b; }
-.gs-stat-total   { background: #e0f2fe; color: #0369a1; }
+.gs-results-header .gs-stats-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
 
-/* قائمة المواد */
+/* ── Stat Pills ── */
+.gs-stat-pill {
+    padding:4px 12px; border-radius:20px; font-size:11px; font-weight:800;
+    display:flex; align-items:center; gap:5px;
+}
+.gs-stat-present { background:#dcfce7; color:#166534; }
+.gs-stat-absent  { background:#fee2e2; color:#991b1b; }
+.gs-stat-total   { background:#e0f2fe; color:#0369a1; }
+
+/* ── Subject Selector ── */
 .gs-subjects-list {
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    background: #f8fafc;
-    border-bottom: 1px solid #e2e8f0;
+    padding:12px; display:flex; flex-direction:column; gap:8px;
+    background:#f8fafc; border-bottom:1px solid #e2e8f0;
 }
 .gs-subjects-list-title {
-    font-size: 11px;
-    font-weight: 800;
-    color: #64748b;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 0 4px 4px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
+    font-size:11px; font-weight:800; color:#64748b;
+    text-transform:uppercase; letter-spacing:.5px;
+    padding:0 4px 4px; display:flex; align-items:center; gap:6px;
 }
 .gs-subject-tab {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    background: #fff;
-    border: 1.5px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 10px 14px;
-    cursor: pointer;
-    transition: all 0.15s;
-    gap: 10px;
+    display:flex; align-items:center; justify-content:space-between;
+    background:#fff; border:1.5px solid #e2e8f0; border-radius:12px;
+    padding:10px 14px; cursor:pointer; transition:all .15s; gap:10px;
 }
-.gs-subject-tab:hover {
-    border-color: #0ea5e9;
-    background: #f0f9ff;
-    transform: translateX(-2px);
-}
-.gs-subject-tab.active {
-    border-color: #0ea5e9;
-    background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
-    box-shadow: 0 2px 8px rgba(14,165,233,0.15);
-}
-.gs-subject-tab-name {
-    font-size: 13px;
-    font-weight: 800;
-    color: #0f172a;
-    flex: 1;
-}
-.gs-subject-tab-meta {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-.gs-subject-tab-count {
-    background: #dcfce7;
-    color: #166534;
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-size: 10px;
-    font-weight: 800;
-}
-.gs-subject-tab-doctor {
-    background: #f1f5f9;
-    color: #64748b;
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-size: 10px;
-    font-weight: 600;
-}
-.gs-subject-tab-arrow {
-    color: #94a3b8;
-    font-size: 11px;
-    transition: transform 0.2s;
-}
-.gs-subject-tab.active .gs-subject-tab-arrow {
-    transform: rotate(90deg);
-    color: #0ea5e9;
-}
+.gs-subject-tab:hover { border-color:#0ea5e9; background:#f0f9ff; transform:translateX(-2px); }
+.gs-subject-tab.active { border-color:#0ea5e9; background:linear-gradient(135deg,#f0f9ff,#e0f2fe); box-shadow:0 2px 8px rgba(14,165,233,.15); }
+.gs-subject-tab-name { font-size:13px; font-weight:800; color:#0f172a; flex:1; }
+.gs-subject-tab-meta { display:flex; align-items:center; gap:6px; }
+.gs-subject-tab-count { background:#dcfce7; color:#166534; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:800; }
+.gs-subject-tab-doctor { background:#f1f5f9; color:#64748b; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:600; }
+.gs-subject-tab-arrow { color:#94a3b8; font-size:11px; transition:transform .2s; }
+.gs-subject-tab.active .gs-subject-tab-arrow { transform:rotate(90deg); color:#0ea5e9; }
 
-/* رأس المادة */
+/* ── Subject Sub-Header ── */
 .gs-subject-header {
-    background: #f8fafc;
-    border-bottom: 1px solid #e2e8f0;
-    padding: 10px 18px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
+    background:#f8fafc; border-bottom:1px solid #e2e8f0;
+    padding:10px 18px; display:flex; justify-content:space-between; align-items:center; gap:8px;
 }
-.gs-subject-name {
-    font-size: 13px;
-    font-weight: 800;
-    color: #334155;
-    flex: 1;
-}
+.gs-subject-name { font-size:13px; font-weight:800; color:#334155; flex:1; }
 .gs-doctor-name {
-    font-size: 11px;
-    font-weight: 600;
-    color: #64748b;
-    background: #f1f5f9;
-    padding: 3px 8px;
-    border-radius: 8px;
+    font-size:11px; font-weight:600; color:#64748b;
+    background:#f1f5f9; padding:3px 8px; border-radius:8px;
 }
 
-/* زر العودة */
+/* ── Back Button ── */
 .gs-back-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: #f1f5f9;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 5px 10px;
-    font-size: 11px;
-    font-weight: 700;
-    color: #334155;
-    cursor: pointer;
-    transition: all 0.15s;
-    margin: 10px 18px 0;
-    width: fit-content;
+    display:flex; align-items:center; gap:6px;
+    background:#f1f5f9; border:1px solid #e2e8f0; border-radius:8px;
+    padding:5px 10px; font-size:11px; font-weight:700; color:#334155;
+    cursor:pointer; transition:all .15s; margin:10px 18px 0; width:fit-content;
 }
-.gs-back-btn:hover { background: #e2e8f0; }
+.gs-back-btn:hover { background:#e2e8f0; }
 
-/* مقسم الأقسام */
+/* ── Section Divider ── */
 .gs-section-divider {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 18px;
-    background: #f8fafc;
-    border-top: 1px solid #e2e8f0;
-    border-bottom: 1px solid #e2e8f0;
+    display:flex; align-items:center; gap:8px; padding:8px 18px;
+    background:#f8fafc; border-top:1px solid #e2e8f0; border-bottom:1px solid #e2e8f0;
 }
-.gs-section-divider-label {
-    font-size: 10px;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    white-space: nowrap;
-}
-.gs-section-divider-line {
-    flex: 1;
-    height: 1px;
-    background: #e2e8f0;
-}
+.gs-section-divider-label { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.5px; white-space:nowrap; }
+.gs-section-divider-line  { flex:1; height:1px; background:#e2e8f0; }
 
-/* صف الطالب */
+/* ── Student Row ── */
 .gs-student-row {
-    display: flex;
-    align-items: center;
-    padding: 11px 18px;
-    border-bottom: 1px solid #f1f5f9;
-    gap: 12px;
-    transition: background 0.1s;
+    display:flex; align-items:center; padding:11px 18px;
+    border-bottom:1px solid #f1f5f9; gap:12px; transition:background .1s;
 }
-.gs-student-row:last-child { border-bottom: none; }
-.gs-student-row:hover { background: #f8fafc; }
-.gs-student-row.absent { background: #fff8f8; }
-.gs-student-row.absent:hover { background: #fef2f2; }
+.gs-student-row:last-child { border-bottom:none; }
+.gs-student-row:hover { background:#f8fafc; }
+.gs-student-row.absent { background:#fff8f8; }
+.gs-student-row.absent:hover { background:#fef2f2; }
 
-/* شارة الحالة */
+/* ── Status Badge ── */
 .gs-status-badge {
-    flex-shrink: 0;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    font-weight: 900;
+    flex-shrink:0; width:28px; height:28px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:11px; font-weight:900;
 }
-.gs-status-badge.present { background: #dcfce7; color: #16a34a; }
-.gs-status-badge.absent { background: #fee2e2; color: #dc2626; }
+.gs-status-badge.present { background:#dcfce7; color:#16a34a; }
+.gs-status-badge.absent  { background:#fee2e2; color:#dc2626; }
 
-/* معلومات الطالب */
-.gs-student-info {
-    flex: 1;
-    min-width: 0;
-}
-.gs-student-name {
-    font-size: 13px;
-    font-weight: 800;
-    color: #0f172a;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.gs-student-id {
-    font-size: 11px;
-    color: #64748b;
-    font-family: 'Courier New', monospace;
-    margin-top: 1px;
+/* ── Student Info ── */
+.gs-student-info { flex:1; min-width:0; }
+.gs-student-name { font-size:13px; font-weight:800; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.gs-student-id   { font-size:11px; color:#64748b; font-family:'Courier New',monospace; margin-top:1px; }
+
+/* ── Attendance Details ── */
+.gs-att-details { text-align:right; flex-shrink:0; }
+.gs-att-time  { font-size:11px; font-weight:700; color:#0ea5e9; direction:ltr; }
+.gs-att-hall  { font-size:10px; color:#94a3b8; margin-top:1px; }
+.gs-absent-label { font-size:11px; font-weight:700; color:#ef4444; }
+
+/* ── Sort Badge ── */
+.gs-sort-badge {
+    font-size:10px; font-weight:700; color:#64748b;
+    background:#f1f5f9; padding:2px 8px; border-radius:8px;
+    display:inline-flex; align-items:center; gap:4px; margin:4px 18px 0; width:fit-content;
 }
 
-/* تفاصيل الحضور */
-.gs-att-details {
-    text-align: right;
-    flex-shrink: 0;
-}
-.gs-att-time {
-    font-size: 11px;
-    font-weight: 700;
-    color: #0ea5e9;
-    direction: ltr;
-}
-.gs-att-hall {
-    font-size: 10px;
-    color: #94a3b8;
-    margin-top: 1px;
-}
-.gs-absent-label {
-    font-size: 11px;
-    font-weight: 700;
-    color: #ef4444;
-}
-
-/* شريط التحميل */
+/* ── Download Bar ── */
 .gs-download-bar {
-    background: #f8fafc;
-    border-top: 1.5px solid #e2e8f0;
-    padding: 12px 18px;
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    justify-content: flex-end;
-    flex-wrap: wrap;
+    background:#f8fafc; border-top:1.5px solid #e2e8f0;
+    padding:12px 18px; display:flex; gap:10px;
+    align-items:center; justify-content:flex-end; flex-wrap:wrap;
 }
-.gs-download-bar .gs-dl-info {
-    flex: 1;
-    font-size: 11px;
-    color: #64748b;
-    font-weight: 600;
-}
+.gs-download-bar .gs-dl-info { flex:1; font-size:11px; color:#64748b; font-weight:600; }
 .gs-btn-download {
-    border: none;
-    border-radius: 10px;
-    padding: 9px 16px;
-    font-size: 12px;
-    font-weight: 800;
-    cursor: pointer;
-    font-family: inherit;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    transition: transform 0.15s;
+    border:none; border-radius:10px; padding:9px 16px;
+    font-size:12px; font-weight:800; cursor:pointer; font-family:inherit;
+    display:flex; align-items:center; gap:6px; transition:transform .15s;
 }
-.gs-btn-download:active { transform: scale(0.96); }
-.gs-btn-excel {
-    background: linear-gradient(135deg, #22c55e, #16a34a);
-    color: #fff;
-    box-shadow: 0 3px 10px rgba(34,197,94,0.3);
-}
-.gs-btn-csv {
-    background: #f1f5f9;
-    color: #334155;
-    border: 1px solid #e2e8f0;
-}
+.gs-btn-download:active { transform:scale(.96); }
+.gs-btn-excel { background:linear-gradient(135deg,#22c55e,#16a34a); color:#fff; box-shadow:0 3px 10px rgba(34,197,94,.3); }
+.gs-btn-csv   { background:#f1f5f9; color:#334155; border:1px solid #e2e8f0; }
 
-/* حالات الخطأ / الفارغة */
-.gs-state-box {
-    padding: 30px 20px;
-    text-align: center;
-    color: #94a3b8;
-    font-size: 13px;
-    font-weight: 600;
-}
-.gs-state-box i {
-    font-size: 30px;
-    margin-bottom: 10px;
-    display: block;
-}
-.gs-state-box.error { color: #ef4444; }
-.gs-state-box.error i { color: #ef4444; }
+/* ── Empty / Error States ── */
+.gs-state-box { padding:30px 20px; text-align:center; color:#94a3b8; font-size:13px; font-weight:600; }
+.gs-state-box i { font-size:30px; margin-bottom:10px; display:block; }
+.gs-state-box.error { color:#ef4444; }
+.gs-state-box.error i { color:#ef4444; }
 
-/* Skeleton loading */
+/* ── Progress Skeleton ── */
 .gs-skeleton-row {
-    height: 50px;
-    background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
-    background-size: 200% 100%;
-    animation: gsShimmer 1.2s infinite;
-    margin: 6px 18px;
-    border-radius: 8px;
+    height:50px; background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%);
+    background-size:200% 100%; animation:gsShimmer 1.2s infinite;
+    margin:6px 18px; border-radius:8px;
 }
-@keyframes gsShimmer {
-    0%   { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-}
+@keyframes gsShimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
 
-/* شريط النسبة المئوية */
-.gs-percent-bar-wrap {
-    height: 4px;
-    background: #e2e8f0;
-    border-radius: 2px;
-    overflow: hidden;
-    margin-top: 6px;
-    width: 120px;
-}
-.gs-percent-bar-fill {
-    height: 100%;
-    border-radius: 2px;
-    transition: width 0.6s ease;
-}
+/* ── Percentage Bar ── */
+.gs-percent-bar-wrap { height:4px; background:#e2e8f0; border-radius:2px; overflow:hidden; margin-top:6px; width:120px; }
+.gs-percent-bar-fill { height:100%; border-radius:2px; transition:width .6s ease; }
 
-/* عرض تفاصيل المادة */
-.gs-detail-view {
-    animation: gsSlideIn 0.2s ease;
-}
-@keyframes gsSlideIn {
-    from { opacity: 0; transform: translateX(20px); }
-    to   { opacity: 1; transform: translateX(0); }
+/* ── Subject Detail View ── */
+.gs-detail-view { animation:gsSlideIn .2s ease; }
+@keyframes gsSlideIn { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:translateX(0)} }
+
+/* ── Loading overlay (progress bar) ── */
+#gsLoadingBar {
+    position:fixed; top:0; left:0; height:3px; width:0;
+    background:linear-gradient(90deg,#0ea5e9,#38bdf8);
+    z-index:9999; transition:width .3s ease; border-radius:0 2px 2px 0;
+    box-shadow:0 0 8px rgba(14,165,233,.6);
 }
         `;
         document.head.appendChild(style);
     };
 
-    // ================================
-    // 2. دوال مساعدة عامة
-    // ================================
-    const fmtDate = (isoStr) => {
-        if (!isoStr) return '';
-        const [y, m, d] = isoStr.split('-');
-        return `${d}/${m}/${y}`;
-    };
-
-    const todayStr = () => {
-        const n = new Date();
-        return `${String(n.getDate()).padStart(2, '0')}/${String(n.getMonth() + 1).padStart(2, '0')}/${n.getFullYear()}`;
-    };
-
-    const todayISO = () => {
-        const n = new Date();
-        return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
-    };
-
-    // تطبيع أسماء للبحث (اختياري)
-    const norm = (s) => (s || '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').trim();
-
-    // دالة آمنة لتقسيم مصفوفة إلى أجزاء (chunks) بحجم أقصى 10 للاستعلامات IN
-    const chunkArray = (arr, size = 10) => {
-        const chunks = [];
-        for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
-        return chunks;
-    };
-
-    // دالة لتنفيذ استعلام IN بشكل آمن (تقسيم القيم)
-    const queryInChunks = async (collectionRef, field, values, ...otherConditions) => {
-        if (!values.length) return [];
-        const chunks = chunkArray(values, 10);
-        const results = [];
-        for (const chunk of chunks) {
-            let q = collectionRef;
-            if (otherConditions.length) {
-                // otherConditions عبارة عن مصفوفة من الشروط [field, operator, value]
-                for (let i = 0; i < otherConditions.length; i += 3) {
-                    q = q.where(otherConditions[i], otherConditions[i+1], otherConditions[i+2]);
-                }
+    /* ═══════════════════════════════════════════════
+       LOADING BAR (top progress indicator)
+    ═══════════════════════════════════════════════ */
+    const loadingBar = {
+        el: null,
+        _timer: null,
+        init() {
+            if (!document.getElementById('gsLoadingBar')) {
+                const bar = document.createElement('div');
+                bar.id = 'gsLoadingBar';
+                document.body.appendChild(bar);
             }
-            const snap = await q.where(field, 'in', chunk).get();
-            snap.forEach(d => results.push(d));
+            this.el = document.getElementById('gsLoadingBar');
+        },
+        start() {
+            this.init();
+            this.el.style.width = '0%';
+            clearInterval(this._timer);
+            let w = 0;
+            this._timer = setInterval(() => {
+                w = Math.min(w + Math.random() * 12, 85);
+                this.el.style.width = w + '%';
+            }, 200);
+        },
+        finish() {
+            clearInterval(this._timer);
+            if (this.el) {
+                this.el.style.width = '100%';
+                setTimeout(() => { if (this.el) this.el.style.width = '0%'; }, 400);
+            }
         }
-        return results;
     };
 
-    // ================================
-    // 3. بناء HTML للواجهة
-    // ================================
+    /* ═══════════════════════════════════════════════
+       HTML TEMPLATE
+    ═══════════════════════════════════════════════ */
     const buildHTML = () => `
-        <div id="${MODULE_ID}" style="padding: 0 4px;">
-            <div id="groupSearchBar" style="display:flex; flex-direction:column; gap:8px;">
-                <div style="display:flex; align-items:center; gap:8px;">
+        <div id="${MODULE_ID}" style="padding:0 4px;">
+            <div id="groupSearchBar">
+                <div style="display:flex;align-items:center;gap:8px;">
                     <i class="fa-solid fa-users-rectangle gsb-icon"></i>
-                    <input
-                        id="groupCodeInput"
-                        type="text"
-                        placeholder="أدخل كود الجروب (مثال: 1G2)"
-                        maxlength="6"
-                        autocomplete="off"
-                        spellcheck="false"
-                    />
+                    <input id="groupCodeInput" type="text"
+                        placeholder="ابحث عن جروب — مثال: 1G2"
+                        maxlength="6" autocomplete="off" spellcheck="false" inputmode="text"/>
                     <button id="btnGroupSearch">
-                        <i class="fa-solid fa-magnifying-glass"></i>
-                        بحث
+                        <i class="fa-solid fa-magnifying-glass"></i> بحث
                     </button>
                 </div>
-                <div style="display:flex; align-items:center; gap:8px; background:#fff; border:1.5px solid #e2e8f0; border-radius:10px; padding:8px 12px;">
-                    <i class="fa-regular fa-calendar-days" style="color:#64748b; font-size:14px;"></i>
-                    <span style="font-size:12px; font-weight:700; color:#64748b;">تاريخ الحضور:</span>
-                    <input id="groupSearchDate" type="date" />
+                <div style="display:flex;align-items:center;gap:8px;background:#fff;border:1.5px solid #e2e8f0;border-radius:10px;padding:8px 12px;">
+                    <i class="fa-regular fa-calendar-days" style="color:#64748b;font-size:14px;"></i>
+                    <span style="font-size:12px;font-weight:700;color:#64748b;">تاريخ الحضور:</span>
+                    <input id="groupSearchDate" type="date"/>
                 </div>
             </div>
             <div id="groupSearchResults"></div>
-        </div>
-    `;
+        </div>`;
 
+    /* ═══════════════════════════════════════════════
+       SKELETON LOADER
+    ═══════════════════════════════════════════════ */
     const showSkeleton = (container) => {
         container.style.display = 'flex';
-        container.innerHTML = `
-            <div style="padding: 16px 0 8px;">
-                ${Array(5).fill('<div class="gs-skeleton-row"></div>').join('')}
-            </div>`;
+        container.innerHTML = `<div style="padding:16px 0 8px;">${Array(6).fill('<div class="gs-skeleton-row"></div>').join('')}</div>`;
     };
 
-    // ================================
-    // 4. وظائف جلب البيانات (محسنة)
-    // ================================
-    /**
-     * تجلب قائمة الطلاب المسجلين في مجموعة (أو مجموعات)
-     * @param {string[]} groupCodes - مصفوفة أكواد المجموعات
-     * @returns {Promise<Array<{id:string, name:string, uid:string}>>} مرتبة حسب id تصاعدياً
-     */
-    const fetchMasterStudents = async (groupCodes) => {
-        if (!groupCodes.length) return [];
-        const db = window.db;
-        if (!db) throw new Error('قاعدة البيانات غير متاحة');
-
-        const { collection, getDocs } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
-
-        // محاولة جلب من user_registrations أولاً
-        let students = [];
-        try {
-            const snaps = await queryInChunks(
-                collection(db, 'user_registrations'),
-                'registrationInfo.group',
-                groupCodes
-            );
-            snaps.forEach(doc => {
-                const data = doc.data();
-                const info = data.registrationInfo || data;
-                if (info.studentID) {
-                    students.push({
-                        id: String(info.studentID).trim(),
-                        name: info.fullName || 'غير معروف',
-                        uid: doc.id
-                    });
-                }
-            });
-        } catch (e) {
-            console.warn('فشل جلب من user_registrations، نحاول من students', e);
-        }
-
-        // إذا لم نجد في user_registrations، نحاول من students
-        if (!students.length) {
-            try {
-                const snaps = await queryInChunks(
-                    collection(db, 'students'),
-                    'group_code',
-                    groupCodes
-                );
-                snaps.forEach(doc => {
-                    const data = doc.data();
-                    students.push({
-                        id: String(data.id || doc.id).trim(),
-                        name: data.name || 'غير معروف',
-                        uid: doc.id
-                    });
-                });
-            } catch (e) {
-                console.warn('فشل جلب من students', e);
-            }
-        }
-
-        // ترتيب تصاعدي حسب id (مع مراعاة الأرقام)
-        students.sort((a, b) => {
-            const idA = a.id.padStart(10, '0');
-            const idB = b.id.padStart(10, '0');
-            return idA.localeCompare(idB);
+    /* ═══════════════════════════════════════════════
+       SORT HELPERS
+    ═══════════════════════════════════════════════ */
+    /** Sort students ascending by numeric student ID; fall back to lexicographic */
+    const sortByID = (students) =>
+        [...students].sort((a, b) => {
+            const na = Number(a.id), nb = Number(b.id);
+            if (!isNaN(na) && !isNaN(nb)) return na - nb;
+            return String(a.id).localeCompare(String(b.id));
         });
 
-        return students;
-    };
-
-    /**
-     * تجلب سجلات الحضور لمادة معينة في تاريخ محدد.
-     * @param {string} subject - اسم المادة
-     * @param {string} doctor - اسم الدكتور (اختياري)
-     * @param {string} date - التاريخ بالتنسيق DD/MM/YYYY
-     * @returns {Promise<Array>} مصفوفة من وثائق الحضور
-     */
-    const fetchAttendanceBySubjectAndDate = async (subject, doctor, date) => {
-        const db = window.db;
-        if (!db) return [];
-        const { collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
-        const attRef = collection(db, 'attendance');
-        let q = query(attRef, where('date', '==', date), where('subject', '==', subject));
-        // إذا كان doctor موجوداً، نضيفه (لكن قد لا يكون فهرساً مركباً)
-        if (doctor && doctor !== '—') {
-            try {
-                q = query(attRef, where('date', '==', date), where('subject', '==', subject), where('doctorName', '==', doctor));
-            } catch (e) {
-                // إذا لم يكن الفهرس موجوداً، نستخدم الاستعلام بدون doctor ثم نفلتر يدوياً
-                console.warn('استعلام بدون doctorName بسبب نقص الفهرس', e);
-            }
-        }
-        const snap = await getDocs(q);
-        const results = [];
-        snap.forEach(doc => results.push({ id: doc.id, ...doc.data() }));
-        return results;
-    };
-
-    /**
-     * تجلب سجلات الحضور لمجموعة من الطلاب (معرفات) في تاريخ محدد.
-     * @param {string[]} studentIds - مصفوفة معرفات الطلاب
-     * @param {string} date - التاريخ بالتنسيق DD/MM/YYYY
-     * @returns {Promise<Array>} مصفوفة من وثائق الحضور
-     */
-    const fetchAttendanceByStudentIds = async (studentIds, date) => {
-        if (!studentIds.length) return [];
-        const db = window.db;
-        if (!db) return [];
-        const { collection } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
-        const snaps = await queryInChunks(
-            collection(db, 'attendance'),
-            'id',
-            studentIds,
-            'date', '==', date
-        );
-        return snaps.map(doc => ({ id: doc.id, ...doc.data() }));
-    };
-
-    // ================================
-    // 5. دوال التصنيف والعرض (محسنة)
-    // ================================
-    /**
-     * تصنيف الحضور حسب المادة، مع فصل حضور الجروب الأصلي، اليدوي، والجروبات الأخرى.
-     * @param {Array} masterList - قائمة طلاب الجروب الأصلي (كل عنصر {id, name})
-     * @param {Array} attendanceRecords - جميع سجلات الحضور للمواد (يمكن أن تكون من مصادر متعددة)
-     * @param {string[]} resolvedGroupCodes - أكواد الجروبات الأصلية (لتمييز الجروبات الأخرى)
-     * @returns {Object} subjectsMap - يحوي لكل مادة attendanceMap, manualAttMap, otherGroupAttMap, doctorName
-     */
-    const classifyAttendance = (masterList, attendanceRecords, resolvedGroupCodes) => {
-        const masterIds = new Set(masterList.map(s => s.id));
-        const subjectsMap = {};
-
-        attendanceRecords.forEach(rec => {
-            const sid = String(rec.id || '').trim();
-            if (!sid) return;
-            const subj = (rec.subject || '—').trim();
-            const doctor = rec.doctorName || '—';
-
-            if (!subjectsMap[subj]) {
-                subjectsMap[subj] = {
-                    attendanceMap: new Map(),   // حضور من الجروب الأصلي
-                    manualAttMap: new Map(),     // حضور يدوي (لا ينتمي لجروب محدد)
-                    otherGroupAttMap: new Map(), // حضور من جروبات أخرى
-                    doctorName: doctor
-                };
-            }
-            const info = subjectsMap[subj];
-            // إذا كان الطالب من الجروب الأصلي
-            if (masterIds.has(sid)) {
-                info.attendanceMap.set(sid, rec);
-            } else {
-                // طالب من خارج الجروب الأصلي: نصنف حسب حقل group
-                const group = rec.group || '';
-                if (group && !resolvedGroupCodes.includes(group)) {
-                    // جروب آخر
-                    info.otherGroupAttMap.set(sid, rec);
-                } else {
-                    // يدوي (لا يوجد group أو group يتبع الجروب الأصلي ولكن الطالب ليس في masterIds؟ نادر)
-                    info.manualAttMap.set(sid, rec);
-                }
-            }
+    /** Sort a Map's entries by numeric/lex key (ID) */
+    const sortedMapEntries = (map) =>
+        [...map.entries()].sort(([a], [b]) => {
+            const na = Number(a), nb = Number(b);
+            if (!isNaN(na) && !isNaN(nb)) return na - nb;
+            return String(a).localeCompare(String(b));
         });
 
-        return subjectsMap;
-    };
-
-    // عرض قائمة المواد (حالة تعدد المواد)
+    /* ═══════════════════════════════════════════════
+       RENDER — SUBJECT SELECTOR (multi-subject)
+    ═══════════════════════════════════════════════ */
     const renderSubjectSelector = (groupCode, targetDate, masterList, subjectsMap) => {
         const container = document.getElementById('groupSearchResults');
         if (!container) return;
 
         const subjects = Object.keys(subjectsMap);
-        const totalPresent = subjects.reduce((sum, subj) => sum + subjectsMap[subj].attendanceMap.size, 0);
+        const totalPresent = subjects.reduce((s, k) => s + subjectsMap[k].attendanceMap.size, 0);
 
-        let subjectTabsHTML = '';
-        subjects.forEach(subj => {
+        const subjectTabsHTML = subjects.map(subj => {
             const info = subjectsMap[subj];
-            const presentCount = info.attendanceMap.size;
-            const doctorLabel = info.doctorName || '—';
-
-            subjectTabsHTML += `
-                <div class="gs-subject-tab" onclick="window._gsOpenSubject('${subj.replace(/'/g, "\\'")}')">
+            return `
+                <div class="gs-subject-tab" onclick="window._gsOpenSubject('${subj.replace(/'/g,"\\'")}')">
                     <div class="gs-subject-tab-name">${subj}</div>
                     <div class="gs-subject-tab-meta">
-                        <div class="gs-subject-tab-count"><i class="fa-solid fa-circle-check"></i> ${presentCount}</div>
-                        <div class="gs-subject-tab-doctor"><i class="fa-solid fa-chalkboard-user"></i> ${doctorLabel}</div>
+                        <div class="gs-subject-tab-count"><i class="fa-solid fa-circle-check" style="font-size:8px;"></i> ${info.attendanceMap.size} حاضر</div>
+                        <div class="gs-subject-tab-doctor"><i class="fa-solid fa-chalkboard-user" style="font-size:8px;"></i> ${info.doctorName || '—'}</div>
                     </div>
                     <i class="fa-solid fa-chevron-left gs-subject-tab-arrow"></i>
                 </div>`;
-        });
+        }).join('');
 
         container.style.display = 'flex';
         container.innerHTML = `
             <div class="gs-results-header">
                 <div>
-                    <div class="gs-group-name"><i class="fa-solid fa-users"></i> ${groupCode.toUpperCase()}</div>
-                    <div style="font-size:11px; color:#94a3b8; margin-top:3px;">${targetDate}</div>
+                    <div class="gs-group-name"><i class="fa-solid fa-users" style="font-size:14px;margin-left:6px;"></i>${groupCode.toUpperCase()}</div>
+                    <div style="font-size:11px;color:#94a3b8;margin-top:3px;direction:ltr;">${targetDate}</div>
                 </div>
                 <div class="gs-stats-row">
                     <div class="gs-stat-pill gs-stat-present"><i class="fa-solid fa-circle-check"></i> ${totalPresent} حضور</div>
@@ -739,131 +407,121 @@
             <div class="gs-subjects-list">
                 <div class="gs-subjects-list-title">
                     <i class="fa-solid fa-layer-group" style="color:#0ea5e9;"></i>
-                    اختر المادة لعرض التفاصيل
+                    اختر المادة لعرض تفاصيل الحضور
                 </div>
                 ${subjectTabsHTML}
-            </div>
-        `;
+            </div>`;
     };
 
-    // عرض تفاصيل مادة واحدة (مع ترتيب حسب id)
-    const renderSingleSubject = (groupCode, targetDate, masterList, attendanceMap, subjectName, doctorName,
-                                 multiSubject = false, manualAttMap = new Map(), otherGroupAttMap = new Map()) => {
+    /* ═══════════════════════════════════════════════
+       RENDER — SINGLE SUBJECT DETAIL VIEW
+       masterList    : all students in original group (sorted by ID)
+       attendanceMap : present students from original group
+       manualAttMap  : manually-added students (not in any group list)
+       otherGroupAttMap : students who belong to a different group
+    ═══════════════════════════════════════════════ */
+    const renderSingleSubject = (
+        groupCode, targetDate, masterList,
+        attendanceMap, subjectName, doctorName,
+        multiSubject = false,
+        manualAttMap  = new Map(),
+        otherGroupAttMap = new Map()
+    ) => {
         const container = document.getElementById('groupSearchResults');
         if (!container) return;
 
-        // ترتيب masterList حسب id (تأكيد)
-        const sortedMaster = [...masterList].sort((a,b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
+        // ── Sorted lists ──────────────────────────────────────────────
+        const sortedMaster   = sortByID(masterList);
+        const sortedManual   = sortedMapEntries(manualAttMap);
+        const sortedOther    = sortedMapEntries(otherGroupAttMap);
 
         const presentCount = sortedMaster.filter(s => attendanceMap.has(s.id)).length;
-        const absentCount = sortedMaster.length - presentCount;
-        const totalAll = sortedMaster.length + manualAttMap.size + otherGroupAttMap.size;
-        const pct = sortedMaster.length ? Math.round((presentCount / sortedMaster.length) * 100) : 0;
-        const barColor = pct >= 75 ? '#22c55e' : pct >= 50 ? '#f59e0b' : '#ef4444';
+        const absentCount  = sortedMaster.length - presentCount;
+        const pct       = sortedMaster.length ? Math.round(presentCount / sortedMaster.length * 100) : 0;
+        const barColor  = pct >= 75 ? '#22c55e' : pct >= 50 ? '#f59e0b' : '#ef4444';
+        const barId     = `gsBarFill_${Date.now()}`;
 
-        // بناء صفوف الطلاب (مرتبة حسب id)
-        const buildStudentRows = (students, isAbsentSection = false) => {
-            return students.map(student => {
-                const rec = attendanceMap.get(student.id);
-                const isPresent = !!rec;
-                if (isAbsentSection && isPresent) return ''; // عند بناء قسم الغائبين فقط
-                if (!isAbsentSection && !isPresent) return ''; // عند بناء قسم الحاضرين فقط
-
-                return `
-                    <div class="gs-student-row ${isPresent ? '' : 'absent'}">
-                        <div class="gs-status-badge ${isPresent ? 'present' : 'absent'}">
-                            <i class="fa-solid fa-${isPresent ? 'check' : 'xmark'}"></i>
-                        </div>
-                        <div class="gs-student-info">
-                            <div class="gs-student-name">${student.name}</div>
-                            <div class="gs-student-id">${student.id}</div>
-                        </div>
-                        <div class="gs-att-details">
-                            ${isPresent
-                                ? `<div class="gs-att-time"><i class="fa-regular fa-clock"></i> ${rec.time_str || '--:--'}</div>
-                                   <div class="gs-att-hall"><i class="fa-solid fa-building-columns"></i> ${rec.hall || '--'}</div>`
-                                : `<div class="gs-absent-label">غائب</div>`
-                            }
-                        </div>
+        // ── Section 1: original group students (sorted by ID asc) ─────
+        const rowsOriginal = sortedMaster.map((student, idx) => {
+            const rec = attendanceMap.get(student.id);
+            return `
+                <div class="gs-student-row ${rec ? '' : 'absent'}">
+                    <div style="font-size:10px;color:#94a3b8;font-weight:700;min-width:22px;text-align:center;">${String(idx+1).padStart(2,'0')}</div>
+                    <div class="gs-status-badge ${rec ? 'present' : 'absent'}">
+                        <i class="fa-solid fa-${rec ? 'check' : 'xmark'}"></i>
                     </div>
-                `;
-            }).join('');
-        };
+                    <div class="gs-student-info">
+                        <div class="gs-student-name">${student.name}</div>
+                        <div class="gs-student-id">${student.id}</div>
+                    </div>
+                    <div class="gs-att-details">
+                        ${rec
+                            ? `<div class="gs-att-time"><i class="fa-regular fa-clock" style="font-size:9px;"></i> ${rec.time_str||'--:--'}</div>
+                               <div class="gs-att-hall"><i class="fa-solid fa-building-columns" style="font-size:9px;"></i> ${rec.hall||'—'}</div>`
+                            : `<div class="gs-absent-label">غائب</div>`
+                        }
+                    </div>
+                </div>`;
+        }).join('');
 
-        // صفوف الحضور والغياب (من الجروب الأصلي)
-        let rowsHTML = '';
-        // الحضور أولاً (مرتب حسب id)
-        rowsHTML += buildStudentRows(sortedMaster, false);
-        // ثم الغياب (مرتب حسب id)
-        rowsHTML += buildStudentRows(sortedMaster, true);
-
-        // قسم الطلاب المضافين يدوياً (مرتبين حسب id)
-        if (manualAttMap.size > 0) {
-            const manualStudents = Array.from(manualAttMap.entries())
-                .map(([id, rec]) => ({ id, ...rec }))
-                .sort((a,b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
-
-            rowsHTML += `
+        // ── Section 2: manually-added students (sorted by ID asc) ─────
+        let rowsManual = '';
+        if (sortedManual.length > 0) {
+            rowsManual = `
                 <div class="gs-section-divider">
                     <div class="gs-section-divider-line"></div>
                     <div class="gs-section-divider-label" style="color:#8b5cf6;">
-                        <i class="fa-solid fa-user-plus"></i> طلاب أضيفوا يدوياً (${manualAttMap.size})
+                        <i class="fa-solid fa-user-plus" style="margin-left:4px;"></i>
+                        طلاب أضيفوا يدوياً (${sortedManual.length})
                     </div>
                     <div class="gs-section-divider-line"></div>
-                </div>`;
-
-            manualStudents.forEach(s => {
-                rowsHTML += `
-                    <div class="gs-student-row" style="background:#faf5ff; border-left: 3px solid #8b5cf6;">
-                        <div class="gs-status-badge present" style="background:#ede9fe; color:#7c3aed;">
+                </div>` +
+                sortedManual.map(([id, rec], idx) => `
+                    <div class="gs-student-row" style="background:#faf5ff;border-left:3px solid #8b5cf6;">
+                        <div style="font-size:10px;color:#8b5cf6;font-weight:700;min-width:22px;text-align:center;">${String(idx+1).padStart(2,'0')}</div>
+                        <div class="gs-status-badge present" style="background:#ede9fe;color:#7c3aed;">
                             <i class="fa-solid fa-user-plus" style="font-size:9px;"></i>
                         </div>
                         <div class="gs-student-info">
-                            <div class="gs-student-name">${s.name || s.id}</div>
-                            <div class="gs-student-id">${s.id} <span style="color:#8b5cf6;">(يدوي)</span></div>
+                            <div class="gs-student-name">${rec.name||id}</div>
+                            <div class="gs-student-id">${id} <span style="color:#8b5cf6;font-size:9px;font-weight:700;">(يدوي)</span></div>
                         </div>
                         <div class="gs-att-details">
-                            <div class="gs-att-time"><i class="fa-regular fa-clock"></i> ${s.time_str || '--:--'}</div>
-                            <div class="gs-att-hall"><i class="fa-solid fa-building-columns"></i> ${s.hall || '--'}</div>
+                            <div class="gs-att-time"><i class="fa-regular fa-clock" style="font-size:9px;"></i> ${rec.time_str||'--:--'}</div>
+                            <div class="gs-att-hall"><i class="fa-solid fa-building-columns" style="font-size:9px;"></i> ${rec.hall||'—'}</div>
                         </div>
-                    </div>`;
-            });
+                    </div>`).join('');
         }
 
-        // قسم الطلاب من جروبات أخرى (مرتبين حسب id)
-        if (otherGroupAttMap.size > 0) {
-            const otherStudents = Array.from(otherGroupAttMap.entries())
-                .map(([id, rec]) => ({ id, ...rec }))
-                .sort((a,b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
-
-            rowsHTML += `
+        // ── Section 3: students from other groups (sorted by ID asc) ──
+        let rowsOther = '';
+        if (sortedOther.length > 0) {
+            rowsOther = `
                 <div class="gs-section-divider">
                     <div class="gs-section-divider-line"></div>
                     <div class="gs-section-divider-label" style="color:#f59e0b;">
-                        <i class="fa-solid fa-users-between-lines"></i> طلاب من جروبات أخرى (${otherGroupAttMap.size})
+                        <i class="fa-solid fa-users-between-lines" style="margin-left:4px;"></i>
+                        طلاب من جروبات أخرى (${sortedOther.length})
                     </div>
                     <div class="gs-section-divider-line"></div>
-                </div>`;
-
-            otherStudents.forEach(s => {
-                rowsHTML += `
-                    <div class="gs-student-row" style="background:#fffbeb; border-left: 3px solid #f59e0b;">
-                        <div class="gs-status-badge present" style="background:#fef9c3; color:#ca8a04;">
+                </div>` +
+                sortedOther.map(([id, rec], idx) => `
+                    <div class="gs-student-row" style="background:#fffbeb;border-left:3px solid #f59e0b;">
+                        <div style="font-size:10px;color:#f59e0b;font-weight:700;min-width:22px;text-align:center;">${String(idx+1).padStart(2,'0')}</div>
+                        <div class="gs-status-badge present" style="background:#fef9c3;color:#ca8a04;">
                             <i class="fa-solid fa-star" style="font-size:9px;"></i>
                         </div>
                         <div class="gs-student-info">
-                            <div class="gs-student-name">${s.name || s.id}</div>
-                            <div class="gs-student-id">${s.id} <span style="color:#f59e0b;">(${s.group || 'جروب آخر'})</span></div>
+                            <div class="gs-student-name">${rec.name||id}</div>
+                            <div class="gs-student-id">${id} <span style="color:#f59e0b;font-size:9px;font-weight:700;">(${rec.group||'جروب آخر'})</span></div>
                         </div>
                         <div class="gs-att-details">
-                            <div class="gs-att-time"><i class="fa-regular fa-clock"></i> ${s.time_str || '--:--'}</div>
-                            <div class="gs-att-hall"><i class="fa-solid fa-building-columns"></i> ${s.hall || '--'}</div>
+                            <div class="gs-att-time"><i class="fa-regular fa-clock" style="font-size:9px;"></i> ${rec.time_str||'--:--'}</div>
+                            <div class="gs-att-hall"><i class="fa-solid fa-building-columns" style="font-size:9px;"></i> ${rec.hall||'—'}</div>
                         </div>
-                    </div>`;
-            });
+                    </div>`).join('');
         }
 
-        // زر العودة إذا كان هناك عدة مواد
         const backBtnHTML = multiSubject ? `
             <button class="gs-back-btn" onclick="window._gsBackToSubjects()">
                 <i class="fa-solid fa-chevron-right"></i> العودة للمواد
@@ -872,34 +530,52 @@
         const detailViewHTML = `
             <div class="gs-detail-view">
                 ${backBtnHTML}
-                <div class="gs-subject-header" style="margin-top: ${multiSubject ? '8px' : '0'};">
-                    <div class="gs-subject-name"><i class="fa-solid fa-book-open" style="color:#0ea5e9;"></i> ${subjectName}</div>
-                    <div class="gs-doctor-name"><i class="fa-solid fa-chalkboard-user"></i> ${doctorName || '—'}</div>
+                <div class="gs-subject-header" style="margin-top:${multiSubject ? '8px' : '0'};">
+                    <div class="gs-subject-name"><i class="fa-solid fa-book-open" style="color:#0ea5e9;margin-left:6px;"></i>${subjectName}</div>
+                    <div class="gs-doctor-name"><i class="fa-solid fa-chalkboard-user" style="margin-left:4px;"></i>${doctorName||'—'}</div>
                 </div>
-                <div style="padding: 10px 18px 4px; display:flex; align-items:center; gap:12px;">
-                    <div style="font-size:11px; font-weight:700; color:#64748b;">نسبة حضور الجروب</div>
-                    <div class="gs-percent-bar-wrap" style="flex:1;">
-                        <div class="gs-percent-bar-fill" id="gsBarFill" style="width:0%; background:${barColor};"></div>
+
+                <!-- نسبة الحضور -->
+                <div style="padding:10px 18px 4px;display:flex;align-items:center;gap:12px;">
+                    <div style="font-size:11px;font-weight:700;color:#64748b;">نسبة حضور الجروب</div>
+                    <div class="gs-percent-bar-wrap" style="flex:1;width:auto;">
+                        <div class="gs-percent-bar-fill" id="${barId}" style="width:0%;background:${barColor};"></div>
                     </div>
-                    <div style="font-size:13px; font-weight:900; color:${barColor};">${pct}%</div>
+                    <div style="font-size:13px;font-weight:900;color:${barColor};">${pct}%</div>
                 </div>
-                <div style="padding: 4px 18px 8px; display:flex; gap:8px; flex-wrap:wrap;">
+
+                <!-- إحصائيات مصغرة -->
+                <div style="padding:4px 18px 4px;display:flex;gap:8px;flex-wrap:wrap;">
                     <div class="gs-stat-pill gs-stat-present"><i class="fa-solid fa-circle-check"></i> ${presentCount} حاضر</div>
                     <div class="gs-stat-pill gs-stat-absent"><i class="fa-solid fa-circle-xmark"></i> ${absentCount} غائب</div>
                     <div class="gs-stat-pill gs-stat-total"><i class="fa-solid fa-users"></i> ${sortedMaster.length} أصلي</div>
-                    ${manualAttMap.size > 0 ? `<div class="gs-stat-pill" style="background:#ede9fe; color:#7c3aed;"><i class="fa-solid fa-user-plus"></i> ${manualAttMap.size} يدوي</div>` : ''}
-                    ${otherGroupAttMap.size > 0 ? `<div class="gs-stat-pill" style="background:#fef9c3; color:#ca8a04;"><i class="fa-solid fa-star"></i> ${otherGroupAttMap.size} جروبات أخرى</div>` : ''}
+                    ${sortedManual.length ? `<div class="gs-stat-pill" style="background:#ede9fe;color:#7c3aed;"><i class="fa-solid fa-user-plus"></i> ${sortedManual.length} يدوي</div>` : ''}
+                    ${sortedOther.length  ? `<div class="gs-stat-pill" style="background:#fef9c3;color:#ca8a04;"><i class="fa-solid fa-star"></i> ${sortedOther.length} جروب آخر</div>` : ''}
                 </div>
-                ${rowsHTML || '<div class="gs-state-box"><i class="fa-solid fa-folder-open"></i>لا توجد بيانات طلاب</div>'}
+
+                <!-- شارة الترتيب -->
+                <div class="gs-sort-badge">
+                    <i class="fa-solid fa-arrow-up-1-9" style="color:#0ea5e9;font-size:9px;"></i>
+                    مرتب تصاعدياً حسب الرقم الجامعي
+                </div>
+
+                <!-- صفوف الطلاب -->
+                ${rowsOriginal || '<div class="gs-state-box"><i class="fa-solid fa-folder-open"></i>لا توجد بيانات طلاب</div>'}
+                ${rowsManual}
+                ${rowsOther}
+
+                <!-- شريط التحميل -->
                 <div class="gs-download-bar">
                     <div class="gs-dl-info">
-                        <i class="fa-solid fa-circle-info" style="color:#0ea5e9;"></i>
-                        ${sortedMaster.length} أصلي · ${presentCount} حاضر · ${absentCount} غائب · ${manualAttMap.size} يدوي · ${otherGroupAttMap.size} جروب آخر
+                        <i class="fa-solid fa-circle-info" style="color:#0ea5e9;margin-left:4px;"></i>
+                        ${sortedMaster.length} أصلي · ${presentCount} حاضر · ${absentCount} غائب · ${sortedManual.length} يدوي · ${sortedOther.length} جروب آخر
                     </div>
-                    <button class="gs-btn-download gs-btn-csv" onclick="window.gsExportCSV('${groupCode}','${targetDate}','${subjectName.replace(/'/g, "\\'")}')">
+                    <button class="gs-btn-download gs-btn-csv"
+                        onclick="window.gsExportCSV('${groupCode}','${targetDate}','${subjectName.replace(/'/g,"\\'")}')">
                         <i class="fa-solid fa-file-csv"></i> CSV
                     </button>
-                    <button class="gs-btn-download gs-btn-excel" onclick="window.gsExportExcel('${groupCode}','${targetDate}','${subjectName.replace(/'/g, "\\'")}')">
+                    <button class="gs-btn-download gs-btn-excel"
+                        onclick="window.gsExportExcel('${groupCode}','${targetDate}','${subjectName.replace(/'/g,"\\'")}')">
                         <i class="fa-solid fa-file-excel"></i> تحميل Excel
                     </button>
                 </div>
@@ -907,182 +583,372 @@
 
         if (multiSubject) {
             const existingHeader = container.querySelector('.gs-results-header');
-            if (existingHeader) {
-                container.innerHTML = existingHeader.outerHTML + detailViewHTML;
-            } else {
-                container.innerHTML = detailViewHTML;
-            }
+            container.innerHTML = (existingHeader ? existingHeader.outerHTML : '') + detailViewHTML;
         } else {
             container.style.display = 'flex';
             container.innerHTML = `
                 <div class="gs-results-header">
                     <div>
-                        <div class="gs-group-name"><i class="fa-solid fa-users"></i> ${groupCode.toUpperCase()}</div>
-                        <div style="font-size:11px; color:#94a3b8; margin-top:3px;">${targetDate}</div>
+                        <div class="gs-group-name"><i class="fa-solid fa-users" style="font-size:14px;margin-left:6px;"></i>${groupCode.toUpperCase()}</div>
+                        <div style="font-size:11px;color:#94a3b8;margin-top:3px;direction:ltr;">${targetDate}</div>
                     </div>
                     <div class="gs-stats-row">
                         <div class="gs-stat-pill gs-stat-present"><i class="fa-solid fa-circle-check"></i> ${presentCount} حاضر</div>
                         <div class="gs-stat-pill gs-stat-absent"><i class="fa-solid fa-circle-xmark"></i> ${absentCount} غائب</div>
-                        <div class="gs-stat-pill gs-stat-total"><i class="fa-solid fa-users"></i> ${totalAll} إجمالي</div>
+                        <div class="gs-stat-pill gs-stat-total"><i class="fa-solid fa-users"></i> ${sortedMaster.length + sortedManual.length + sortedOther.length} إجمالي</div>
                     </div>
                 </div>
                 ${detailViewHTML}`;
         }
 
-        // تحريك شريط النسبة بعد الرسم
-        setTimeout(() => {
-            const bar = container.querySelector('.gs-percent-bar-fill');
-            if (bar) bar.style.width = pct + '%';
-        }, 50);
+        // تحريك bar بعد رسم الـ DOM
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                const bar = document.getElementById(barId);
+                if (bar) bar.style.width = pct + '%';
+            });
+        });
     };
 
-    // ================================
-    // 6. دالة البحث الرئيسية (محسنة)
-    // ================================
+    /* ═══════════════════════════════════════════════
+       FIRESTORE HELPERS
+    ═══════════════════════════════════════════════ */
+    /**
+     * Run multiple Firestore query promises in controlled parallel batches.
+     * @param {Function[]} fns  - array of () => Promise<QuerySnapshot>
+     * @param {number}     limit
+     */
+    const parallelBatch = async (fns, limit = MAX_REQUESTS) => {
+        const results = [];
+        for (let i = 0; i < fns.length; i += limit) {
+            const batch = fns.slice(i, i + limit).map(fn => fn());
+            results.push(...await Promise.all(batch));
+        }
+        return results;
+    };
+
+    /* ═══════════════════════════════════════════════
+       MAIN SEARCH
+    ═══════════════════════════════════════════════ */
     const performSearch = async () => {
-        const input = document.getElementById('groupCodeInput');
+        // ── Throttle guard ────────────────────────────────────────────
+        const now = Date.now();
+        if (now - _lastSearchTs < THROTTLE_MS) return;
+        _lastSearchTs = now;
+
+        const input     = document.getElementById('groupCodeInput');
         const dateInput = document.getElementById('groupSearchDate');
-        const btn = document.getElementById('btnGroupSearch');
+        const btn       = document.getElementById('btnGroupSearch');
         const container = document.getElementById('groupSearchResults');
 
-        const groupCode = (input?.value || '').trim().toUpperCase();
-        const resolvedGroupCodes = window.resolveGroups ? window.resolveGroups(groupCode) : [groupCode];
+        const rawCode   = (input?.value || '').trim().toUpperCase();
         const targetDate = dateInput?.value ? fmtDate(dateInput.value) : todayStr();
 
-        // التحقق من صيغة الكود (مثال 1G2)
-        const groupPattern = /^\dG\d{1,2}$/i;
-        if (!groupCode) {
+        // ── Input validation ──────────────────────────────────────────
+        if (!rawCode) {
             if (typeof showToast === 'function') showToast('⚠️ أدخل كود الجروب أولاً', 2500, '#f59e0b');
-            input?.focus();
-            return;
+            input?.focus(); return;
         }
-        if (!groupPattern.test(groupCode)) {
-            if (typeof showToast === 'function') showToast('⚠️ صيغة غير صحيحة. مثال صحيح: 1G2', 3000, '#ef4444');
-            input?.focus();
+        if (!isValidGroupCode(rawCode)) {
+            if (typeof showToast === 'function') showToast('⚠️ صيغة غير صحيحة — مثال: 1G2 أو 2G15', 3000, '#ef4444');
+            input?.focus(); return;
+        }
+
+        const groupCode       = rawCode;
+        const resolvedCodes   = window.resolveGroups ? window.resolveGroups(groupCode) : [groupCode];
+
+        // ── Cache check ───────────────────────────────────────────────
+        const cacheKey = `${resolvedCodes.sort().join('|')}::${targetDate}`;
+        const cached   = cache.get(cacheKey);
+        if (cached) {
+            window._gsLastData = cached;
+            _renderFromData(cached);
             return;
         }
 
-        const origText = btn.innerHTML;
-        btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
-        btn.disabled = true;
+        // ── UI: loading state ─────────────────────────────────────────
+        const origText  = btn.innerHTML;
+        btn.innerHTML   = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+        btn.disabled    = true;
         showSkeleton(container);
+        loadingBar.start();
+
+        window._gsLastData = { groupCode, targetDate, masterList: [], subjectsMap: {} };
 
         try {
             const db = window.db;
             if (!db) throw new Error('قاعدة البيانات غير متاحة');
 
-            // 1. جلب قائمة الطلاب في الجروب (مرتبة حسب id)
-            const masterList = await fetchMasterStudents(resolvedGroupCodes);
-            const masterIds = masterList.map(s => s.id);
+            const { collection, query, where, getDocs } =
+                await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
-            // 2. جلب حضور الطلاب (حسب معرفاتهم)
-            let attendanceFromIds = [];
-            if (masterIds.length) {
-                attendanceFromIds = await fetchAttendanceByStudentIds(masterIds, targetDate);
-            }
+            /* ── STEP 1: Fetch master student list ─────────────────── */
+            let masterList = [];
 
-            // 3. تجميع المواد الموجودة في attendanceFromIds
-            const subjectsPresent = new Set(attendanceFromIds.map(a => a.subject).filter(Boolean));
-            const subjectsMap = {};
+            // Primary: user_registrations
+            const [regSnap] = await parallelBatch([
+                () => getDocs(query(
+                    collection(db, 'user_registrations'),
+                    where('registrationInfo.group', 'in', resolvedCodes)
+                ))
+            ]);
 
-            // 4. تصنيف attendanceFromIds أولاً
-            attendanceFromIds.forEach(rec => {
-                const sid = String(rec.id || '').trim();
-                const subj = (rec.subject || '—').trim();
-                const doctor = rec.doctorName || '—';
-                if (!subjectsMap[subj]) {
-                    subjectsMap[subj] = {
-                        attendanceMap: new Map(),
-                        manualAttMap: new Map(),
-                        otherGroupAttMap: new Map(),
-                        doctorName: doctor
-                    };
+            regSnap.forEach(d => {
+                const info = d.data().registrationInfo || d.data();
+                if (info?.studentID) {
+                    masterList.push({
+                        id:   String(info.studentID).trim(),
+                        name: (info.fullName || 'غير معروف').trim(),
+                        uid:  d.id
+                    });
                 }
-                subjectsMap[subj].attendanceMap.set(sid, rec);
             });
 
-            // 5. لكل مادة من المواد الموجودة، نجلب حضوراً إضافياً (من نفس المادة) ليشمل الطلاب من خارج الجروب
-            for (const subj of subjectsPresent) {
-                const doctor = subjectsMap[subj].doctorName;
-                const extraAttendance = await fetchAttendanceBySubjectAndDate(subj, doctor, targetDate);
-                extraAttendance.forEach(rec => {
-                    const sid = String(rec.id || '').trim();
-                    if (!sid) return;
-                    // إذا كان الطالب موجوداً بالفعل في attendanceMap (من الجروب) نتخطى
-                    if (subjectsMap[subj].attendanceMap.has(sid)) return;
-
-                    const group = rec.group || '';
-                    if (group && !resolvedGroupCodes.includes(group)) {
-                        subjectsMap[subj].otherGroupAttMap.set(sid, rec);
-                    } else {
-                        subjectsMap[subj].manualAttMap.set(sid, rec);
-                    }
+            // Fallback: students collection
+            if (masterList.length === 0) {
+                const [studSnap] = await parallelBatch([
+                    () => getDocs(query(
+                        collection(db, 'students'),
+                        where('group_code', 'in', resolvedCodes)
+                    ))
+                ]);
+                studSnap.forEach(d => {
+                    const data = d.data();
+                    masterList.push({
+                        id:   String(data.id || d.id).trim(),
+                        name: (data.name || 'غير معروف').trim(),
+                        uid:  d.id
+                    });
                 });
             }
 
-            // حفظ البيانات للاستخدام لاحقاً (للوظائف الأخرى)
-            window._gsLastData = { groupCode, targetDate, masterList, subjectsMap };
+            // Sort master list by ID ascending
+            masterList = sortByID(masterList);
 
-            // 6. عرض النتائج حسب عدد المواد
-            const subjectNames = Object.keys(subjectsMap);
-            if (masterList.length === 0 && subjectNames.length === 0) {
-                container.style.display = 'flex';
-                container.innerHTML = `
-                    <div class="gs-state-box">
-                        <i class="fa-solid fa-folder-open"></i>
-                        لم يُعثر على بيانات للجروب <strong>${groupCode}</strong>
-                        <br><small>تأكد من كود الجروب أو وجود طلاب مسجلين</small>
-                    </div>`;
-            } else if (subjectNames.length === 1) {
-                const subj = subjectNames[0];
-                renderSingleSubject(
-                    groupCode, targetDate, masterList,
-                    subjectsMap[subj].attendanceMap,
-                    subj, subjectsMap[subj].doctorName,
-                    false,
-                    subjectsMap[subj].manualAttMap,
-                    subjectsMap[subj].otherGroupAttMap
+            // Remove duplicates (same id may appear in multiple docs)
+            const seenIDs = new Set();
+            masterList = masterList.filter(s => {
+                if (seenIDs.has(s.id)) return false;
+                seenIDs.add(s.id); return true;
+            });
+
+            const masterIDs = new Set(masterList.map(s => s.id));
+
+            /* ── STEP 2: Fetch attendance for these groups ─────────── */
+            // Fire both queries in parallel
+            const [attByGroup] = await parallelBatch([
+                () => getDocs(query(
+                    collection(db, 'attendance'),
+                    where('date', '==', targetDate),
+                    where('group', 'in', resolvedCodes)
+                ))
+            ]);
+
+            /** subjectsMap structure:
+             *  {
+             *    subjectName: {
+             *      attendanceMap:   Map<id, rec>   — original group present students
+             *      manualAttMap:    Map<id, rec>   — truly manual (no group field)
+             *      otherGroupAttMap:Map<id, rec>   — students from known other groups
+             *      doctorName: string
+             *    }
+             *  }
+             */
+            const subjectsMap = {};
+
+            const ensureSubject = (subj, doctor) => {
+                if (!subjectsMap[subj]) {
+                    subjectsMap[subj] = {
+                        attendanceMap:    new Map(),
+                        manualAttMap:     new Map(),
+                        otherGroupAttMap: new Map(),
+                        doctorName:       doctor || '—'
+                    };
+                }
+            };
+
+            const classifyRecord = (data) => {
+                const sid   = String(data.id || '').trim();
+                const subj  = (data.subject || '—').trim();
+                const doc   = data.doctorName || '—';
+                if (!sid) return;
+
+                ensureSubject(subj, doc);
+                const info = subjectsMap[subj];
+
+                const rec = {
+                    name:       (data.name || '').trim(),
+                    subject:    subj,
+                    doctorName: doc,
+                    time_str:   data.time_str || '--:--',
+                    hall:       data.hall || '—',
+                    group:      data.group || null
+                };
+
+                if (masterIDs.has(sid)) {
+                    // From original group
+                    if (!info.attendanceMap.has(sid)) info.attendanceMap.set(sid, rec);
+                } else if (data.group && !resolvedCodes.includes(data.group)) {
+                    // Known different group
+                    if (!info.otherGroupAttMap.has(sid)) info.otherGroupAttMap.set(sid, rec);
+                } else {
+                    // No group field or same code but not in masterList → manual
+                    if (!info.manualAttMap.has(sid)) info.manualAttMap.set(sid, rec);
+                }
+            };
+
+            attByGroup.forEach(d => classifyRecord(d.data()));
+
+            /* ── STEP 3: Fallback by student IDs (for old records without `group` field) ── */
+            if (Object.keys(subjectsMap).length === 0 && masterList.length > 0) {
+                const idChunks  = chunkArray(masterList.map(s => s.id), BATCH_SIZE);
+                const snapshots = await parallelBatch(
+                    idChunks.map(chunk => () => getDocs(query(
+                        collection(db, 'attendance'),
+                        where('date', '==', targetDate),
+                        where('id', 'in', chunk)
+                    )))
                 );
-            } else if (subjectNames.length === 0 && masterList.length > 0) {
-                container.style.display = 'flex';
-                container.innerHTML = `
-                    <div class="gs-results-header">
-                        <div>
-                            <div class="gs-group-name"><i class="fa-solid fa-users"></i> ${groupCode.toUpperCase()}</div>
-                            <div style="font-size:11px; color:#94a3b8; margin-top:3px;">${targetDate}</div>
-                        </div>
-                        <div class="gs-stats-row">
-                            <div class="gs-stat-pill gs-stat-total"><i class="fa-solid fa-users"></i> ${masterList.length} طالب</div>
-                        </div>
-                    </div>
-                    <div class="gs-state-box">
-                        <i class="fa-solid fa-calendar-xmark"></i>
-                        لا يوجد حضور مسجل لهذا اليوم
-                        <br><small>الجروب مسجل بـ ${masterList.length} طالب</small>
-                    </div>`;
-            } else {
-                renderSubjectSelector(groupCode, targetDate, masterList, subjectsMap);
+                snapshots.forEach(snap => snap.forEach(d => classifyRecord(d.data())));
             }
 
+            /* ── STEP 4: Fetch students from other groups (same subject+doctor+date) ─── */
+            const subjectNames = Object.keys(subjectsMap);
+
+            if (subjectNames.length > 0) {
+                const otherQueries = subjectNames.map(subj => {
+                    const info = subjectsMap[subj];
+                    return () => getDocs(query(
+                        collection(db, 'attendance'),
+                        where('date', '==', targetDate),
+                        where('subject', '==', subj),
+                        where('doctorName', '==', info.doctorName)
+                    )).catch(() =>
+                        // Fallback without doctorName filter if composite index missing
+                        getDocs(query(
+                            collection(db, 'attendance'),
+                            where('date', '==', targetDate),
+                            where('subject', '==', subj)
+                        ))
+                    );
+                });
+
+                const otherSnaps = await parallelBatch(otherQueries);
+
+                otherSnaps.forEach((snap, i) => {
+                    const subj = subjectNames[i];
+                    const info = subjectsMap[subj];
+
+                    snap.forEach(d => {
+                        const data = d.data();
+                        const sid  = String(data.id || '').trim();
+                        if (!sid) return;
+
+                        // Skip already-classified students
+                        if (masterIDs.has(sid))               return;
+                        if (info.attendanceMap.has(sid))      return;
+                        if (info.manualAttMap.has(sid))       return;
+                        if (info.otherGroupAttMap.has(sid))   return;
+
+                        const rec = {
+                            name:       (data.name || '').trim(),
+                            subject:    subj,
+                            doctorName: data.doctorName || info.doctorName,
+                            time_str:   data.time_str || '--:--',
+                            hall:       data.hall || '—',
+                            group:      data.group || null
+                        };
+
+                        if (data.group && !resolvedCodes.includes(data.group)) {
+                            info.otherGroupAttMap.set(sid, rec);
+                        } else if (!data.group) {
+                            info.manualAttMap.set(sid, rec);
+                        }
+                        // Else: same group but not in masterList → skip (already handled above)
+                    });
+                });
+            }
+
+            /* ── STEP 5: Cache & render ────────────────────────────── */
+            const resultData = { groupCode, targetDate, masterList, subjectsMap };
+            cache.set(cacheKey, resultData);
+            window._gsLastData = resultData;
+
+            _renderFromData(resultData);
+
         } catch (err) {
-            console.error('Group Search Error:', err);
+            console.error('[GroupSearchModule] Error:', err);
             container.style.display = 'flex';
             container.innerHTML = `
                 <div class="gs-state-box error">
                     <i class="fa-solid fa-triangle-exclamation"></i>
                     حدث خطأ أثناء البحث
-                    <br><small>${err.message}</small>
+                    <br><small style="font-size:10px; opacity:.7;">${err.message}</small>
                 </div>`;
         } finally {
             btn.innerHTML = origText;
-            btn.disabled = false;
+            btn.disabled  = false;
+            loadingBar.finish();
         }
     };
 
-    // ================================
-    // 7. دوال التنقل بين المواد
-    // ================================
-    window._gsOpenSubject = function (subjectName) {
+    /* ═══════════════════════════════════════════════
+       RENDER DISPATCHER (uses cached/stored data)
+    ═══════════════════════════════════════════════ */
+    const _renderFromData = ({ groupCode, targetDate, masterList, subjectsMap }) => {
+        const container    = document.getElementById('groupSearchResults');
+        if (!container) return;
+
+        const subjectNames = Object.keys(subjectsMap);
+
+        if (masterList.length === 0 && subjectNames.length === 0) {
+            container.style.display = 'flex';
+            container.innerHTML = `
+                <div class="gs-state-box">
+                    <i class="fa-solid fa-folder-open"></i>
+                    لم يُعثر على بيانات للجروب <strong>${groupCode}</strong>
+                    <br><small style="color:#cbd5e1;font-size:11px;">تأكد من كود الجروب أو وجود طلاب مسجلين</small>
+                </div>`;
+            return;
+        }
+
+        if (subjectNames.length === 0 && masterList.length > 0) {
+            container.style.display = 'flex';
+            container.innerHTML = `
+                <div class="gs-results-header">
+                    <div>
+                        <div class="gs-group-name"><i class="fa-solid fa-users" style="font-size:14px;margin-left:6px;"></i>${groupCode.toUpperCase()}</div>
+                        <div style="font-size:11px;color:#94a3b8;margin-top:3px;direction:ltr;">${targetDate}</div>
+                    </div>
+                    <div class="gs-stats-row">
+                        <div class="gs-stat-pill gs-stat-total"><i class="fa-solid fa-users"></i> ${masterList.length} طالب</div>
+                    </div>
+                </div>
+                <div class="gs-state-box">
+                    <i class="fa-solid fa-calendar-xmark"></i>
+                    لا يوجد حضور مسجل لهذا اليوم
+                    <br><small style="color:#cbd5e1;font-size:11px;">الجروب مسجل بـ ${masterList.length} طالب</small>
+                </div>`;
+            return;
+        }
+
+        if (subjectNames.length === 1) {
+            const subj = subjectNames[0];
+            const info = subjectsMap[subj];
+            renderSingleSubject(
+                groupCode, targetDate, masterList,
+                info.attendanceMap, subj, info.doctorName,
+                false, info.manualAttMap, info.otherGroupAttMap
+            );
+        } else {
+            renderSubjectSelector(groupCode, targetDate, masterList, subjectsMap);
+        }
+    };
+
+    /* ═══════════════════════════════════════════════
+       GLOBAL CALLBACKS (open subject / back)
+    ═══════════════════════════════════════════════ */
+    window._gsOpenSubject = (subjectName) => {
         const data = window._gsLastData;
         if (!data) return;
         const { groupCode, targetDate, masterList, subjectsMap } = data;
@@ -1090,16 +956,13 @@
         if (!info) return;
         renderSingleSubject(
             groupCode, targetDate, masterList,
-            info.attendanceMap,
-            subjectName, info.doctorName,
-            true,
-            info.manualAttMap,
-            info.otherGroupAttMap
+            info.attendanceMap, subjectName, info.doctorName,
+            true, info.manualAttMap, info.otherGroupAttMap
         );
         window._gsLastData._activeSubject = subjectName;
     };
 
-    window._gsBackToSubjects = function () {
+    window._gsBackToSubjects = () => {
         const data = window._gsLastData;
         if (!data) return;
         const { groupCode, targetDate, masterList, subjectsMap } = data;
@@ -1107,89 +970,83 @@
         window._gsLastData._activeSubject = null;
     };
 
-    // ================================
-    // 8. دوال التصدير (Excel/CSV)
-    // ================================
+    /* ═══════════════════════════════════════════════
+       EXPORT HELPERS
+    ═══════════════════════════════════════════════ */
     const buildExportRows = (groupCode, targetDate, subjectFilter) => {
         const data = window._gsLastData;
         if (!data) return [];
+
         const { masterList, subjectsMap } = data;
-        const subj = subjectFilter || (Object.keys(subjectsMap)[0]);
-        const info = subjectsMap[subj];
+        const subj = subjectFilter || Object.keys(subjectsMap)[0];
+        const info = subjectsMap?.[subj];
         if (!info) return [];
 
         const { attendanceMap, manualAttMap, otherGroupAttMap } = info;
-
-        // دالة مساعدة لترتيب حسب id
-        const sortById = (arr) => [...arr].sort((a,b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
-
         const rows = [];
 
-        // طلاب الجروب الأصلي (حاضر + غائب)
-        const sortedMaster = sortById(masterList);
-        sortedMaster.forEach((student, idx) => {
+        // Section 1 — original group (sorted by ID)
+        sortByID(masterList).forEach((student, idx) => {
             const rec = attendanceMap.get(student.id);
             rows.push({
-                'م': idx + 1,
-                'اسم الطالب': student.name,
+                'م':             idx + 1,
+                'اسم الطالب':    student.name,
                 'الرقم الجامعي': student.id,
-                'المجموعة': groupCode,
-                'التاريخ': targetDate,
-                'المادة': subj,
-                'الحالة': rec ? '✅ حاضر' : '❌ غائب',
-                'وقت الحضور': rec ? (rec.time_str || '--') : '--',
-                'القاعة': rec ? (rec.hall || '--') : '--',
-                'المحاضر': rec ? (rec.doctorName || '--') : '--',
-                'ملاحظات': rec ? 'منضبط' : 'لم يحضر'
+                'المجموعة':      groupCode,
+                'التاريخ':       targetDate,
+                'المادة':        subj,
+                'الحالة':        rec ? '✅ حاضر' : '❌ غائب',
+                'وقت الحضور':    rec ? (rec.time_str || '--') : '--',
+                'القاعة':        rec ? (rec.hall || '--') : '--',
+                'المحاضر':       rec ? (rec.doctorName || '--') : '--',
+                'ملاحظات':       rec ? 'منضبط' : 'لم يحضر'
             });
         });
 
-        // طلاب يدوي
-        const manualArray = Array.from(manualAttMap.entries()).map(([id, rec]) => ({ id, ...rec }));
-        sortById(manualArray).forEach((s) => {
+        // Section 2 — manual (sorted by ID)
+        sortedMapEntries(manualAttMap).forEach(([id, rec], idx) => {
             rows.push({
-                'م': rows.length + 1,
-                'اسم الطالب': s.name || s.id,
-                'الرقم الجامعي': s.id,
-                'المجموعة': groupCode + ' (يدوي)',
-                'التاريخ': targetDate,
-                'المادة': subj,
-                'الحالة': '✅ حاضر يدوي',
-                'وقت الحضور': s.time_str || '--',
-                'القاعة': s.hall || '--',
-                'المحاضر': s.doctorName || '--',
-                'ملاحظات': 'أضيف يدوياً'
+                'م':             rows.length + 1,
+                'اسم الطالب':    rec.name || id,
+                'الرقم الجامعي': id,
+                'المجموعة':      groupCode + ' (يدوي)',
+                'التاريخ':       targetDate,
+                'المادة':        subj,
+                'الحالة':        '✅ حاضر يدوي',
+                'وقت الحضور':    rec.time_str || '--',
+                'القاعة':        rec.hall || '--',
+                'المحاضر':       rec.doctorName || '--',
+                'ملاحظات':       'أضيف يدوياً'
             });
         });
 
-        // طلاب جروبات أخرى
-        const otherArray = Array.from(otherGroupAttMap.entries()).map(([id, rec]) => ({ id, ...rec }));
-        sortById(otherArray).forEach((s) => {
+        // Section 3 — other groups (sorted by ID)
+        sortedMapEntries(otherGroupAttMap).forEach(([id, rec], idx) => {
             rows.push({
-                'م': rows.length + 1,
-                'اسم الطالب': s.name || s.id,
-                'الرقم الجامعي': s.id,
-                'المجموعة': s.group || 'جروب آخر',
-                'التاريخ': targetDate,
-                'المادة': subj,
-                'الحالة': '✅ حاضر من جروب آخر',
-                'وقت الحضور': s.time_str || '--',
-                'القاعة': s.hall || '--',
-                'المحاضر': s.doctorName || '--',
-                'ملاحظات': `حضر من ${s.group || 'جروب آخر'}`
+                'م':             rows.length + 1,
+                'اسم الطالب':    rec.name || id,
+                'الرقم الجامعي': id,
+                'المجموعة':      rec.group || 'جروب آخر',
+                'التاريخ':       targetDate,
+                'المادة':        subj,
+                'الحالة':        '✅ حاضر من جروب آخر',
+                'وقت الحضور':    rec.time_str || '--',
+                'القاعة':        rec.hall || '--',
+                'المحاضر':       rec.doctorName || '--',
+                'ملاحظات':       `حضر من ${rec.group || 'جروب آخر'}`
             });
         });
 
         return rows;
     };
 
+    /* ── Excel Export ── */
     window.gsExportExcel = (groupCode, targetDate, subjectName) => {
         if (!window._gsLastData) return;
         if (typeof XLSX === 'undefined') {
             if (typeof showToast === 'function') showToast('⚠️ مكتبة Excel غير محملة', 3000, '#ef4444');
             return;
         }
-
         const subj = subjectName || window._gsLastData._activeSubject;
         const rows = buildExportRows(groupCode, targetDate, subj);
         if (!rows.length) {
@@ -1199,49 +1056,51 @@
 
         const ws = XLSX.utils.json_to_sheet(rows);
         ws['!cols'] = [
-            { wch: 5 }, { wch: 32 }, { wch: 15 }, { wch: 10 }, { wch: 12 },
-            { wch: 30 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 25 }, { wch: 15 }
+            {wch:5},{wch:32},{wch:15},{wch:12},{wch:12},
+            {wch:30},{wch:16},{wch:12},{wch:10},{wch:25},{wch:15}
         ];
 
-        const range = XLSX.utils.decode_range(ws['!ref']);
+        // Style header
+        const range  = XLSX.utils.decode_range(ws['!ref']);
         const hStyle = {
-            font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11 },
-            fill: { fgColor: { rgb: '0F172A' }, patternType: 'solid' },
-            alignment: { horizontal: 'center', vertical: 'center', wrapText: true }
+            font:      { bold:true, color:{ rgb:'FFFFFF' }, sz:11 },
+            fill:      { fgColor:{ rgb:'0F172A' }, patternType:'solid' },
+            alignment: { horizontal:'center', vertical:'center', wrapText:true }
         };
         for (let C = range.s.c; C <= range.e.c; C++) {
-            const hCell = XLSX.utils.encode_cell({ r: 0, c: C });
-            if (ws[hCell]) ws[hCell].s = hStyle;
+            const ref = XLSX.utils.encode_cell({ r:0, c:C });
+            if (ws[ref]) ws[ref].s = hStyle;
         }
+
+        // Style data rows
         for (let R = 1; R <= range.e.r; R++) {
-            const statusCell = XLSX.utils.encode_cell({ r: R, c: 6 });
-            const statusVal = ws[statusCell] ? ws[statusCell].v : '';
-            const isAbsent = statusVal.includes('غائب');
-            const isManual = statusVal.includes('يدوي');
-            const isOther  = statusVal.includes('جروب آخر');
-            const bgColor  = isAbsent ? 'FEE2E2' : isManual ? 'EDE9FE' : isOther ? 'FEFCE8' : 'F0FDF4';
-            const rowStyle = {
-                fill: { patternType: 'solid', fgColor: { rgb: bgColor } },
-                alignment: { horizontal: 'center' }
-            };
+            const statusCell = XLSX.utils.encode_cell({ r:R, c:6 });
+            const val        = ws[statusCell]?.v || '';
+            const bg = val.includes('غائب') ? 'FEE2E2'
+                     : val.includes('يدوي')  ? 'EDE9FE'
+                     : val.includes('آخر')   ? 'FEFCE8'
+                     : 'F0FDF4';
             for (let C = range.s.c; C <= range.e.c; C++) {
-                const ref = XLSX.utils.encode_cell({ r: R, c: C });
-                if (ws[ref]) ws[ref].s = { ...rowStyle };
+                const ref = XLSX.utils.encode_cell({ r:R, c:C });
+                if (ws[ref]) ws[ref].s = { fill:{ patternType:'solid', fgColor:{ rgb:bg } }, alignment:{ horizontal:'center' } };
             }
         }
-        ws['!views'] = [{ RTL: true }];
+
+        ws['!views'] = [{ RTL:true }];
 
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'كشف الحضور');
+
         const safeName = groupCode.replace(/[^a-zA-Z0-9]/g, '_');
         const safeDate = (targetDate || '').replace(/\//g, '-');
-        const safeSubj = (subj || '').replace(/\s/g, '_').substring(0, 20);
+        const safeSubj = (subj || '').replace(/\s+/g, '_').substring(0, 20);
         XLSX.writeFile(wb, `حضور_${safeName}_${safeSubj}_${safeDate}.xlsx`);
 
         if (typeof showToast === 'function') showToast('✅ تم تحميل ملف Excel بنجاح', 3000, '#10b981');
         if (navigator.vibrate) navigator.vibrate(50);
     };
 
+    /* ── CSV Export ── */
     window.gsExportCSV = (groupCode, targetDate, subjectName) => {
         if (!window._gsLastData) return;
         const subj = subjectName || window._gsLastData._activeSubject;
@@ -1254,38 +1113,34 @@
         const headers = Object.keys(rows[0]);
         let csv = '\uFEFF' + headers.join(',') + '\n';
         rows.forEach(row => {
-            csv += headers.map(h => `"${(row[h] || '').toString().replace(/"/g, '""')}"`).join(',') + '\n';
+            csv += headers.map(h => `"${(row[h] ?? '').toString().replace(/"/g,'""')}"`).join(',') + '\n';
         });
 
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const safeSubj = (subj || '').replace(/\s/g, '_').substring(0, 20);
-        a.download = `حضور_${groupCode}_${safeSubj}_${(targetDate || '').replace(/\//g, '-')}.csv`;
+        const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        const safeSubj = (subj || '').replace(/\s+/g,'_').substring(0,20);
+        a.download = `حضور_${groupCode}_${safeSubj}_${(targetDate||'').replace(/\//g,'-')}.csv`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
 
         if (typeof showToast === 'function') showToast('✅ تم تحميل CSV', 2500, '#10b981');
     };
 
-    // ================================
-    // 9. تهيئة الوحدة
-    // ================================
+    /* ═══════════════════════════════════════════════
+       INIT
+    ═══════════════════════════════════════════════ */
     window.initGroupSearchModule = () => {
         injectCSS();
 
         const target = document.getElementById('viewSubjects');
-        if (!target) {
-            console.warn('GroupSearchModule: #viewSubjects not found');
-            return;
-        }
+        if (!target) { console.warn('[GroupSearchModule] #viewSubjects not found'); return; }
 
-        const existing = document.getElementById(MODULE_ID);
-        if (!existing) {
-            const wrapper = document.createElement('div');
+        if (!document.getElementById(MODULE_ID)) {
+            const wrapper   = document.createElement('div');
             wrapper.innerHTML = buildHTML();
             target.insertBefore(wrapper.firstElementChild, target.firstChild);
         }
@@ -1295,38 +1150,37 @@
 
         const codeInput = document.getElementById('groupCodeInput');
         if (codeInput) {
-            codeInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') performSearch();
-            });
+            // Allow only digits and G/g
             codeInput.addEventListener('input', () => {
-                codeInput.value = codeInput.value.replace(/[^0-9Gg]/g, '').toUpperCase();
+                const cleaned = codeInput.value.replace(/[^0-9Gg]/g, '').toUpperCase();
+                if (codeInput.value !== cleaned) codeInput.value = cleaned;
             });
+            codeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') performSearch(); });
         }
 
         const btn = document.getElementById('btnGroupSearch');
         if (btn) btn.addEventListener('click', performSearch);
 
-        console.log('✅ GroupSearchModule mounted (محسّن)');
+        console.log('✅ [GroupSearchModule v2] mounted — sorted by ID · parallel queries · caching enabled');
     };
 
-    // ربط مع openReportModal إن وجد
-    const _originalOpenReportModal = window.openReportModal;
-    if (typeof _originalOpenReportModal === 'function') {
-        window.openReportModal = async function (...args) {
-            await _originalOpenReportModal.apply(this, args);
-            setTimeout(() => window.initGroupSearchModule(), 300);
-        };
-        console.log('✅ GroupSearchModule hooked into openReportModal');
+    /* ── Hook into openReportModal ── */
+    const _hookModal = () => {
+        const orig = window.openReportModal;
+        if (typeof orig === 'function' && !orig._gsHooked) {
+            window.openReportModal = async function (...args) {
+                await orig.apply(this, args);
+                setTimeout(() => window.initGroupSearchModule(), 300);
+            };
+            window.openReportModal._gsHooked = true;
+            console.log('✅ [GroupSearchModule v2] hooked into openReportModal');
+        }
+    };
+
+    if (typeof window.openReportModal === 'function') {
+        _hookModal();
     } else {
-        document.addEventListener('DOMContentLoaded', () => {
-            const orig = window.openReportModal;
-            if (typeof orig === 'function') {
-                window.openReportModal = async function (...args) {
-                    await orig.apply(this, args);
-                    setTimeout(() => window.initGroupSearchModule(), 300);
-                };
-            }
-        });
+        document.addEventListener('DOMContentLoaded', _hookModal);
     }
 
 })();
