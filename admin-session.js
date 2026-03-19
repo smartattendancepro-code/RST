@@ -523,7 +523,7 @@ window.listenToSessionState = function () {
     }
 
     window.unsubscribeSessionListener = onSnapshot(doctorSessionRef,
-        async (docSnap) => { 
+        async (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 const isActive = data.isActive === true;
@@ -548,7 +548,7 @@ window.listenToSessionState = function () {
 
                                 if (secSnap.exists() && secSnap.data().sessionCode) {
                                     codeDisplay.innerText = secSnap.data().sessionCode;
-                                    codeDisplay.style.color = "#0ea5e9"; 
+                                    codeDisplay.style.color = "#0ea5e9";
                                 } else {
                                     codeDisplay.innerText = data.sessionCode || "------";
                                 }
@@ -558,7 +558,7 @@ window.listenToSessionState = function () {
                             }
                         } else {
                             codeDisplay.innerText = data.sessionCode || "------";
-                            codeDisplay.style.color = ""; 
+                            codeDisplay.style.color = "";
                         }
                     }
 
@@ -989,7 +989,6 @@ window.confirmOpenDoor = async function (seconds) {
         return;
     }
 
-    // 1. جلب الحد الأقصى للطلاب بذكاء (Default: 9999)
     const maxInput = document.getElementById('doorMaxLimitInput');
     let maxStudentsVal = 9999;
     if (maxInput && maxInput.value.trim() !== "") {
@@ -997,27 +996,22 @@ window.confirmOpenDoor = async function (seconds) {
         maxStudentsVal = isNaN(parsed) ? 9999 : parsed;
     }
 
-    // 2. توليد الكود السري (6 أرقام)
     const newCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // 3. تحديد المراجع (العام والسري)
     const sessionRef = doc(db, "active_sessions", user.uid);
     const securityRef = doc(db, "active_sessions", user.uid, "private", "security");
 
     try {
-        // 🔥 استخدام writeBatch لضمان تحديث كل شيء أو لا شيء (Atomic Transaction)
         const batch = writeBatch(db);
 
-        // أ. تحديث المستند العام (يراه الجميع لكن الكود الحقيقي مخفي)
         batch.update(sessionRef, {
             isDoorOpen: true,
-            sessionCode: "PROTECTED", // ⬅️ هذا ما سيراه الطالب "المتجسس"
+            sessionCode: newCode, 
             startTime: serverTimestamp(),
             duration: seconds,
             maxStudents: maxStudentsVal,
             lastStatusUpdate: serverTimestamp()
         });
-
 
         batch.set(securityRef, {
             sessionCode: newCode,
@@ -1034,6 +1028,7 @@ window.confirmOpenDoor = async function (seconds) {
         const codeDisplay = document.getElementById('liveSessionCodeDisplay');
         if (codeDisplay) {
             codeDisplay.innerText = newCode;
+            codeDisplay.style.color = "#0ea5e9"; 
             codeDisplay.classList.add('code-active-animation');
         }
 
@@ -1049,12 +1044,12 @@ window.confirmOpenDoor = async function (seconds) {
             `${lang === 'ar' ? 'حد' : 'Limit'}: ${maxStudentsVal}`;
 
         const successMsg = lang === 'ar' ?
-            `🔓 تم التشفير والفتح لمدة ${seconds}ث (${limitMsg})` :
-            `🔓 Secure Open for ${seconds}s (${limitMsg})`;
+            `🔓 تم توليد الكود وفتح الباب لمدة ${seconds}ث (${limitMsg})` :
+            `🔓 Code Generated & Door Open for ${seconds}s (${limitMsg})`;
 
         showToast(successMsg, 4000, "#10b981");
 
-        if (typeof playSuccessSound === 'function') playSuccessSound();
+        if (typeof playSuccess === 'function') playSuccess();
 
     } catch (e) {
         console.error("Critical Security Error (OpenDoor):", e);
@@ -1062,7 +1057,7 @@ window.confirmOpenDoor = async function (seconds) {
         if (e.code === 'permission-denied') {
             showToast("❌ خطأ: لا تملك صلاحية الوصول للأمن", 4000, "#ef4444");
         } else {
-            showToast("❌ فشل في تأمين الكود.. حاول مجدداً", 3000, "#ef4444");
+            showToast("❌ فشل في تحديث بيانات البوابة", 3000, "#ef4444");
         }
     }
 };
