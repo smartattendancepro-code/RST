@@ -7203,7 +7203,7 @@ window.downloadSimpleSheet = function (subjectName) {
     let pingInterval = null;
 
     const PING_URL = 'https://cp.cloudflare.com/generate_204';
-    const PING_INTERVAL_MS = 2000;
+    const PING_INTERVAL_MS = 30000;
     const TIMEOUT_MS = 3000;
 
     const STATE = {
