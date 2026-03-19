@@ -1391,18 +1391,13 @@ document.addEventListener('click', (e) => {
         if (pinInput) {
             pinInput.value = ''; 
             pinInput.setAttribute('autocomplete', 'off'); 
+            pinInput.setAttribute('inputmode', 'numeric'); 
         }
 
         const signupFields = [
-            'regStudentID',
-            'regFullName',
-            'regLevel',
-            'regGender',
-            'regGroup',
-            'regEmail',
-            'regEmailConfirm',
-            'regPass',
-            'regPassConfirm'
+            'regStudentID', 'regFullName', 'regLevel',
+            'regGender', 'regGroup', 'regEmail',
+            'regEmailConfirm', 'regPass', 'regPassConfirm'
         ];
 
         signupFields.forEach(id => {
@@ -1411,7 +1406,6 @@ document.addEventListener('click', (e) => {
                 el.addEventListener('input', () => {
                     if (typeof validateSignupForm === 'function') validateSignupForm();
                 });
-
                 el.addEventListener('change', () => {
                     if (typeof validateSignupForm === 'function') validateSignupForm();
                 });
@@ -1442,13 +1436,21 @@ document.addEventListener('click', (e) => {
                 if (typeof isTyping !== 'undefined') isTyping = false;
             });
 
-            pinInput.addEventListener('input', () => {
+            pinInput.addEventListener('input', (e) => {
                 if (typeof isTyping !== 'undefined') isTyping = false;
                 if (typeof elapsedTime !== 'undefined') elapsedTime = 0;
+
+                const currentVal = e.target.value.trim();
+                if (currentVal.length === 6) {
+                    console.log("🚀 Code complete (6 digits). Auto-joining...");
+                    if (typeof window.searchForSession === 'function') {
+                        window.searchForSession();
+                    }
+                }
             });
         }
 
-        console.log("🚀 System Ready: Idle Timer will now trigger ONLY after typing starts.");
+        console.log("🚀 System Shield & Auto-Join: ACTIVE");
     });
 
     ['regEmail', 'regEmailConfirm', 'regPass', 'regPassConfirm', 'regGender', 'regLevel', 'regGroup'].forEach(id => {
