@@ -523,10 +523,12 @@ window.listenToSessionState = function () {
     }
 
     window.unsubscribeSessionListener = onSnapshot(doctorSessionRef,
-        (docSnap) => {
+        async (docSnap) => { 
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 const isActive = data.isActive === true;
+
+                const isAdmin = !!sessionStorage.getItem("secure_admin_session_token_v99");
 
                 if (isActive) {
                     if (typeof updateSessionButtonUI === 'function') updateSessionButtonUI(true);
@@ -536,7 +538,29 @@ window.listenToSessionState = function () {
                     if (document.getElementById('liveSubjectTag')) document.getElementById('liveSubjectTag').innerText = data.allowedSubject || "";
                     if (document.getElementById('liveHallTag')) document.getElementById('liveHallTag').innerHTML = `<i class="fa-solid fa-building-columns"></i> ${data.hall || ""}`;
                     if (document.getElementById('liveGroupTag')) document.getElementById('liveGroupTag').innerText = `GROUPS: ${(data.targetGroups || []).join(', ')}`;
-                    if (document.getElementById('liveSessionCodeDisplay')) document.getElementById('liveSessionCodeDisplay').innerText = data.sessionCode || "------";
+
+                    const codeDisplay = document.getElementById('liveSessionCodeDisplay');
+                    if (codeDisplay) {
+                        if (isAdmin) {
+                            try {
+                                const securityRef = doc(db, "active_sessions", docSnap.id, "private", "security");
+                                const secSnap = await getDoc(securityRef);
+
+                                if (secSnap.exists() && secSnap.data().sessionCode) {
+                                    codeDisplay.innerText = secSnap.data().sessionCode;
+                                    codeDisplay.style.color = "#0ea5e9"; 
+                                } else {
+                                    codeDisplay.innerText = data.sessionCode || "------";
+                                }
+                            } catch (e) {
+                                console.warn("Security Sync: Waiting for session initialization...");
+                                codeDisplay.innerText = data.sessionCode || "------";
+                            }
+                        } else {
+                            codeDisplay.innerText = data.sessionCode || "------";
+                            codeDisplay.style.color = ""; 
+                        }
+                    }
 
                     const avatarLink = document.getElementById('liveDocAvatar');
                     if (avatarLink && data.doctorAvatar) {
@@ -740,7 +764,7 @@ window.closeDoorImmediately = async function () {
 
         batch.update(sessionRef, {
             isDoorOpen: false,
-            sessionCode: "EXPIRED", 
+            sessionCode: "EXPIRED",
             duration: 0,
             lastStatusUpdate: serverTimestamp()
         });
@@ -774,7 +798,7 @@ window.closeDoorImmediately = async function () {
 
     } catch (e) {
         console.error("Critical Security Error (CloseDoor):", e);
-        
+
         const errorMsg = lang === 'ar' ? "❌ فشل في إغلاق البوابة" : `❌ ${t('close_door_error_toast', 'Error closing door')}`;
         showToast(errorMsg, 4000, "#ef4444");
 
@@ -994,7 +1018,7 @@ window.confirmOpenDoor = async function (seconds) {
             lastStatusUpdate: serverTimestamp()
         });
 
-       
+
         batch.set(securityRef, {
             sessionCode: newCode,
             updatedAt: serverTimestamp(),
@@ -1006,11 +1030,11 @@ window.confirmOpenDoor = async function (seconds) {
         if (document.getElementById('doorDurationModal')) {
             document.getElementById('doorDurationModal').style.display = 'none';
         }
-        
+
         const codeDisplay = document.getElementById('liveSessionCodeDisplay');
         if (codeDisplay) {
             codeDisplay.innerText = newCode;
-            codeDisplay.classList.add('code-active-animation'); 
+            codeDisplay.classList.add('code-active-animation');
         }
 
         const doorStatus = document.getElementById('doorStatusText');
@@ -1020,12 +1044,12 @@ window.confirmOpenDoor = async function (seconds) {
         }
 
         const lang = localStorage.getItem('sys_lang') || 'ar';
-        let limitMsg = (maxStudentsVal >= 9999) ? 
-            (lang === 'ar' ? "عدد مفتوح" : "Unlimited") : 
+        let limitMsg = (maxStudentsVal >= 9999) ?
+            (lang === 'ar' ? "عدد مفتوح" : "Unlimited") :
             `${lang === 'ar' ? 'حد' : 'Limit'}: ${maxStudentsVal}`;
 
-        const successMsg = lang === 'ar' ? 
-            `🔓 تم التشفير والفتح لمدة ${seconds}ث (${limitMsg})` : 
+        const successMsg = lang === 'ar' ?
+            `🔓 تم التشفير والفتح لمدة ${seconds}ث (${limitMsg})` :
             `🔓 Secure Open for ${seconds}s (${limitMsg})`;
 
         showToast(successMsg, 4000, "#10b981");
@@ -1034,7 +1058,7 @@ window.confirmOpenDoor = async function (seconds) {
 
     } catch (e) {
         console.error("Critical Security Error (OpenDoor):", e);
-        
+
         if (e.code === 'permission-denied') {
             showToast("❌ خطأ: لا تملك صلاحية الوصول للأمن", 4000, "#ef4444");
         } else {
