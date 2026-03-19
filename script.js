@@ -838,6 +838,9 @@ document.addEventListener('click', (e) => {
     }
     window.onload = function () {
 
+        const pinInput = document.getElementById('attendanceCode');
+        if (pinInput) pinInput.value = '';
+
         const _savedUID = localStorage.getItem('TARGET_DOCTOR_UID');
         if (_savedUID) {
             sessionStorage.setItem('TARGET_DOCTOR_UID', _savedUID);
@@ -1384,7 +1387,14 @@ document.addEventListener('click', (e) => {
         }
     });
     document.addEventListener('DOMContentLoaded', () => {
-        // 1. مراقبة حقول التسجيل لتفعيل التحقق الفوري
+        // --- 1. تعريف وتنظيف حقل الكود فوراً عند التحميل ---
+        const pinInput = document.getElementById('attendanceCode');
+        if (pinInput) {
+            pinInput.value = ''; // مسح أي كود مخزن بواسطة المتصفح عند تحديث الصفحة
+            pinInput.setAttribute('autocomplete', 'off'); // منع المتصفح من اقتراح كود قديم
+        }
+
+        // --- 2. مراقبة حقول التسجيل لتفعيل التحقق الفوري ---
         const signupFields = [
             'regStudentID',
             'regFullName',
@@ -1410,7 +1420,7 @@ document.addEventListener('click', (e) => {
             }
         });
 
-        // 2. مزامنة اللغة المحفوظة عند تحميل الصفحة
+        // --- 3. مزامنة اللغة المحفوظة عند تحميل الصفحة ---
         const savedLang = localStorage.getItem('sys_lang') || 'ar';
         if (typeof changeLanguage === 'function') {
             changeLanguage(savedLang);
@@ -1419,28 +1429,28 @@ document.addEventListener('click', (e) => {
             });
         }
 
-        // 3. ربط حقل إدخال الكود بمؤقت الخمول (تم التعديل للأسماء الصحيحة)
-        const pinInput = document.getElementById('attendanceCode');
+        // --- 4. ربط حقل إدخال الكود بمؤقت الخمول (Idle Timer Logic) ---
         if (pinInput) {
-            // عند بدء الضغط: نبلغ النظام أن المستخدم يكتب ونصفر العداد (Reset)
+            // عند بدء الضغط: نبلغ النظام أن المستخدم يكتب ونصفر العداد (Reset) ليعطيه وقتاً جديداً
             pinInput.addEventListener('keydown', () => {
                 if (typeof isTyping !== 'undefined') isTyping = true;
                 if (typeof elapsedTime !== 'undefined') elapsedTime = 0;
             });
 
-            // عند رفع الإصبع أو لصق نص: نبلغ النظام أن التفاعل المباشر انتهى ليبدأ العد
+            // عند رفع الإصبع: نبلغ النظام أن الكتابة توقفت مؤقتاً ليبدأ العداد في العد
             pinInput.addEventListener('keyup', () => {
                 if (typeof isTyping !== 'undefined') isTyping = false;
             });
 
+            // عند إدخال بيانات (مثل اللصق): نضمن تصفير العداد أيضاً
             pinInput.addEventListener('input', () => {
                 if (typeof isTyping !== 'undefined') isTyping = false;
+                if (typeof elapsedTime !== 'undefined') elapsedTime = 0;
             });
         }
 
-        console.log("🚀 Signup Monitor, Language Lock & Idle Timer: ACTIVE");
+        console.log("🚀 System DOM Ready: Input Cleared & Idle Timer Synchronized");
     });
-
     ['regEmail', 'regEmailConfirm', 'regPass', 'regPassConfirm', 'regGender', 'regLevel', 'regGroup'].forEach(id => {
         document.getElementById(id).addEventListener('input', validateSignupForm);
     });
@@ -1992,6 +2002,7 @@ document.addEventListener('click', (e) => {
 
         const passInput = document.getElementById('sessionPass');
         const codeInput = document.getElementById('attendanceCode');
+        if (codeInput) codeInput.value = '';
 
         if (passInput) passInput.value = '';
         if (codeInput) codeInput.value = '';
@@ -7354,31 +7365,31 @@ var elapsedTime = 0;
 var isTyping = false;
 var tickInterval = null;
 
-window.startCodeEntryIdleTimer = function() {
+window.startCodeEntryIdleTimer = function () {
     window.stopCodeEntryIdleTimer(); // إيقاف أي عداد سابق لتجنب التداخل
     elapsedTime = 0;
     isTyping = false;
-    
+
     console.log("⏳ مؤقت الخمول بدأ (15 ثانية)...");
-    
+
     tickInterval = setInterval(() => {
         if (!isTyping) {
             elapsedTime++;
             // يمكنك تفعيل السطر القادم أثناء التجربة فقط لمراقبة الوقت في الـ Console
             // console.log("Idle Time: " + elapsedTime); 
 
-            if (elapsedTime >= 15) { 
+            if (elapsedTime >= 10) {
                 console.log("⏰ انتهى الوقت، العودة للرئيسية");
                 window.stopCodeEntryIdleTimer();
                 window.switchScreen('screenWelcome');
-                if(typeof window.showToast === 'function') 
+                if (typeof window.showToast === 'function')
                     window.showToast("⚠️ تم إلغاء العملية لعدم النشاط", 3000, "#f59e0b");
             }
         }
     }, 1000);
 };
 
-window.stopCodeEntryIdleTimer = function() {
+window.stopCodeEntryIdleTimer = function () {
     clearInterval(tickInterval);
     tickInterval = null;
     elapsedTime = 0;
