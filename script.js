@@ -1,4 +1,5 @@
-import { MASTER_HALLS, MASTER_SUBJECTS } from './config.js';
+import { getHallsByCollege, getAllSubjectsByCollege, getSubjectsByCollegeAndLevel, COLLEGE_SUBJECTS } from './config.js';
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import {
     getFirestore,
@@ -34,6 +35,8 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { i18n, t, changeLanguage, toggleSystemLanguage } from './i18n.js';
 import { AuditManager } from './AuditManager.js';
+window.COLLEGE_SUBJECTS = COLLEGE_SUBJECTS;
+
 
 window.HARDWARE_ID = null;
 const DEVICE_CACHE_KEY = "nursing_secure_device_v4";
@@ -477,6 +480,17 @@ window.performStudentSignup = async function () {
     const level = document.getElementById('regLevel').value;
     const gender = document.getElementById('regGender').value;
     const group = document.getElementById('regGroup') ? document.getElementById('regGroup').value : "عام";
+    const collegeMap = {
+        'N': 'NURS',
+        'P': 'PT',
+        'C': 'PHARM',
+        'D': 'DENT',
+        'T': 'CS',
+        'B': 'BA',
+        'H': 'HS'
+    };
+    const groupLetter = group.length >= 2 ? group[1].toUpperCase() : 'N';
+    const detectedCollege = collegeMap[groupLetter] || 'NURS';
 
     if (!email || !pass || !fullName || !studentID) {
         if (typeof playBeep === 'function') playBeep();
@@ -502,7 +516,7 @@ window.performStudentSignup = async function () {
         const deviceID = await window.getUniqueDeviceId();
         console.log("📤 Sending request to Backend...");
 
-        const response = await fetch(`https://nursing-backend-rej8.vercel.app/api/registerStudent`, {
+        const response = await fetch(`https://backendcollege-psi.vercel.app/api/registerStudent`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -513,6 +527,7 @@ window.performStudentSignup = async function () {
                 level: level,
                 gender: gender,
                 group: group,
+                college: detectedCollege,
                 deviceFingerprint: deviceID
             })
         });
@@ -620,17 +635,38 @@ document.addEventListener('click', (e) => {
 
     const STUDENT_DB_URL = "https://script.google.com/macros/s/AKfycbxi2Itb_GW4OXkP6ki5PmzN1O8GFY70XoQyYiWKUdKYHxhXL7YGMFfA2tXcXAWbC_ez/exec";
 
-    let hallsList = MASTER_HALLS;
-
-    let subjectsData = MASTER_SUBJECTS;
-    window.subjectsData = MASTER_SUBJECTS;
+    let hallsList = [];
+    let subjectsData = {};
+    window.subjectsData = {};
     localStorage.removeItem('subjectsData_v4');
 
+    (async () => {
+        try {
+            const user = auth.currentUser;
+            if (user) {
+                const facSnap = await getDoc(doc(db, "faculty_members", user.uid));
+                if (facSnap.exists()) {
+                    const facData = facSnap.data();
+                    const doctorCollege = facData.college || "NURS";
+
+                    hallsList = getHallsByCollege(doctorCollege);
+                    subjectsData = getAllSubjectsByCollege(doctorCollege);
+                    window.subjectsData = subjectsData;
+
+                    renderHallOptions();
+                    console.log("✅ College Data Loaded:", doctorCollege);
+                }
+            }
+        } catch (e) {
+            console.warn("College fetch failed, using empty defaults:", e);
+        }
+    })();
+
     const ARCHIVE_SUBJECTS = {
-        "1": MASTER_SUBJECTS["first_year"],
-        "2": MASTER_SUBJECTS["second_year"],
-        "3": MASTER_SUBJECTS["third_year"],
-        "4": MASTER_SUBJECTS["fourth_year"]
+        "1": [],
+        "2": [],
+        "3": [],
+        "4": []
     };
 
     const SEARCH_DB = ARCHIVE_SUBJECTS;
@@ -967,7 +1003,7 @@ document.addEventListener('click', (e) => {
 
         const sessionBtn = document.getElementById('btnToggleSession');
         const quickModeBtn = document.getElementById('btnQuickMode');
-        const toolsBtn = document.getElementById('btnToolsRequest');
+        const theoryBtn = document.getElementById('btnTheoryAttendance');
         const deanZone = document.getElementById('deanPrivateZone');
         const btnDataEntry = document.getElementById('btnDataEntry');
         const reportBtn = document.getElementById('btnViewReport');
@@ -1124,22 +1160,27 @@ document.addEventListener('click', (e) => {
         dataArray.forEach(item => {
             const div = document.createElement('div');
             div.className = 'list-item-option';
-            div.innerText = item;
-            div.style.cssText = "padding: 10px; border-bottom: 1px solid #f1f5f9; cursor: pointer; font-size: 13px; font-weight:600; color:#334155; transition:0.1s;";
+            const isEnrolled = item.includes('⭐');
+            const cleanItem = item.replace(' ⭐', '').trim();
+
+            // ✅ كل الـ styles في cssText مرة واحدة
+            div.style.cssText = "padding:10px; border-bottom:1px solid #f1f5f9; cursor:pointer; font-size:13px; font-weight:600; color:#334155; transition:0.1s; display:flex; justify-content:space-between; align-items:center; direction:rtl;";
+
+            div.innerHTML = `
+            <span>${cleanItem}</span>
+            ${isEnrolled ? `<span style="background:#fef9c3;color:#ca8a04;border:1px solid #fde68a;border-radius:20px;padding:2px 8px;font-size:10px;font-weight:800;flex-shrink:0;">مسجلة ⭐</span>` : ''}
+        `;
 
             div.onclick = function () {
-                const siblings = container.querySelectorAll('.list-item-option');
-                siblings.forEach(el => {
+                container.querySelectorAll('.list-item-option').forEach(el => {
                     el.style.backgroundColor = "transparent";
                     el.style.color = "#334155";
                     el.style.borderLeft = "none";
                 });
-
                 this.style.backgroundColor = "#e0f2fe";
                 this.style.color = "#0284c7";
                 this.style.borderLeft = "4px solid #0284c7";
-
-                document.getElementById(hiddenInputId).value = item;
+                document.getElementById(hiddenInputId).value = cleanItem;
             };
 
             container.appendChild(div);
@@ -1302,8 +1343,7 @@ document.addEventListener('click', (e) => {
             if (passErr) passErr.style.display = isPassMatch ? 'none' : 'block';
         }
 
-        const groupPattern = /^[1-4][GPNCDTBH]\d{1,2}$/;
-
+        const groupPattern = /^[1-4][NPCDBTH]\d{1,2}$/;
         const isGroupFormatValid = groupPattern.test(groupRaw);
 
         let isGroupLevelMatch = true;
@@ -1655,7 +1695,7 @@ document.addEventListener('click', (e) => {
                 gpsData: gpsData
             });
 
-            const response = await fetch('https://nursing-backend-rej8.vercel.app/joinSessionSecure', {
+            const response = await fetch('https://backendcollege-psi.vercel.app/joinSessionSecure', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -2175,7 +2215,8 @@ document.addEventListener('click', (e) => {
         gReal.innerHTML = '<option value="" disabled selected>-- اختر المجموعة --</option>'; gOptions.innerHTML = ''; gTriggerText.textContent = '-- اختر المجموعة --';
         if (y) {
             gReal.disabled = false; gWrapper.classList.remove('disabled');
-            let prefix = (y === "first_year") ? "1G" : "2G";
+            const collegeLetter = window.currentCollegeLetter || "N";
+            let prefix = (y === "first_year") ? `1${collegeLetter}` : `2${collegeLetter}`;
             for (let i = 1; i <= 20; i++) {
                 let groupName = prefix + i;
                 const opt = document.createElement("option"); opt.value = groupName; opt.text = groupName; gReal.appendChild(opt);
@@ -2343,17 +2384,17 @@ document.addEventListener('click', (e) => {
         const modal = document.getElementById('reportModal');
         if (modal) {
             modal.style.display = 'flex';
-            const currentLang = localStorage.getItem('sys_lang') || 'en';
-            if (typeof changeLanguage === 'function') changeLanguage(currentLang);
-
+            if (typeof changeLanguage === 'function') changeLanguage(localStorage.getItem('sys_lang') || 'en');
             if (typeof showSubjectsView === 'function') showSubjectsView();
         }
 
+        // تاريخ اليوم
         const now = new Date();
-        const d = String(now.getDate()).padStart(2, '0');
-        const m = String(now.getMonth() + 1).padStart(2, '0');
-        const y = now.getFullYear();
-        const dateStr = `${d}/${m}/${y}`;
+        const dateStr = [
+            String(now.getDate()).padStart(2, '0'),
+            String(now.getMonth() + 1).padStart(2, '0'),
+            now.getFullYear()
+        ].join('/');
 
         const dateDisplay = document.getElementById('reportDateDisplay');
         if (dateDisplay) dateDisplay.innerText = dateStr;
@@ -2361,97 +2402,100 @@ document.addEventListener('click', (e) => {
         const container = document.getElementById('subjectsContainer');
         if (container) {
             container.innerHTML = `
-            <div style="text-align:center; padding:50px 20px;">
-                <i class="fa-solid fa-circle-notch fa-spin" style="font-size:30px; color:var(--primary); margin-bottom:15px;"></i>
-                <div style="font-weight:bold; color:#64748b;">
-                    <span data-i18n="report_searching_text">Searching records for date:</span> ${dateStr}
-                </div>
-            </div>`;
-
-            if (typeof changeLanguage === 'function') changeLanguage(localStorage.getItem('sys_lang') || 'en');
+        <div style="text-align:center;padding:50px 20px;">
+          <i class="fa-solid fa-circle-notch fa-spin"
+             style="font-size:30px;color:var(--primary);margin-bottom:15px;"></i>
+          <div style="font-weight:bold;color:#64748b;">جاري تحميل بيانات الكلية...</div>
+        </div>`;
         }
 
+        // إلغاء listener قديم
         if (window.unsubscribeReport) {
             window.unsubscribeReport();
             window.unsubscribeReport = null;
         }
 
         try {
+            // جيب بيانات الدكتور/العميد مباشرة
             const user = auth.currentUser;
             const adminToken = sessionStorage.getItem("secure_admin_session_token_v99");
             const isDean = (adminToken === "SUPER_ADMIN_ACTIVE");
+            const isDoctor = (adminToken === "ADMIN_ACTIVE");
 
-            let q;
+            let doctorData = null;
 
             if (isDean) {
+                doctorData = { isDean: true, isDoctor: false, college: null, uid: user?.uid, name: "" };
+            } else if (isDoctor && user) {
+                const facSnap = await getDoc(doc(db, "faculty_members", user.uid));
+                if (facSnap.exists()) {
+                    const d = facSnap.data();
+                    doctorData = { isDean: false, isDoctor: true, college: d.college || null, uid: user.uid, name: d.fullName || "" };
+                }
+            }
 
+            if (!doctorData) {
+                if (container) container.innerHTML = `<div class="empty-state">⚠️ يرجى تسجيل الدخول أولاً</div>`;
+                return;
+            }
+
+            const { isDean: dean, college, uid } = doctorData;
+
+            // ---- بناء الـ Query ----
+            let q;
+
+            if (dean) {
+                // العميد → كل الكليات
                 q = query(
                     collection(db, "attendance"),
                     where("date", "==", dateStr)
                 );
-            } else {
-
-                const sessionRef = doc(db, "active_sessions", user.uid);
-                const sessionSnap = await getDoc(sessionRef);
-
-                let targetSubject = "";
-
-                if (sessionSnap.exists()) {
-                    const sessionData = sessionSnap.data();
-                    targetSubject = sessionData.allowedSubject || sessionData.subject || "";
-                }
-
-                targetSubject = targetSubject ? targetSubject.trim() : "";
-
-                if (!targetSubject) {
-                    if (container) {
-                        container.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fa-solid fa-chalkboard-user" style="font-size:40px; color:#f59e0b; margin-bottom:15px;"></i>
-                        <br>
-                        <span data-i18n="error_no_active_subject">Please start a session or select a subject first to view reports.</span>
-                        <br>
-                        <small style="color:#64748b; margin-top:10px; display:block;">
-                            (System couldn't detect subject from your session settings)
-                        </small>
-                    </div>`;
-                        if (typeof changeLanguage === 'function') changeLanguage(localStorage.getItem('sys_lang') || 'en');
-                    }
-                    return;
-                }
-
+            } else if (college) {
+                // الدكتور → كليته + مواده هو بس
                 q = query(
                     collection(db, "attendance"),
                     where("date", "==", dateStr),
-                    where("subject", "==", targetSubject)
+                    where("college", "==", college),
+                    where("doctorUID", "==", uid)
                 );
+            } else {
+                if (container) container.innerHTML = `<div class="empty-state">⚠️ لا يمكن تحديد الكلية</div>`;
+                return;
             }
 
-            const activeSessionsQ = query(collection(db, "active_sessions"), where("isActive", "==", true));
-            const activeSnap = await getDocs(activeSessionsQ);
-            const activeSubjectsList = activeSnap.docs.map(doc => doc.data().allowedSubject ? doc.data().allowedSubject.trim() : "");
+            // الجلسات النشطة (عشان badge "جارية الآن")
+            const activeSnap = await getDocs(query(
+                collection(db, "active_sessions"),
+                where("isActive", "==", true)
+            ));
+            const activeSubjectsList = activeSnap.docs
+                .map(d => (d.data().allowedSubject || "").trim())
+                .filter(Boolean);
 
-            window.unsubscribeReport = onSnapshot(q, (querySnapshot) => {
+            // ---- Snapshot Listener ----
+            window.unsubscribeReport = onSnapshot(q, (snapshot) => {
                 let allData = [];
 
-                querySnapshot.forEach((doc) => {
-                    const data = doc.data();
+                snapshot.forEach((docSnap) => {
+                    const data = docSnap.data();
                     allData.push({
-                        docId: doc.id,
+                        docId: docSnap.id,
                         uniID: data.id || "---",
-                        name: data.name || "Unknown Student",
-                        subject: (data.subject || "Unknown Subject").trim(),
+                        name: data.name || "Unknown",
+                        subject: (data.subject || "").trim(),
                         group: data.group || "--",
                         time: data.time_str || "--:--",
-                        hall: data.hall || "Unknown Hall",
-                        code: data.session_code || "",
-                        notes: data.notes || "Disciplined",
+                        hall: data.hall || "--",
+                        notes: data.notes || "منضبط",
                         doctorName: data.doctorName || "---",
+                        doctorUID: data.doctorUID || "",
+                        college: data.college || college || "",
                         segment_count: data.segment_count || 1,
                         timestamp: data.archivedAt || data.timestamp
                     });
                 });
 
+                // ترتيب بالوقت (الأحدث أولاً)
                 allData.sort((a, b) => {
                     const tA = a.timestamp ? (a.timestamp.seconds || 0) : 0;
                     const tB = b.timestamp ? (b.timestamp.seconds || 0) : 0;
@@ -2459,146 +2503,203 @@ document.addEventListener('click', (e) => {
                 });
 
                 window.cachedReportData = allData;
+                window._currentDoctorData = doctorData;
 
-                if (container) {
-                    if (allData.length === 0) {
-                        container.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fa-solid fa-folder-open" style="font-size:40px; color:#cbd5e1; margin-bottom:15px;"></i>
-                        <br>
-                        <span data-i18n="report_empty_msg">No records found for today.</span>
-                        <br>
-                        <small style="color:#ef4444; margin-top:10px; display:block;">
-                            <span data-i18n="report_check_save">Make sure sessions are ended and saved correctly.</span>
-                        </small>
-                    </div>`;
-                    } else {
-                        if (typeof renderSubjectsList === 'function') {
-                            renderSubjectsList(allData, activeSubjectsList);
-                        } else {
-                            console.error("Function renderSubjectsList is missing!");
-                        }
+                if (!container) return;
+
+                if (allData.length === 0) {
+                    container.innerHTML = `
+            <div class="empty-state">
+                <i class="fa-solid fa-folder-open"
+                   style="font-size:40px;color:#cbd5e1;margin-bottom:15px;display:block;text-align:center;"></i>
+                <div style="text-align:center;color:#64748b;font-weight:bold;">
+                    لا توجد سجلات لمحاضراتك اليوم
+                </div>
+                ${college
+                            ? `<div style="text-align:center;margin-top:8px;">
+                           <span style="background:#e0f2fe;color:#0284c7;padding:3px 12px;
+                                        border-radius:20px;font-size:11px;font-weight:800;
+                                        border:1px solid #bae6fd;">
+                               <i class="fa-solid fa-building-columns"></i> ${college}
+                           </span>
+                       </div>`
+                            : ''}
+            </div>`;
+                } else {
+                    if (typeof renderSubjectsList === 'function') {
+                        renderSubjectsList(allData, activeSubjectsList, doctorData);
                     }
-
-                    if (typeof changeLanguage === 'function') changeLanguage(localStorage.getItem('sys_lang') || 'en');
                 }
-            }, (error) => {
-                console.error("Snapshot Error:", error);
 
-                let errorDetails = "";
-                if (error.message.includes("requires an index")) {
-                    errorDetails = "<br><span style='font-size:11px; color:#f59e0b'>(System: Missing Index. Check Console for Link)</span>";
+                if (typeof changeLanguage === 'function') {
+                    changeLanguage(localStorage.getItem('sys_lang') || 'en');
+                }
+
+            }, (error) => {
+                console.error("Report Snapshot Error:", error);
+
+                const needsIndex = error.message && error.message.includes("requires an index");
+
+                if (needsIndex) {
+                    console.warn("⚠️ Firestore Composite Index مطلوب!");
+                    console.warn("Collection: attendance | Fields: date + college + doctorUID");
+                    console.warn("افتح الـ Console واضغط على الرابط اللي Firestore بيديه لعمل الـ Index تلقائياً.");
                 }
 
                 if (container) {
                     container.innerHTML = `
-                <div style="color:#ef4444; text-align:center; padding:30px;">
-                    ⚠️ <span data-i18n="report_error_fetch">Error fetching data.</span>
-                    ${errorDetails}
-                    <br><small>${error.message}</small>
-                </div>`;
-                    if (typeof changeLanguage === 'function') changeLanguage(localStorage.getItem('sys_lang') || 'en');
+            <div style="color:#ef4444;text-align:center;padding:30px;">
+                <i class="fa-solid fa-triangle-exclamation"
+                   style="font-size:35px;margin-bottom:15px;display:block;"></i>
+                <div style="font-weight:bold;margin-bottom:8px;">خطأ في تحميل البيانات</div>
+                ${needsIndex
+                            ? `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;
+                                   padding:10px;margin-top:10px;font-size:12px;color:#92400e;">
+                           <i class="fa-solid fa-wrench"></i>
+                           يلزم إنشاء Firestore Index<br>
+                           <small>افتح الـ Browser Console وستجد رابطاً لإنشائه تلقائياً</small>
+                       </div>`
+                            : `<small style="color:#94a3b8;">${error.message}</small>`}
+            </div>`;
                 }
             });
 
         } catch (e) {
-            console.error("Report Function Error:", e);
+            console.error("openReportModal Error:", e);
             if (container) {
                 container.innerHTML = `
-            <div style="color:#ef4444; text-align:center; padding:30px;">
-                ⚠️ <span data-i18n="report_error_unknown">Unexpected System Error.</span>
-                <br><small>${e.message}</small>
+            <div style="color:#ef4444;text-align:center;padding:30px;">
+              ⚠️ خطأ غير متوقع<br><small>${e.message}</small>
             </div>`;
-                if (typeof changeLanguage === 'function') changeLanguage(localStorage.getItem('sys_lang') || 'en');
             }
         }
     };
 
-    window.renderSubjectsList = function (data, activeSubjects = []) {
+    window.renderSubjectsList = function (data, activeSubjects = [], doctorData = null) {
+        const container = document.getElementById('subjectsContainer');
+        if (!container) return;
+
+        const isDean = doctorData?.isDean || false;
+        const doctorCollege = doctorData?.college || null;
+
         const subjects = [...new Set(data.map(item => item.subject))];
-        let html = '';
 
         if (subjects.length === 0) {
-            document.getElementById('subjectsContainer').innerHTML = '<div class="empty-state">لا توجد مواد مسجلة اليوم.</div>';
+            container.innerHTML = '<div class="empty-state">لا توجد مواد مسجلة اليوم.</div>';
             return;
         }
 
+        const COLLEGE_COLORS = {
+            NURS: { bg: "#fef3c7", color: "#92400e", border: "#fde68a" },
+            PT: { bg: "#e0f2fe", color: "#0c4a6e", border: "#bae6fd" },
+            PHARM: { bg: "#f3e8ff", color: "#5b21b6", border: "#c4b5fd" },
+            DENT: { bg: "#fee2e2", color: "#991b1b", border: "#fca5a5" },
+            CS: { bg: "#dcfce7", color: "#14532d", border: "#86efac" },
+            BA: { bg: "#fff7ed", color: "#7c2d12", border: "#fdba74" },
+            HS: { bg: "#f0fdf4", color: "#166534", border: "#bbf7d0" }
+        };
+
+        let html = '';
+
         subjects.forEach(subject => {
-            const btnTargetedStyle = `background:#fffbeb; color:#d97706; border:1px solid #fde68a;`;
-            const count = data.filter(i => i.subject === subject).length;
+            const subjectRecords = data.filter(i => i.subject === subject);
+            const count = subjectRecords.length;
+            const firstRecord = subjectRecords[0] || {};
+            const subjectCollege = firstRecord.college || doctorCollege || "";
+            const doctorName = firstRecord.doctorName || "";
+            const isActiveNow = activeSubjects.includes(subject.trim());
 
-            const isSubjectActiveNow = activeSubjects.includes(subject.trim());
-
-            let activeBadge = '';
-            let cardStyle = '';
-            let statusIcon = '<div style="font-size:11px; background:#dcfce7; color:#166534; padding:2px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px;"><i class="fa-solid fa-check-circle"></i> Completed</div>';
-
-            if (isSubjectActiveNow) {
-                activeBadge = `
-    <div style="margin-top:5px; margin-bottom:5px; display:inline-flex; align-items:center; gap:6px; background:#fef2f2; color:#ef4444; padding:4px 12px; border-radius:12px; font-size:11px; font-weight:800; border:1px solid #fecaca;">
-        <span class="blink-dot" style="width:6px; height:6px; background:#ef4444; border-radius:50%; display:inline-block;"></span>
-        Please wait until lectures close
-    </div>`;
-
-                statusIcon = '';
-            } else {
-                cardStyle = 'border-top: 4px solid #10b981;';
+            // Badge الكلية (يظهر للعميد بس)
+            let collegeBadge = '';
+            if (isDean && subjectCollege) {
+                const clr = COLLEGE_COLORS[subjectCollege] || { bg: "#f1f5f9", color: "#334155", border: "#e2e8f0" };
+                collegeBadge = `
+            <span style="font-size:10px;background:${clr.bg};color:${clr.color};
+                          padding:2px 8px;border-radius:10px;font-weight:800;
+                          border:1px solid ${clr.border};">
+                ${subjectCollege}
+            </span>`;
             }
 
+            // اسم الدكتور (يظهر للعميد بس)
+            const doctorBadge = (isDean && doctorName) ? `
+        <div style="font-size:11px;color:#64748b;margin-top:4px;">
+            <i class="fa-solid fa-user-doctor"></i> ${doctorName}
+        </div>` : '';
+
+            // حالة المادة
+            let activeBadge = '';
+            let cardStyle = '';
+            let statusIcon = `
+        <div style="font-size:11px;background:#dcfce7;color:#166534;padding:2px 8px;
+                    border-radius:12px;display:inline-flex;align-items:center;gap:4px;">
+            <i class="fa-solid fa-check-circle"></i> Completed
+        </div>`;
+
+            if (isActiveNow) {
+                activeBadge = `
+            <div style="margin-top:5px;display:inline-flex;align-items:center;gap:6px;
+                        background:#fef2f2;color:#ef4444;padding:4px 12px;border-radius:12px;
+                        font-size:11px;font-weight:800;border:1px solid #fecaca;">
+                <span style="width:6px;height:6px;background:#ef4444;border-radius:50%;
+                             display:inline-block;animation:blink 1s infinite;"></span>
+                جارية الآن
+            </div>`;
+                statusIcon = '';
+            } else {
+                cardStyle = 'border-top:4px solid #10b981;';
+            }
+
+            const btnDisabled = isActiveNow ? 'opacity:0.5;cursor:not-allowed;' : '';
+
             html += `
-        <div class="subject-big-card" onclick="openSubjectDetails('${subject}')" 
-             style="${cardStyle} position: relative; transition:0.2s; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 15px; padding: 20px;">
-            
-            <!-- الجزء العلوي: اسم المادة والحالة -->
-            <div style="width: 100%;">
-                <div style="display:flex; flex-direction:column; align-items:center; gap: 5px;">
-                    <h3 style="margin: 0; font-size: 18px; font-weight: 900; color: #1e293b; line-height: 1.4;">
-                        ${subject}
-                    </h3>
-                    ${statusIcon ? statusIcon : ''}
+        <div class="subject-big-card" onclick="openSubjectDetails('${subject.replace(/'/g, "\\'")}')"
+             style="${cardStyle}position:relative;display:flex;flex-direction:column;
+                    align-items:center;text-align:center;gap:15px;padding:20px;">
+
+            <div style="width:100%;">
+                <div style="display:flex;flex-direction:column;align-items:center;gap:5px;">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;">
+                        <h3 style="margin:0;font-size:18px;font-weight:900;color:#1e293b;">${subject}</h3>
+                        ${collegeBadge}
+                    </div>
+                    ${statusIcon}
+                    ${doctorBadge}
                 </div>
-                
-                ${activeBadge} <!-- يظهر هنا لو المحاضرة شغالة -->
+                ${activeBadge}
             </div>
 
-            <!-- الجزء الأوسط: عدد الطلاب (تم التعديل: الأيقونة والرقم فقط) -->
-            <div>
-                <span style="background: #e0f2fe; color: #0284c7; padding: 8px 20px; border-radius: 50px; font-size: 16px; font-weight: 800; border:1px solid #bae6fd; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 2px 5px rgba(2, 132, 199, 0.1);">
-                    <i class="fa-solid fa-users"></i> ${count}
-                </span>
-            </div>
+            <span style="background:#e0f2fe;color:#0284c7;padding:8px 20px;border-radius:50px;
+                          font-size:16px;font-weight:800;border:1px solid #bae6fd;
+                          display:inline-flex;align-items:center;gap:8px;
+                          box-shadow:0 2px 5px rgba(2,132,199,0.1);">
+                <i class="fa-solid fa-users"></i> ${count}
+            </span>
 
-            <!-- الجزء السفلي: الأزرار بجانب بعض -->
-            <div style="display: flex; gap: 12px; width: 100%; justify-content: center; margin-top: 5px;">
-                
-                <!-- زر إكسيل -->
-                <button onclick="event.stopPropagation(); exportAttendanceSheet('${subject}')" 
-                        title="تصدير شيت إكسيل"
+            <div style="display:flex;gap:12px;width:100%;justify-content:center;">
+                <button onclick="event.stopPropagation();exportAttendanceSheet('${subject.replace(/'/g, "\\'")}')"
                         class="btn-download-excel"
-                        style="flex:1; justify-content: center; ${isSubjectActiveNow ? 'opacity:0.5; cursor:not-allowed; background:#f1f5f9; color:#94a3b8; border-color:#e2e8f0;' : ''}">
+                        style="flex:1;justify-content:center;${btnDisabled}"
+                        title="تصدير Excel">
                     <i class="fa-solid fa-file-excel" style="margin:0;"></i>
                 </button>
-                
-                <!-- زر التحميل البسيط -->
-                <button onclick="event.stopPropagation(); downloadSimpleSheet('${subject}')" 
-                        title="تحميل الحضور الحالي فقط" 
-                        class="btn-download-excel" 
-                        style="flex:1; justify-content: center; background:#e0f2fe; color:#0284c7; border:1px solid #bae6fd;">
+                <button onclick="event.stopPropagation();downloadSimpleSheet('${subject.replace(/'/g, "\\'")}')"
+                        class="btn-download-excel"
+                        style="flex:1;justify-content:center;background:#e0f2fe;color:#0284c7;border:1px solid #bae6fd;"
+                        title="تحميل الحضور">
                     <i class="fa-solid fa-download" style="margin:0;"></i>
                 </button>
-                
-                <!-- زر التقرير الملون -->
-                 <button onclick="event.stopPropagation(); exportTargetedAttendance('${subject}')" 
-                            title="تقرير الحضور والغياب للمجموعات المستهدفة" 
-                            class="btn-download-excel" 
-                            style="flex:1; justify-content: center; ${btnTargetedStyle}">
-                        <i class="fa-solid fa-clipboard-user" style="margin:0;"></i>
-                    </button>
+                <button onclick="event.stopPropagation();exportTargetedAttendance('${subject.replace(/'/g, "\\'")}')"
+                        class="btn-download-excel"
+                        style="flex:1;justify-content:center;background:#fffbeb;color:#d97706;border:1px solid #fde68a;"
+                        title="تقرير الحضور والغياب">
+                    <i class="fa-solid fa-clipboard-user" style="margin:0;"></i>
+                </button>
             </div>
         </div>`;
         });
 
-        document.getElementById('subjectsContainer').innerHTML = html;
+        container.innerHTML = html;
     };
 
     window.openSubjectDetails = function (subjectName) {
@@ -2688,76 +2789,127 @@ document.addEventListener('click', (e) => {
 
     function getEvaluations() { return JSON.parse(localStorage.getItem(EVAL_STORAGE_KEY) || "{}"); }
 
-    window.openSubjectDetails = function (subjectName) {
-        playClick();
+    window.openSubjectDetails = async function (subjectName) {
+        if (typeof playClick === 'function') playClick();
 
-        const cleanSubjectName = normalizeArabic(subjectName.trim());
+        const normalize = (s) => typeof normalizeArabic === 'function'
+            ? normalizeArabic((s || "").trim())
+            : (s || "").trim();
+
+        const cleanSubject = normalize(subjectName);
         document.getElementById('currentSubjectTitle').innerText = subjectName;
 
         if (!window.cachedReportData) {
-            alert("⚠️ خطأ: البيانات غير محملة. يرجى تحديث السجل.");
+            alert("⚠️ البيانات غير محملة. يرجى تحديث السجل.");
             return;
         }
 
+        const doctorData = window._currentDoctorData;
+        const isDean = doctorData?.isDean || false;
+        const doctorCollege = doctorData?.college || null;
+        const doctorUID = doctorData?.uid || null;
+
+        // فلترة
         let students = window.cachedReportData.filter(s => {
-            const storedSubject = normalizeArabic((s.subject || "").trim());
-            return storedSubject === cleanSubjectName;
+            // فلترة المادة
+            if (normalize(s.subject) !== cleanSubject) return false;
+
+            // العميد يشوف الكل
+            if (isDean) return true;
+
+            // الدكتور: كليته بس + مواده هو بس
+            if (doctorCollege && s.college !== doctorCollege) return false;
+            if (doctorUID && s.doctorUID && s.doctorUID !== doctorUID) return false;
+
+            return true;
         });
 
-        console.log(`فتح المادة: ${cleanSubjectName} | عدد الطلاب: ${students.length}`);
+        students.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+
+        const studentsContainer = document.getElementById('studentsContainer');
 
         if (students.length === 0) {
-            document.getElementById('studentsContainer').innerHTML = `
+            studentsContainer.innerHTML = `
         <div class="empty-state">
-            ⚠️ لا توجد بيانات للعرض!<br>
-            قد يكون هناك اختلاف في اسم المادة.
-            <br><small>المطلوب: "${subjectName}"</small>
+            ⚠️ لا توجد بيانات للعرض
+            ${doctorCollege
+                    ? `<br><small style="color:#0ea5e9;">الكلية: ${doctorCollege}</small>`
+                    : ''}
         </div>`;
         } else {
-            students.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+            const COLLEGE_COLORS = {
+                NURS: "#92400e", PT: "#0c4a6e", PHARM: "#5b21b6",
+                DENT: "#991b1b", CS: "#14532d", BA: "#7c2d12", HS: "#166534"
+            };
 
             let html = '';
             students.forEach(item => {
                 let cardClass = "";
-                let notesBadge = `<span style="color:#10b981; font-size:10px; background:#ecfdf5; padding:2px 6px; border-radius:4px;">منضبط</span>`;
+                let notesBadge = `<span style="color:#10b981;font-size:10px;background:#ecfdf5;
+                                           padding:2px 6px;border-radius:4px;">منضبط</span>`;
 
                 if (item.notes && (item.notes.includes("غير منضبط") || item.notes.includes("زي"))) {
                     cardClass = "alert-row";
-                    notesBadge = `<span style="color:#ef4444; font-weight:bold; font-size:11px; background:#fee2e2; padding:2px 6px; border-radius:4px;">⚠️ ${item.notes}</span>`;
+                    notesBadge = `<span style="color:#ef4444;font-weight:bold;font-size:11px;
+                                            background:#fee2e2;padding:2px 6px;border-radius:4px;">
+                                    ⚠️ ${item.notes}
+                               </span>`;
+                }
+
+                // Badge الكلية (للعميد)
+                let collegeBadge = '';
+                if (isDean && item.college) {
+                    const clr = COLLEGE_COLORS[item.college] || "#334155";
+                    collegeBadge = `
+                <span style="font-size:9px;background:#f1f5f9;color:${clr};
+                              padding:1px 6px;border-radius:8px;font-weight:800;
+                              border:1px solid #e2e8f0;">
+                    ${item.college}
+                </span>`;
                 }
 
                 html += `
-        <div class="student-detailed-card ${cardClass}">
-            <div class="st-data-col" style="width: 100%;">
-                
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <div class="st-name" style="font-weight:800; font-size:14px; color:#1e293b;">${item.name}</div>
-                    <div style="background:#f1f5f9; color:#64748b; padding:2px 8px; border-radius:5px; font-size:11px; font-weight:bold;">${item.group}</div>
-                </div>
+            <div class="student-detailed-card ${cardClass}">
+                <div class="st-data-col" style="width:100%;">
 
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:5px;">
-                    <div class="en-font" style="font-size:12px; color:#64748b;">ID: ${item.uniID}</div>
-                    ${notesBadge}
-                </div>
-
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; border-top:1px dashed #e2e8f0; padding-top:5px;">
-                    <div style="font-size:11px; color:#0ea5e9; font-weight:bold;">
-                        <i class="fa-solid fa-building-columns"></i> ${item.hall}
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <div class="st-name"
+                             style="font-weight:800;font-size:14px;color:#1e293b;">${item.name}</div>
+                        <div style="display:flex;gap:4px;align-items:center;">
+                            ${collegeBadge}
+                            <div style="background:#f1f5f9;color:#64748b;padding:2px 8px;
+                                        border-radius:5px;font-size:11px;font-weight:bold;">
+                                ${item.group}
+                            </div>
+                        </div>
                     </div>
-                    <div style="font-size:11px; color:#334155; font-weight:bold; direction:ltr;">
-                        <i class="fa-regular fa-clock"></i> ${item.time}
+
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:5px;">
+                        <div class="en-font" style="font-size:12px;color:#64748b;">
+                            ID: ${item.uniID}
+                        </div>
+                        ${notesBadge}
+                    </div>
+
+                    <div style="display:flex;justify-content:space-between;align-items:center;
+                                margin-top:8px;border-top:1px dashed #e2e8f0;padding-top:5px;">
+                        <div style="font-size:11px;color:#0ea5e9;font-weight:bold;">
+                            <i class="fa-solid fa-building-columns"></i> ${item.hall}
+                        </div>
+                        <div style="font-size:11px;color:#334155;font-weight:bold;direction:ltr;">
+                            <i class="fa-regular fa-clock"></i> ${item.time}
+                        </div>
                     </div>
                 </div>
 
-            </div>
-            
-            <button class="btn-delete-item" onclick="deleteEntry('${item.uniID}', '${item.subject}', this)" style="margin-right: 10px;">
-                <i class="fa-solid fa-trash"></i>
-            </button>
-        </div>`;
+                <button class="btn-delete-item"
+                        onclick="deleteEntry('${item.uniID}','${subjectName.replace(/'/g, "\\'")}',this)">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </div>`;
             });
 
-            document.getElementById('studentsContainer').innerHTML = html;
+            studentsContainer.innerHTML = html;
         }
 
         document.getElementById('viewSubjects').style.transform = 'translateX(100%)';
@@ -2935,6 +3087,17 @@ document.addEventListener('click', (e) => {
 
                 let totalUploaded = 0;
 
+                // جلب كلية الدكتور مرة واحدة قبل الـ loop
+                let uploadCollege = "NURS";
+                try {
+                    const facSnapUpload = await getDoc(doc(db, "faculty_members", auth.currentUser.uid));
+                    if (facSnapUpload.exists()) {
+                        uploadCollege = facSnapUpload.data().college || "NURS";
+                    }
+                } catch (e) {
+                    console.warn("College fetch for upload failed:", e);
+                }
+
                 for (const chunk of chunks) {
                     const batch = writeBatch(db);
 
@@ -2959,6 +3122,7 @@ document.addEventListener('click', (e) => {
                                 id: studentId,
                                 academic_level: selectedLevel,
                                 group_code: finalGroup,
+                                college: uploadCollege,
                                 upload_batch_id: batchID,
                                 created_at: serverTimestamp(),
                                 method: "Excel_With_Group"
@@ -2976,6 +3140,8 @@ document.addEventListener('click', (e) => {
                     filename: file.name,
                     count: totalUploaded,
                     level: selectedLevel,
+                    college: uploadCollege,
+                    uploaded_by: auth.currentUser.uid,
                     timestamp: Timestamp.now(),
                     method: "Excel_Group_System"
                 });
@@ -3490,32 +3656,28 @@ document.addEventListener('click', (e) => {
                 const cData = JSON.parse(cachedProfileData);
                 if (cData.uid === user.uid) {
                     document.getElementById('profFullName').innerText = cData.fullName || "--";
-                    document.getElementById('profStudentID').innerText = cData.studentID || "--";
+
+                    // ← أضف هنا
                     const COLLEGE_NAME_MAP = {
                         'N': 'Nursing', 'P': 'Physical Therapy', 'C': 'Pharmacy',
                         'D': 'Dentistry', 'T': 'Computer Science', 'B': 'Business Admin', 'H': 'Health Sciences'
                     };
                     const grp = cData.group || "";
-                    const COLLEGE_CODE_MAP = {
-                        'NURS': 'N', 'PT': 'P', 'PHARM': 'C',
-                        'DENT': 'D', 'CS': 'T', 'BA': 'B', 'HS': 'H'
-                    };
-                    const collegeCode = cData.college || "";
-                    const letter = collegeCode
-                        ? (COLLEGE_CODE_MAP[collegeCode] || grp[1]?.toUpperCase() || 'N')
-                        : (grp.length >= 2 ? grp[1].toUpperCase() : 'N');
+                    const letter = grp.length >= 2 ? grp[1].toUpperCase() : 'N';
                     const roleEl = document.querySelector('.pro-role');
                     if (roleEl) {
                         roleEl.innerHTML = `
-        <span style="font-size:13px; font-weight:800;">
+        <span style="font-size:13px; font-weight:800; font-family:'Outfit', sans-serif;">
             ${COLLEGE_NAME_MAP[letter] || 'Nursing'} Student
         </span><br>
         <span style="font-size:13px; color:#0ea5e9; font-weight:900; 
                      background:#e0f2fe; padding:2px 10px; border-radius:20px; 
-                     display:inline-block; margin-top:4px;">
+                     display:inline-block; margin-top:4px; font-family:'Outfit', sans-serif;">
             ${grp || "--"}
         </span>`;
                     }
+
+                    document.getElementById('profStudentID').innerText = cData.studentID || "--";
                     document.getElementById('profLevel').innerText = `الفرقة ${cData.level || '?'}`;
                     document.getElementById('profGender').innerText = cData.gender || "--";
                     document.getElementById('profEmail').innerText = cData.email || user.email;
@@ -3569,33 +3731,37 @@ document.addEventListener('click', (e) => {
             const info = data.registrationInfo || data;
 
             document.getElementById('profFullName').innerText = info.fullName || "--";
-            document.getElementById('profStudentID').innerText = info.studentID || "--";
+
             const COLLEGE_NAME_MAP = {
-                'N': 'Nursing', 'P': 'Physical Therapy', 'C': 'Pharmacy',
-                'D': 'Dentistry', 'T': 'Computer Science', 'B': 'Business Admin', 'H': 'Health Sciences'
+                'N': 'Nursing',
+                'P': 'Physical Therapy',
+                'C': 'Pharmacy',
+                'D': 'Dentistry',
+                'T': 'Computer Science',
+                'B': 'Business Admin',
+                'H': 'Health Sciences'
             };
-            const COLLEGE_CODE_MAP = {
-                'NURS': 'N', 'PT': 'P', 'PHARM': 'C',
-                'DENT': 'D', 'CS': 'T', 'BA': 'B', 'HS': 'H'
-            };
+
             const studentGroup = info.group || "";
-            const collegeCode = data.college || info.college || "";
-            const letter = collegeCode
-                ? (COLLEGE_CODE_MAP[collegeCode] || studentGroup[1]?.toUpperCase() || 'N')
-                : (studentGroup.length >= 2 ? studentGroup[1].toUpperCase() : 'N');
+            const collegeLetter = studentGroup.length >= 2 ? studentGroup[1].toUpperCase() : 'N';
+            const collegeName = COLLEGE_NAME_MAP[collegeLetter] || "Nursing";
 
             const roleEl = document.querySelector('.pro-role');
             if (roleEl) {
                 roleEl.innerHTML = `
-        <span style="font-size:13px; font-weight:800;">
-            ${COLLEGE_NAME_MAP[letter] || 'Nursing'} Student
-        </span><br>
+        <span style="font-size:13px; font-weight:800; font-family:'Outfit', sans-serif;">
+            ${collegeName} Student
+        </span>
+        <br>
         <span style="font-size:13px; color:#0ea5e9; font-weight:900; 
                      background:#e0f2fe; padding:2px 10px; border-radius:20px; 
-                     display:inline-block; margin-top:4px;">
+                     display:inline-block; margin-top:4px;
+                     font-family:'Outfit', sans-serif;">
             ${studentGroup || "--"}
-        </span>`;
+        </span>
+    `;
             }
+            document.getElementById('profStudentID').innerText = info.studentID || "--";
             document.getElementById('profLevel').innerText = `الفرقة ${info.level || '?'}`;
             document.getElementById('profGender').innerText = info.gender || "--";
 
@@ -3840,6 +4006,7 @@ document.addEventListener('click', (e) => {
         const pass = document.getElementById('facPass').value;
         const passConfirm = document.getElementById('facPassConfirm').value;
         const masterKeyInput = document.getElementById('facMasterKey').value.trim();
+        const college = document.getElementById('facCollege').value;
 
         if (!name || !gender || !jobTitle || !email || !pass || !masterKeyInput) {
             showToast(_t('msg_missing_data', "⚠️ يرجى ملء جميع الحقول المطلوبة"), 3000, "#f59e0b");
@@ -3874,7 +4041,7 @@ document.addEventListener('click', (e) => {
         btn.style.pointerEvents = 'none';
 
         try {
-            const BACKEND_BASE_URL = "https://nursing-backend-rej8.vercel.app";
+            const BACKEND_BASE_URL = "https://backendcollege-psi.vercel.app";
 
             const response = await fetch(`${BACKEND_BASE_URL}/api/registerFaculty`, {
                 method: 'POST',
@@ -3886,6 +4053,7 @@ document.addEventListener('click', (e) => {
                     gender: gender,
                     role: role,
                     jobTitle: jobTitle,
+                    college: college,
                     masterKey: masterKeyInput
                 })
             });
@@ -3999,6 +4167,8 @@ document.addEventListener('click', (e) => {
         }
     };
 
+
+
     window.performFacultyLogin = async function () {
 
         const _t = (key, defaultText) => {
@@ -4076,6 +4246,7 @@ document.addEventListener('click', (e) => {
                     role: userData.role,
                     jobTitle: userData.jobTitle || userData.subject || "Faculty Member",
                     avatarClass: userData.avatarClass || "fa-user-doctor",
+                    college: userData.college || "NURS",
                     uid: user.uid,
                     type: 'faculty'
                 };
@@ -4232,6 +4403,7 @@ document.addEventListener('click', (e) => {
                     jobTitle: data.jobTitle,
                     subject: data.subject,
                     avatarClass: data.avatarClass || "fa-user-doctor",
+                    college: data.college || "NURS",
                     uid: user.uid,
                     type: 'faculty',
                     status_message: data.status_message || ""
@@ -4315,99 +4487,75 @@ document.addEventListener('click', (e) => {
         const isStaff = isDean || isDoctor;
 
         document.body.classList.remove('is-dean', 'is-doctor', 'is-student');
+        if (isDean) document.body.classList.add('is-dean');
+        else if (isDoctor) document.body.classList.add('is-doctor');
+        else document.body.classList.add('is-student');
 
-        if (isDean) {
-            document.body.classList.add('is-dean');
-            console.log("🛡️ Current Identity: DEAN (Oversight Mode)");
-        } else if (isDoctor) {
-            document.body.classList.add('is-doctor');
-            console.log("👨‍🏫 Current Identity: DOCTOR (Control Mode)");
-        } else {
-            document.body.classList.add('is-student');
-            console.log("🎓 Current Identity: STUDENT/GUEST");
-        }
-
+        // --- التعريفات الأساسية (تأكد من وجودها جميعاً هنا) ---
         const sessionBtn = document.getElementById('btnToggleSession');
         const quickModeBtn = document.getElementById('btnQuickMode');
-        const toolsBtn = document.getElementById('btnToolsRequest');
-
+        const theoryBtn = document.getElementById('btnTheoryAttendance'); // هذا هو التعريف الصحيح
         const deanZone = document.getElementById('deanPrivateZone');
         const btnDataEntry = document.getElementById('btnDataEntry');
         const reportBtn = document.getElementById('btnViewReport');
-
-        const facultyProfileBtn = document.getElementById('facultyProfileBtn');
-        const studentProfileBtn = document.getElementById('studentProfileBtn');
         const mainActionBtn = document.getElementById('mainActionBtn');
         const makaniBar = document.getElementById('makaniSearchBar');
-
+        const studentProfileBtn = document.getElementById('studentProfileBtn');
+        const facultyProfileBtn = document.getElementById('facultyProfileBtn');
         const btnFeed = document.getElementById('btnLiveFeedback');
 
         if (isStaff) {
-            if (facultyProfileBtn) facultyProfileBtn.style.display = 'flex';
             if (btnDataEntry) btnDataEntry.style.display = 'flex';
             if (reportBtn) reportBtn.classList.remove('locked');
+            if (facultyProfileBtn) facultyProfileBtn.style.display = 'flex';
 
-            if (studentProfileBtn) studentProfileBtn.style.display = 'none';
             if (mainActionBtn) mainActionBtn.style.display = 'none';
             if (makaniBar) makaniBar.style.display = 'none';
+            if (studentProfileBtn) studentProfileBtn.style.display = 'none';
 
             if (isDoctor) {
                 console.log("✅ وضع الدكتور: إظهار أزرار التحكم");
-
                 if (sessionBtn) sessionBtn.style.setProperty('display', 'flex', 'important');
                 if (quickModeBtn) quickModeBtn.style.setProperty('display', 'flex', 'important');
-                if (toolsBtn) toolsBtn.style.setProperty('display', 'flex', 'important');
+
+                // تم استخدام theoryBtn بدلاً من toolsBtn المفقودة
+                if (theoryBtn) theoryBtn.style.setProperty('display', 'flex', 'important');
 
                 if (deanZone) deanZone.style.setProperty('display', 'none', 'important');
 
                 if (btnFeed) {
                     btnFeed.style.setProperty('display', 'flex', 'important');
-
                     if (typeof window.initFeedbackListener === 'function') {
                         window.initFeedbackListener();
                     }
                 }
-
             } else {
                 console.log("🛡️ وضع العميد: إخفاء أزرار التحكم");
-
                 if (sessionBtn) sessionBtn.style.setProperty('display', 'none', 'important');
                 if (quickModeBtn) quickModeBtn.style.setProperty('display', 'none', 'important');
-                if (toolsBtn) toolsBtn.style.setProperty('display', 'none', 'important');
-
+                if (theoryBtn) theoryBtn.style.setProperty('display', 'none', 'important');
                 if (deanZone) deanZone.style.setProperty('display', 'block', 'important');
-
                 if (btnFeed) btnFeed.style.setProperty('display', 'none', 'important');
             }
-        }
-        else {
+        } else {
             console.log("🎓 وضع الطالب: إخفاء أدوات الإدارة");
-
-            const adminElements = [
-                sessionBtn, quickModeBtn, toolsBtn, deanZone,
-                btnDataEntry, facultyProfileBtn,
-            ];
-
-            adminElements.forEach(el => {
-                if (el) el.style.setProperty('display', 'none', 'important');
-            });
-
+            if (btnDataEntry) btnDataEntry.style.display = 'none';
+            if (reportBtn) reportBtn.classList.add('locked');
+            if (deanZone) deanZone.style.display = 'none';
+            if (facultyProfileBtn) facultyProfileBtn.style.display = 'none';
+            if (sessionBtn) sessionBtn.style.display = 'none';
+            if (quickModeBtn) quickModeBtn.style.display = 'none';
+            if (theoryBtn) theoryBtn.style.display = 'none';
             if (btnFeed) btnFeed.style.setProperty('display', 'none', 'important');
-
-            if (window.feedbackUnsubscribe) {
-                window.feedbackUnsubscribe();
-                window.feedbackUnsubscribe = null;
-            }
 
             if (mainActionBtn) mainActionBtn.style.display = 'flex';
             if (makaniBar) makaniBar.style.display = 'block';
             if (studentProfileBtn) studentProfileBtn.style.display = 'flex';
-            if (reportBtn) reportBtn.classList.add('locked');
         }
 
-        const savedLang = localStorage.getItem('sys_lang') || 'ar';
-        if (typeof changeLanguage === 'function') {
-            changeLanguage(savedLang);
+        if (!isDoctor && window.feedbackUnsubscribe) {
+            window.feedbackUnsubscribe();
+            window.feedbackUnsubscribe = null;
         }
     };
 
@@ -5139,6 +5287,8 @@ document.addEventListener('click', (e) => {
         }
     };
 
+
+
     window.checkForPendingSurveys = async function () {
         const user = auth.currentUser;
         const isAdmin = sessionStorage.getItem("secure_admin_session_token_v99");
@@ -5833,7 +5983,13 @@ window.openUploadHistory = async function () {
     container.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b;"><i class="fa-solid fa-circle-notch fa-spin"></i> جاري جلب السجل...</div>';
 
     try {
-        const q = query(collection(db, "upload_history"), orderBy("timestamp", "desc"));
+        const currentUser = auth.currentUser;
+        const adminToken = sessionStorage.getItem("secure_admin_session_token_v99");
+        const isDean = (adminToken === "SUPER_ADMIN_ACTIVE");
+
+        const q = isDean
+            ? query(collection(db, "upload_history"), orderBy("timestamp", "desc"))
+            : query(collection(db, "upload_history"), where("uploaded_by", "==", currentUser.uid), orderBy("timestamp", "desc"));
         const querySnapshot = await getDocs(q);
 
         if (querySnapshot.empty) {
@@ -5870,7 +6026,7 @@ window.openUploadHistory = async function () {
 
     } catch (error) {
         console.error(error);
-        container.innerHTML = '<div style="color:red; text-align:center;">حدث خطأ في جلب البيانات</div>';
+        container.innerHTML = '<div style="color:red; text-align:center;">لا يوجد سجلات مرفوعه</div>';
     }
 };
 window.deleteBatch = function (batchId, historyDocId) {
@@ -6528,21 +6684,6 @@ window.resetManualModal = function () {
     }, 300);
 };
 
-window.addEventListener('load', () => {
-    const manualBtn = document.getElementById("btnConfirmManualAdd");
-
-    if (manualBtn) {
-        console.log("✅ تم العثور على زر الإضافة وربطه بنجاح.");
-
-        const newBtn = manualBtn.cloneNode(true);
-        manualBtn.parentNode.replaceChild(newBtn, manualBtn);
-
-        newBtn.addEventListener("click", window.handleManualAdd);
-
-    } else {
-        console.error("❌ زر الإضافة غير موجود في HTML! تأكد من الـ ID: btnConfirmManualAdd");
-    }
-});
 window.filterLiveStudents = function () {
     const input = document.getElementById('liveSearchInput');
     const filter = input.value.toUpperCase().trim();
@@ -7026,8 +7167,7 @@ document.addEventListener('DOMContentLoaded', () => {
         groupInput.addEventListener('input', function (e) {
             let val = this.value.toUpperCase();
 
-            val = val.replace(/[^0-9GPNCDTBH]/g, '');
-
+            val = val.replace(/[^0-9NPCDBTH]/g, '');
 
             this.value = val;
 
@@ -7301,5 +7441,104 @@ window.downloadSimpleSheet = function (subjectName) {
     performNetworkDiagnostic();
 
 })();
+window.openSubjectEnrollmentSecurely = async function () {
+    const lang = localStorage.getItem('sys_lang') || 'ar';
 
+    const adminToken = sessionStorage.getItem("secure_admin_session_token_v99");
+    const isDoctor = (adminToken === "ADMIN_ACTIVE" || adminToken === "SUPER_ADMIN_ACTIVE");
 
+    if (!isDoctor) {
+        const msg = (lang === 'ar') ? "🚫 منطقة محمية للدكاترة فقط." : "🚫 Faculty Only Area.";
+        if (typeof showToast === 'function') showToast(msg, 4000, "#ef4444");
+        return;
+    }
+
+    const modalId = 'customPassModal';
+    if (document.getElementById(modalId)) return;
+
+    const modalHTML = `
+        <div id="${modalId}" style="position:fixed; inset:0; background:rgba(15,23,42,0.7); backdrop-filter:blur(8px); z-index:2147483647; display:flex; align-items:center; justify-content:center; animation: fadeIn 0.3s ease;">
+            <div style="background:#fff; width:90%; max-width:340px; border-radius:24px; padding:30px; text-align:center; box-shadow:0 25px 50px -12px rgba(0,0,0,0.5); transform: scale(1); animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);">
+                <div style="width:60px; height:60px; background:#f5f3ff; color:#7c3aed; border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 20px; border:2px solid #ddd6fe;">
+                    <i class="fa-solid fa-shield-halved" style="font-size:24px;"></i>
+                </div>
+                <h3 style="margin:0 0 10px; font-size:18px; font-weight:900; color:#1e293b;">${lang === 'ar' ? 'منطقة محميّة' : 'Protected Area'}</h3>
+                <p style="margin:0 0 20px; font-size:13px; color:#64748b;">${lang === 'ar' ? 'برجاء إدخال الكود السري للمتابعة' : 'Please enter secret code'}</p>
+                <input type="password" id="secretPassInput" placeholder="••••••••"
+                       autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly');" data-lpignore="true"
+                       style="width:100%; padding:12px; border-radius:12px; border:2px solid #e2e8f0; text-align:center; font-size:18px; outline:none; transition:0.2s; margin-bottom:20px;">
+                <div style="display:flex; gap:10px;">
+                    <button id="cancelPassBtn" style="flex:1; padding:12px; border-radius:12px; border:none; background:#f1f5f9; color:#64748b; font-weight:700; cursor:pointer;">${lang === 'ar' ? 'إلغاء' : 'Cancel'}</button>
+                    <button id="confirmPassBtn" style="flex:1; padding:12px; border-radius:12px; border:none; background:linear-gradient(135deg, #7c3aed, #6d28d9); color:#fff; font-weight:700; cursor:pointer;">${lang === 'ar' ? 'دخول' : 'Enter'}</button>
+                </div>
+            </div>
+        </div>
+        <style>
+            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes scaleIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+            #secretPassInput:focus { border-color: #7c3aed; box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.1); }
+        </style>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    const input = document.getElementById('secretPassInput');
+    const closeModal = () => document.getElementById(modalId)?.remove();
+
+    setTimeout(() => input.focus(), 100);
+    document.getElementById('cancelPassBtn').onclick = closeModal;
+
+    // ✅ جلب الكود في الخلفية فوراً لما المودال يفتح — مش هيستنى المستخدم
+    let _cachedCode = sessionStorage.getItem("_sec_code_cache") || null;
+
+    if (!_cachedCode) {
+        getDoc(doc(db, "app_settings", "security"))
+            .then(snap => {
+                if (snap.exists()) {
+                    _cachedCode = snap.data().registration_code;
+                    sessionStorage.setItem("_sec_code_cache", _cachedCode);
+                }
+            })
+            .catch(e => console.warn("Prefetch failed:", e));
+    }
+
+    document.getElementById('confirmPassBtn').onclick = async function () {
+        const userCode = input.value.trim();
+        if (!userCode) return;
+
+        this.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+        this.style.pointerEvents = 'none';
+
+        try {
+
+            let correctCode = _cachedCode;
+
+            if (!correctCode) {
+                const snap = await getDoc(doc(db, "app_settings", "security"));
+                if (snap.exists()) {
+                    correctCode = snap.data().registration_code;
+                    _cachedCode = correctCode;
+                    sessionStorage.setItem("_sec_code_cache", correctCode);
+                }
+            }
+
+            if (userCode === correctCode) {
+                closeModal();
+                if (typeof openSubjectEnrollmentModal === "function") openSubjectEnrollmentModal();
+                else document.getElementById('subjectEnrollmentModal').style.display = 'flex';
+            } else {
+                alert(lang === 'ar' ? 'الكود خطأ ❌' : 'Invalid Code ❌');
+                this.innerHTML = lang === 'ar' ? 'دخول' : 'Enter';
+                this.style.pointerEvents = 'auto';
+                input.value = "";
+                input.focus();
+            }
+        } catch (e) {
+            console.error(e);
+            closeModal();
+        }
+    };
+
+    input.addEventListener("keyup", (e) => {
+        if (e.key === "Enter") document.getElementById('confirmPassBtn')?.click();
+    });
+};
