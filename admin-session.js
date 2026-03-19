@@ -562,7 +562,7 @@ window.listenToSessionState = function () {
                             if (data.sessionCode === "EXPIRED" || data.isDoorOpen === false) {
                                 codeDisplay.style.color = "#ef4444";
                             } else {
-                                codeDisplay.style.color = ""; 
+                                codeDisplay.style.color = "";
                             }
                         }
                     }
@@ -1256,7 +1256,54 @@ window.startLiveSnapshotListener = function () {
     if (isDoctor || isDean) {
         q = query(participantsRef, orderBy("timestamp", "desc"));
     } else {
-        q = query(participantsRef, where("uid", "==", user.uid));
+        const myRef = doc(db, "active_sessions", targetRoomUID, "participants", user.uid);
+
+        if (window.unsubscribeLiveSnapshot) window.unsubscribeLiveSnapshot();
+
+        window.unsubscribeLiveSnapshot = onSnapshot(myRef, (docSnap) => {
+            if (grid && docSnap.exists()) {
+                const s = docSnap.data();
+                if (s.status === 'expelled') return;
+
+                const isOnBreak = s.status === 'on_break';
+                const isLeft = s.status === 'left';
+                const opacityVal = (isLeft || isOnBreak) ? '0.5' : '1';
+                const borderStyle = isOnBreak ? '2px dashed #f59e0b' : '1px solid #e2e8f0';
+                const rawCount = s.segment_count;
+                const segCount = (rawCount && !isNaN(rawCount)) ? parseInt(rawCount) : 1;
+
+                let countBadge = '';
+                if (segCount > 1) {
+                    countBadge = `<div style="position:absolute; top:-10px; left:-10px; background:#0ea5e9; color:white; font-size:11px; font-weight:800; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:3px solid #f8fafc; z-index:100;">${segCount}</div>`;
+                }
+
+                let statusColor = isLeft ? "#94a3b8" : (s.isUnruly ? "#ef4444" : (s.isUniformViolation ? "#f97316" : "#10b981"));
+                let statusText = isLeft ? "مغادر" : (s.isUnruly ? "مشاغب" : (s.isUniformViolation ? "مخالف" : "حاضر"));
+
+                grid.innerHTML = '';
+                const card = document.createElement('div');
+                card.className = 'live-st-card student-view-card is-me-card';
+                card.style.cssText = `background:white; border-radius:15px; padding:20px; display:flex; flex-direction:column; align-items:center; opacity:${opacityVal}; width:100%; max-width:320px; margin:0 auto; border:${borderStyle}; position:relative; overflow:visible !important;`;
+                card.innerHTML = `
+                <div class="me-badge">أنت</div>
+                ${countBadge}
+                <div style="width:70px; height:70px; border-radius:50%; background:#f8fafc; border:3.5px solid ${statusColor}; display:flex; align-items:center; justify-content:center; font-size:30px; color:#0284c7; margin-bottom:10px; z-index:2;">
+                    <i class="fa-solid ${s.avatarClass || 'fa-user-graduate'}"></i>
+                </div>
+                <div style="text-align:center;">
+                    <div class="st-name notranslate" style="font-size:16px; font-weight:900; color:#1e293b; text-align:center;">${s.name}</div>
+                    <div class="st-id en-font" style="font-size:12px; color:#64748b;">#${s.id}</div>
+                </div>
+                <div style="margin-top:12px; padding:4px 15px; border-radius:6px; font-size:11px; font-weight:800; border:1px solid ${statusColor}30; background:${statusColor}15; color:${statusColor};">
+                    ${statusText}
+                </div>`;
+                grid.appendChild(card);
+            }
+        }, (error) => {
+            console.error("❌ Participant Listener Error:", error.code, error.message);
+        });
+
+        return; 
     }
 
     if (window.unsubscribeLiveSnapshot) window.unsubscribeLiveSnapshot();
