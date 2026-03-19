@@ -1567,10 +1567,10 @@ document.addEventListener('click', (e) => {
         }
     };
     window.joinSessionAction = async function () {
-        const passInput = document.getElementById('sessionPass').value.trim();
         const btn = document.getElementById('btnJoinFinal');
         const targetDrUID = sessionStorage.getItem('TEMP_DR_UID');
-        const originalText = btn.innerHTML;
+        const inputCode = sessionStorage.getItem('PROVIDED_CODE');
+        const passInput = document.getElementById('sessionPass') ? document.getElementById('sessionPass').value.trim() : "";
 
         const user = auth.currentUser;
         if (!user) {
@@ -1578,41 +1578,22 @@ document.addEventListener('click', (e) => {
             return;
         }
 
-        if (!targetDrUID) {
-            showToast("⚠️ حدث خطأ في بيانات الجلسة، يرجى البحث مجدداً", 4000, "#f59e0b");
+        if (!targetDrUID || !inputCode) {
+            showToast("⚠️ حدث خطأ في بيانات الجلسة، يرجى إعادة البحث بالكود", 4000, "#f59e0b");
             if (typeof resetSearchSession === 'function') resetSearchSession();
             return;
         }
 
         window.isJoiningProcessActive = true;
-        btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Verifying & Joining...';
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-shield-halved fa-spin"></i> Verifying Security...';
         btn.style.pointerEvents = 'none';
 
         try {
-            const sessionRef = doc(db, "active_sessions", targetDrUID);
-            const sessionSnap = await getDoc(sessionRef);
-
-            if (!sessionSnap.exists()) {
-                throw new Error("⛔ الجلسة غير موجودة");
-            }
-
-            const sessionData = sessionSnap.data();
-
-            if (!sessionData.isActive || !sessionData.isDoorOpen) {
-                throw new Error("🔒 عذراً، الجلسة مغلقة حالياً.");
-            }
-
-            if (sessionData.sessionPassword && sessionData.sessionPassword !== "" && passInput !== sessionData.sessionPassword) {
-                throw new Error("❌ كلمة المرور غير صحيحة");
-            }
-
-            console.log("⚡ جاري إرسال الطلب للمصيدة الأمنية...");
-
             const gpsData = await window.getGPSForJoin();
-
             const deviceFingerprint = await window.getUniqueDeviceId();
+            const cachedProfile = JSON.parse(localStorage.getItem('cached_profile_data') || '{}');
 
-            // 🔐 [تعديل جراحي] نظام البصمة المزدوجة - الفرونت إند
             let isDeviceMatch = true;
             try {
                 const sensRef = doc(db, "user_registrations", user.uid, "sensitive_info", "main");
@@ -1620,104 +1601,104 @@ document.addEventListener('click', (e) => {
 
                 if (sensSnap.exists()) {
                     const sensData = sensSnap.data();
-                    // جلب البصمات المسجلة (دعم النظام القديم والجديد)
                     let allowed = sensData.allowed_devices || (sensData.bound_device_id ? [sensData.bound_device_id] : []);
 
                     if (!allowed.includes(deviceFingerprint)) {
                         if (allowed.length < 2) {
-                            // الطالب عنده بصمة واحدة.. سجل التانية فوراً كبصمة قانونية
                             allowed.push(deviceFingerprint);
                             await setDoc(sensRef, {
                                 allowed_devices: allowed,
                                 second_device_added_at: serverTimestamp()
                             }, { merge: true });
-                            console.log("✅ تم تسجيل بصمة الجهاز الثانية كجهاز موثوق.");
                             isDeviceMatch = true;
                         } else {
-                            // مسجل جهازين بالفعل وده جهاز تالت
                             isDeviceMatch = false;
                         }
                     } else {
-                        isDeviceMatch = true; // الجهاز الحالي هو واحد من الاتنين
+                        isDeviceMatch = true;
                     }
                 }
             } catch (e) {
-                console.error("Security Sync Error:", e);
-                isDeviceMatch = true; // نمررها في حالة الخطأ عشان الطالب ميعطلش
+                console.warn("Security Sync Warning:", e);
+                isDeviceMatch = true;
             }
 
-            const idToken = await user.getIdToken();
+            const sessionRef = doc(db, "active_sessions", targetDrUID);
+            const sessionSnap = await getDoc(sessionRef);
+            if (!sessionSnap.exists()) throw new Error("⛔ الجلسة غير موجودة");
 
-            await AuditManager.sendSecretLog(db, user, sessionData, {
+            const sessionData = sessionSnap.data();
+            if (sessionData.sessionPassword && sessionData.sessionPassword !== "" && passInput !== sessionData.sessionPassword) {
+                throw new Error("❌ كلمة مرور القاعة غير صحيحة");
+            }
+
+            if (window.AuditManager) {
+                await AuditManager.sendSecretLog(db, user, sessionData, {
+                    deviceFingerprint: deviceFingerprint,
+                    isDeviceMatch: isDeviceMatch,
+                    userIP: typeof userIP !== 'undefined' ? userIP : "Hidden",
+                    gpsData: gpsData
+                });
+            }
+
+            const participantRef = doc(db, "active_sessions", targetDrUID, "participants", user.uid);
+
+            await setDoc(participantRef, {
+                uid: user.uid,
+                id: cachedProfile.studentID || "0000",
+                name: cachedProfile.fullName || "Student",
+                avatarClass: cachedProfile.avatarClass || "fa-user-graduate",
+                group: cachedProfile.group || "General",
+                status: "active",
+                providedCode: inputCode,
+                timestamp: serverTimestamp(),
+                time_str: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
                 deviceFingerprint: deviceFingerprint,
                 isDeviceMatch: isDeviceMatch,
-                userIP: typeof userIP !== 'undefined' ? userIP : "Hidden",
-                gpsData: gpsData
-            });
-
-            const response = await fetch('https://nursing-backend-rej8.vercel.app/joinSessionSecure', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${idToken}`
+                trap_report: {
+                    is_device_match: isDeviceMatch,
+                    is_in_range: gpsData.in_range || false,
+                    gps_success: gpsData.gps_success || false,
+                    distance: gpsData.distance || 0
                 },
-                body: JSON.stringify({
-                    studentUID: user.uid,
-                    sessionDocID: targetDrUID,
-                    gpsLat: gpsData.lat || 0,
-                    gpsLng: gpsData.lng || 0,
-                    deviceFingerprint: deviceFingerprint,
-                    isDeviceMatch: isDeviceMatch, // النتيجة اللي الفرونت إند حسبها
-                    codeInput: sessionData.sessionCode
-                })
+                isUnruly: false,
+                isUniformViolation: false,
+                segment_count: 1
             });
 
-            const result = await response.json();
+            if (typeof playSuccess === 'function') playSuccess();
+            showToast(`✅ تم تسجيل حضورك بنجاح! يمكنك غلق الموقع الان `, 3000, "#10b981");
 
-            if (response.ok && result.success) {
-                if (typeof playSuccess === 'function') playSuccess();
-                showToast(`✅ ${result.message}`, 3000, "#10b981");
+            localStorage.setItem('TARGET_DOCTOR_UID', targetDrUID);
+            sessionStorage.setItem('TARGET_DOCTOR_UID', targetDrUID);
+            sessionStorage.removeItem('TEMP_DR_UID');
+            sessionStorage.removeItem('PROVIDED_CODE');
 
-                localStorage.setItem('TARGET_DOCTOR_UID', targetDrUID);
-                sessionStorage.setItem('TARGET_DOCTOR_UID', targetDrUID);
-                sessionStorage.removeItem('TEMP_DR_UID');
-
-                try {
-                    let cached = localStorage.getItem('cached_profile_data');
-                    if (cached) {
-                        let cacheObj = JSON.parse(cached);
-                        if (cacheObj.uid === user.uid) {
-                            cacheObj.attendanceCount = (cacheObj.attendanceCount || 0) + 1;
-                            localStorage.setItem('cached_profile_data', JSON.stringify(cacheObj));
-                        }
-                    }
-                } catch (err) { console.warn("Cache update skipped."); }
-
-                if (document.getElementById('liveDocName')) document.getElementById('liveDocName').innerText = sessionData.doctorName || "Professor";
-                if (document.getElementById('liveSubjectTag')) document.getElementById('liveSubjectTag').innerText = sessionData.allowedSubject || "Subject";
-                const liveAvatar = document.getElementById('liveDocAvatar');
-                if (liveAvatar && sessionData.doctorAvatar) {
-                    liveAvatar.innerHTML = `<i class="fa-solid ${sessionData.doctorAvatar}"></i>`;
-                }
-
-                switchScreen('screenLiveSession');
-                if (typeof startLiveSnapshotListener === 'function') startLiveSnapshotListener();
-
-            } else {
-                throw new Error(result.error || "تم رفض الدخول من قبل النظام الأمني");
+            if (document.getElementById('liveDocName')) document.getElementById('liveDocName').innerText = sessionData.doctorName || "Professor";
+            if (document.getElementById('liveSubjectTag')) document.getElementById('liveSubjectTag').innerText = sessionData.allowedSubject || "Subject";
+            const liveAvatar = document.getElementById('liveDocAvatar');
+            if (liveAvatar && sessionData.doctorAvatar) {
+                liveAvatar.innerHTML = `<i class="fa-solid ${sessionData.doctorAvatar}"></i>`;
             }
 
+            switchScreen('screenLiveSession');
+            if (typeof startLiveSnapshotListener === 'function') startLiveSnapshotListener();
+
         } catch (e) {
-            console.error("Join Session Error:", e);
+            console.error("Critical Join Error:", e);
             window.isJoiningProcessActive = false;
 
-            let msg = e.message;
-            if (msg.includes("Failed to fetch")) msg = "فشل الاتصال بالسيرفر! تأكد من الإنترنت.";
+            let errorMsg = e.message;
+            if (e.code === 'permission-denied') {
+                errorMsg = "❌ فشل التحقق الأمني: الكود غير صحيح أو انتهى وقت الدخول.";
+            } else if (errorMsg.includes("Failed to fetch")) {
+                errorMsg = "📡 فشل الاتصال بالسيرفر، تحقق من الإنترنت.";
+            }
 
-            showToast(msg.startsWith("❌") || msg.startsWith("⛔") || msg.startsWith("🔒") ? msg : "⚠️ " + msg, 4000, "#ef4444");
+            showToast(errorMsg, 5000, "#ef4444");
 
-            if (msg.includes("غير موجودة") || msg.includes("مغلقة")) {
-                setTimeout(() => location.reload(), 1500);
+            if (e.message.includes("الجلسة")) {
+                setTimeout(() => location.reload(), 2000);
             }
 
         } finally {
@@ -1745,10 +1726,12 @@ document.addEventListener('click', (e) => {
         btn.style.pointerEvents = 'none';
 
         try {
-            const q = query(collection(db, "active_sessions"),
-                where("sessionCode", "==", codeInput),
+            const q = query(
+                collection(db, "active_sessions"),
+                where("sessionCode", "==", codeInput), 
                 where("isActive", "==", true),
-                where("isDoorOpen", "==", true));
+                where("isDoorOpen", "==", true)
+            );
 
             const querySnapshot = await getDocs(q);
 
@@ -1757,37 +1740,31 @@ document.addEventListener('click', (e) => {
                 const checkSnap = await getDocs(checkQ);
 
                 if (!checkSnap.empty) {
-                    showToast("🔒 Session is currently CLOSED", 4000, "#ef4444");
+                    showToast("🔒 Session found but Door is CLOSED", 4000, "#f59e0b");
                 } else {
                     showToast("❌ Invalid Session PIN", 4000, "#ef4444");
                 }
+
                 btn.innerHTML = originalText;
                 btn.style.pointerEvents = 'auto';
                 return;
             }
 
             const sessionDoc = querySnapshot.docs[0];
-            const sessionData = sessionDoc.data();
+            const targetSession = sessionDoc.data();
             const doctorUID = sessionDoc.id;
 
             sessionStorage.setItem('TEMP_DR_UID', doctorUID);
+            sessionStorage.setItem('PROVIDED_CODE', codeInput);
 
             const docNameEl = document.getElementById('foundDocName');
-            const subjectNameEl = document.getElementById('foundSubjectName'); // ✅ تم التعريف
+            const subjectNameEl = document.getElementById('foundSubjectName');
             const foundAvatar = document.getElementById('foundDocAvatar');
 
-            if (docNameEl) {
-                docNameEl.innerText = "Dr. " + (sessionData.doctorName || "Unknown");
-                docNameEl.style.fontFamily = "'Outfit', sans-serif";
-            }
-
-            if (subjectNameEl) {
-                subjectNameEl.innerText = sessionData.allowedSubject || "--";
-                subjectNameEl.style.fontFamily = "'Outfit', sans-serif";
-            }
-
-            if (foundAvatar && sessionData.doctorAvatar) {
-                foundAvatar.innerHTML = `<i class="fa-solid ${sessionData.doctorAvatar}"></i>`;
+            if (docNameEl) docNameEl.innerText = targetSession.doctorName || "Professor";
+            if (subjectNameEl) subjectNameEl.innerText = targetSession.allowedSubject || "--";
+            if (foundAvatar && targetSession.doctorAvatar) {
+                foundAvatar.innerHTML = `<i class="fa-solid ${targetSession.doctorAvatar}"></i>`;
             }
 
             if (typeof startAuthScreenTimer === 'function') {
@@ -1797,15 +1774,26 @@ document.addEventListener('click', (e) => {
             const step1 = document.getElementById('step1_search');
             const step2 = document.getElementById('step2_auth');
 
-            if (step1) step1.style.display = 'none';
-            if (step2) {
-                step2.style.display = 'block';
-                step2.classList.add('active'); // تفعيل الأنيميشن
+            if (step1) {
+                step1.style.opacity = '0';
+                setTimeout(() => {
+                    step1.style.display = 'none';
+                    if (step2) {
+                        step2.style.display = 'block';
+                        step2.style.opacity = '0';
+                        setTimeout(() => {
+                            step2.style.opacity = '1';
+                            step2.classList.add('active');
+                        }, 50);
+                    }
+                }, 300);
             }
+
+            if (typeof playSuccess === 'function') playSuccess();
 
         } catch (e) {
             console.error("Critical Search Error:", e);
-            showToast("⚠️ Connection Error", 3000, "#ef4444");
+            showToast("⚠️ Connection Error: Permission Denied", 3000, "#ef4444");
         } finally {
             btn.innerHTML = originalText;
             btn.style.pointerEvents = 'auto';
@@ -1937,30 +1925,53 @@ document.addEventListener('click', (e) => {
         }, 2500);
     }
     window.resetSearchSession = function () {
+        sessionStorage.removeItem('PROVIDED_CODE');
+        sessionStorage.removeItem('TEMP_DR_UID');
+
+        if (window.authUnsubscribe) {
+            window.authUnsubscribe();
+            window.authUnsubscribe = null;
+        }
+        if (window.localTicker) {
+            clearInterval(window.localTicker);
+            window.localTicker = null;
+        }
+
         const step1 = document.getElementById('step1_search');
         const step2 = document.getElementById('step2_auth');
 
         if (step2) {
             step2.style.display = 'none';
             step2.classList.remove('active');
+            step2.style.opacity = '0';
         }
 
         if (step1) {
             step1.style.display = 'block';
-            step1.style.opacity = '1';
             step1.style.visibility = 'visible';
+            setTimeout(() => {
+                step1.style.opacity = '1';
+            }, 50);
         }
 
         const passInput = document.getElementById('sessionPass');
         const codeInput = document.getElementById('attendanceCode');
+        const studentPassInput = document.getElementById('studentEnteredPass');
 
         if (passInput) passInput.value = '';
-        if (codeInput) codeInput.value = '';
-
+        if (codeInput) {
+            codeInput.value = '';
+            setTimeout(() => codeInput.focus(), 400);
+        }
+        if (studentPassInput) studentPassInput.value = '';
 
         const errorContainer = document.getElementById('screenError');
         if (errorContainer) errorContainer.style.display = 'none';
 
+        if (document.getElementById('foundDocName')) document.getElementById('foundDocName').innerText = "--";
+        if (document.getElementById('foundSubjectName')) document.getElementById('foundSubjectName').innerText = "--";
+
+        console.log("🧹 Security System: Session cache cleared successfully.");
     };
 
     function closeTimeoutModal() { document.getElementById('timeoutModal').style.display = 'none'; location.reload(); }
