@@ -1821,6 +1821,8 @@ document.addEventListener('click', (e) => {
 
             sessionStorage.setItem('TEMP_DR_UID', doctorUID);
 
+            if (typeof window.stopCodeEntryIdleTimer === 'function') window.stopCodeEntryIdleTimer();
+
             const docNameEl = document.getElementById('foundDocName');
             const subjectNameEl = document.getElementById('foundSubjectName'); // ✅ تم التعريف
             const foundAvatar = document.getElementById('foundDocAvatar');
@@ -2010,6 +2012,8 @@ document.addEventListener('click', (e) => {
 
         const errorContainer = document.getElementById('screenError');
         if (errorContainer) errorContainer.style.display = 'none';
+
+        if (typeof window.startCodeEntryIdleTimer === 'function') window.startCodeEntryIdleTimer();
 
     };
 
@@ -7385,7 +7389,7 @@ window.startCodeEntryIdleTimer = function () {
             // يمكنك تفعيل السطر القادم أثناء التجربة فقط لمراقبة الوقت في الـ Console
             // console.log("Idle Time: " + elapsedTime); 
 
-            if (elapsedTime >= 3) {
+            if (elapsedTime >= 4 ) {
                 console.log("⏰ انتهى الوقت، العودة للرئيسية");
                 window.stopCodeEntryIdleTimer();
                 window.switchScreen('screenWelcome');
