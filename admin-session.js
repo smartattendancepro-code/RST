@@ -302,7 +302,8 @@ window.closeSessionImmediately = function () {
             partsSnap.forEach(docSnap => {
                 const p = docSnap.data();
 
-                if (p.status === "active" || p.status === "on_break") {
+                if (p.status === "active" || p.status === "on_break" || p.status === "expelled") {
+
 
                     const recID = `${p.id}_${fixedDateStr.replace(/\//g, '-')}_${cleanSubKey}`;
                     const attRef = doc(db, "attendance", recID);
@@ -523,12 +524,10 @@ window.listenToSessionState = function () {
     }
 
     window.unsubscribeSessionListener = onSnapshot(doctorSessionRef,
-        async (docSnap) => {
+        (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 const isActive = data.isActive === true;
-
-                const isAdmin = !!sessionStorage.getItem("secure_admin_session_token_v99");
 
                 if (isActive) {
                     if (typeof updateSessionButtonUI === 'function') updateSessionButtonUI(true);
@@ -538,29 +537,7 @@ window.listenToSessionState = function () {
                     if (document.getElementById('liveSubjectTag')) document.getElementById('liveSubjectTag').innerText = data.allowedSubject || "";
                     if (document.getElementById('liveHallTag')) document.getElementById('liveHallTag').innerHTML = `<i class="fa-solid fa-building-columns"></i> ${data.hall || ""}`;
                     if (document.getElementById('liveGroupTag')) document.getElementById('liveGroupTag').innerText = `GROUPS: ${(data.targetGroups || []).join(', ')}`;
-
-                    const codeDisplay = document.getElementById('liveSessionCodeDisplay');
-                    if (codeDisplay) {
-                        if (isAdmin) {
-                            try {
-                                const securityRef = doc(db, "active_sessions", docSnap.id, "private", "security");
-                                const secSnap = await getDoc(securityRef);
-
-                                if (secSnap.exists() && secSnap.data().sessionCode) {
-                                    codeDisplay.innerText = secSnap.data().sessionCode;
-                                    codeDisplay.style.color = "#0ea5e9";
-                                } else {
-                                    codeDisplay.innerText = data.sessionCode || "------";
-                                }
-                            } catch (e) {
-                                console.warn("Security Sync: Waiting for session initialization...");
-                                codeDisplay.innerText = data.sessionCode || "------";
-                            }
-                        } else {
-                            codeDisplay.innerText = data.sessionCode || "------";
-                            codeDisplay.style.color = "";
-                        }
-                    }
+                    if (document.getElementById('liveSessionCodeDisplay')) document.getElementById('liveSessionCodeDisplay').innerText = data.sessionCode || "------";
 
                     const avatarLink = document.getElementById('liveDocAvatar');
                     if (avatarLink && data.doctorAvatar) {
@@ -744,68 +721,35 @@ window.closeDoorImmediately = async function () {
     const user = auth.currentUser;
     if (!user) return;
 
-    const lang = localStorage.getItem('sys_lang') || 'ar';
+    const lang = localStorage.getItem('sys_lang') || 'en';
     const dict = (typeof i18n !== 'undefined' && i18n[lang]) ? i18n[lang] : {};
     const t = (key, defaultText) => dict[key] || defaultText;
 
     const btn = document.getElementById('btnCloseDoor');
-    const originalBtnHTML = btn ? btn.innerHTML : "";
     if (btn) {
-        btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> ${t('closing_door_loading', 'جاري القفل...')}`;
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${t('closing_door_loading', 'Closing the Door...')}`;
         btn.style.pointerEvents = 'none';
-        btn.style.opacity = '0.8';
     }
 
     try {
         const sessionRef = doc(db, "active_sessions", user.uid);
-        const securityRef = doc(db, "active_sessions", user.uid, "private", "security");
 
-        const batch = writeBatch(db);
-
-        batch.update(sessionRef, {
+        await updateDoc(sessionRef, {
             isDoorOpen: false,
             sessionCode: "EXPIRED",
-            duration: 0,
-            lastStatusUpdate: serverTimestamp()
+            duration: 0
         });
 
-        batch.set(securityRef, {
-            sessionCode: "VOID_" + Math.random().toString(36).substring(7),
-            isActive: false,
-            closedAt: serverTimestamp()
-        }, { merge: true });
+        document.getElementById('doorDurationModal').style.display = 'none';
 
-        await batch.commit();
-
-        const modal = document.getElementById('doorDurationModal');
-        if (modal) modal.style.display = 'none';
-
-        const codeDisplay = document.getElementById('liveSessionCodeDisplay');
-        if (codeDisplay) {
-            codeDisplay.innerText = "------";
-            codeDisplay.style.opacity = "0.5";
-        }
-
-        const doorStatus = document.getElementById('doorStatusText');
-        if (doorStatus) {
-            doorStatus.innerHTML = '<i class="fa-solid fa-door-closed"></i> CLOSED';
-            doorStatus.style.color = "#ef4444";
-        }
-
-        showToast(`🔒 ${t('close_door_success_toast', 'تم إغلاق البوابة ')}`, 3000, "#10b981");
-
-        if (typeof playLockSound === 'function') playLockSound();
+        showToast(`🔒 ${t('close_door_success_toast', 'Door closed successfully')}`, 3000, "#10b981");
 
     } catch (e) {
-        console.error("Critical Security Error (CloseDoor):", e);
-
-        const errorMsg = lang === 'ar' ? "❌ فشل في إغلاق البوابة" : `❌ ${t('close_door_error_toast', 'Error closing door')}`;
-        showToast(errorMsg, 4000, "#ef4444");
-
+        console.error("Error Closing Door:", e);
+        showToast(`❌ ${t('close_door_error_toast', 'Error closing door')}`, 3000, "#ef4444");
         if (btn) {
-            btn.innerHTML = originalBtnHTML || `⛔ ${t('close_door_btn', 'Close the Door')}`;
+            btn.innerHTML = `⛔ ${t('close_door_btn', 'Close the Door')}`;
             btn.style.pointerEvents = 'auto';
-            btn.style.opacity = '1';
         }
     }
 };
@@ -984,81 +928,36 @@ window.openDoorActionModal = function () {
 
 window.confirmOpenDoor = async function (seconds) {
     const user = auth.currentUser;
-    if (!user) {
-        showToast("⚠️ يجب تسجيل الدخول أولاً", 3000, "#ef4444");
-        return;
-    }
 
     const maxInput = document.getElementById('doorMaxLimitInput');
     let maxStudentsVal = 9999;
-    if (maxInput && maxInput.value.trim() !== "") {
-        const parsed = parseInt(maxInput.value);
-        maxStudentsVal = isNaN(parsed) ? 9999 : parsed;
-    }
 
+    if (maxInput && maxInput.value.trim() !== "") {
+        maxStudentsVal = parseInt(maxInput.value);
+    }
     const newCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-    const sessionRef = doc(db, "active_sessions", user.uid);
-    const securityRef = doc(db, "active_sessions", user.uid, "private", "security");
-
     try {
-        const batch = writeBatch(db);
+        const sessionRef = doc(db, "active_sessions", user.uid);
 
-        batch.update(sessionRef, {
+        await updateDoc(sessionRef, {
             isDoorOpen: true,
-            sessionCode: newCode, 
+            sessionCode: newCode,
             startTime: serverTimestamp(),
             duration: seconds,
-            maxStudents: maxStudentsVal,
-            lastStatusUpdate: serverTimestamp()
+            maxStudents: maxStudentsVal
         });
 
-        batch.set(securityRef, {
-            sessionCode: newCode,
-            updatedAt: serverTimestamp(),
-            isActive: true
-        }, { merge: true });
+        document.getElementById('doorDurationModal').style.display = 'none';
+        document.getElementById('liveSessionCodeDisplay').innerText = newCode;
+        document.getElementById('doorStatusText').innerHTML = '<i class="fa-solid fa-door-open fa-fade"></i>';
 
-        await batch.commit();
-
-        if (document.getElementById('doorDurationModal')) {
-            document.getElementById('doorDurationModal').style.display = 'none';
-        }
-
-        const codeDisplay = document.getElementById('liveSessionCodeDisplay');
-        if (codeDisplay) {
-            codeDisplay.innerText = newCode;
-            codeDisplay.style.color = "#0ea5e9"; 
-            codeDisplay.classList.add('code-active-animation');
-        }
-
-        const doorStatus = document.getElementById('doorStatusText');
-        if (doorStatus) {
-            doorStatus.innerHTML = '<i class="fa-solid fa-door-open fa-fade"></i> OPEN';
-            doorStatus.style.color = "#10b981";
-        }
-
-        const lang = localStorage.getItem('sys_lang') || 'ar';
-        let limitMsg = (maxStudentsVal >= 9999) ?
-            (lang === 'ar' ? "عدد مفتوح" : "Unlimited") :
-            `${lang === 'ar' ? 'حد' : 'Limit'}: ${maxStudentsVal}`;
-
-        const successMsg = lang === 'ar' ?
-            `🔓 تم توليد الكود وفتح الباب لمدة ${seconds}ث (${limitMsg})` :
-            `🔓 Code Generated & Door Open for ${seconds}s (${limitMsg})`;
-
-        showToast(successMsg, 4000, "#10b981");
-
-        if (typeof playSuccess === 'function') playSuccess();
+        let limitMsg = (maxStudentsVal === 9999) ? "عدد مفتوح" : `حد أقصى: ${maxStudentsVal}`;
+        showToast(`🔓 تم الفتح لمدة ${seconds}ث (${limitMsg})`, 4000, "#10b981");
 
     } catch (e) {
-        console.error("Critical Security Error (OpenDoor):", e);
-
-        if (e.code === 'permission-denied') {
-            showToast("❌ خطأ: لا تملك صلاحية الوصول للأمن", 4000, "#ef4444");
-        } else {
-            showToast("❌ فشل في تحديث بيانات البوابة", 3000, "#ef4444");
-        }
+        console.error(e);
+        showToast("خطأ في فتح البوابة", 3000, "#ef4444");
     }
 };
 
