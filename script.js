@@ -1387,14 +1387,12 @@ document.addEventListener('click', (e) => {
         }
     });
     document.addEventListener('DOMContentLoaded', () => {
-        // --- 1. تعريف وتنظيف حقل الكود فوراً عند التحميل ---
         const pinInput = document.getElementById('attendanceCode');
         if (pinInput) {
-            pinInput.value = ''; // مسح أي كود مخزن بواسطة المتصفح عند تحديث الصفحة
-            pinInput.setAttribute('autocomplete', 'off'); // منع المتصفح من اقتراح كود قديم
+            pinInput.value = ''; 
+            pinInput.setAttribute('autocomplete', 'off'); 
         }
 
-        // --- 2. مراقبة حقول التسجيل لتفعيل التحقق الفوري ---
         const signupFields = [
             'regStudentID',
             'regFullName',
@@ -1420,7 +1418,6 @@ document.addEventListener('click', (e) => {
             }
         });
 
-        // --- 3. مزامنة اللغة المحفوظة عند تحميل الصفحة ---
         const savedLang = localStorage.getItem('sys_lang') || 'ar';
         if (typeof changeLanguage === 'function') {
             changeLanguage(savedLang);
@@ -1429,30 +1426,34 @@ document.addEventListener('click', (e) => {
             });
         }
 
-        // --- 4. ربط حقل إدخال الكود بمؤقت الخمول (Idle Timer Logic) ---
         if (pinInput) {
-            // عند بدء الضغط: نبلغ النظام أن المستخدم يكتب ونصفر العداد (Reset) ليعطيه وقتاً جديداً
             pinInput.addEventListener('keydown', () => {
+                if (typeof tickInterval !== 'undefined' && tickInterval === null) {
+                    if (typeof window.startCodeEntryIdleTimer === 'function') {
+                        window.startCodeEntryIdleTimer();
+                    }
+                }
+
                 if (typeof isTyping !== 'undefined') isTyping = true;
                 if (typeof elapsedTime !== 'undefined') elapsedTime = 0;
             });
 
-            // عند رفع الإصبع: نبلغ النظام أن الكتابة توقفت مؤقتاً ليبدأ العداد في العد
             pinInput.addEventListener('keyup', () => {
                 if (typeof isTyping !== 'undefined') isTyping = false;
             });
 
-            // عند إدخال بيانات (مثل اللصق): نضمن تصفير العداد أيضاً
             pinInput.addEventListener('input', () => {
                 if (typeof isTyping !== 'undefined') isTyping = false;
                 if (typeof elapsedTime !== 'undefined') elapsedTime = 0;
             });
         }
 
-        console.log("🚀 System DOM Ready: Input Cleared & Idle Timer Synchronized");
+        console.log("🚀 System Ready: Idle Timer will now trigger ONLY after typing starts.");
     });
+
     ['regEmail', 'regEmailConfirm', 'regPass', 'regPassConfirm', 'regGender', 'regLevel', 'regGroup'].forEach(id => {
-        document.getElementById(id).addEventListener('input', validateSignupForm);
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', validateSignupForm);
     });
 
     window.performStudentLogin = async () => {
@@ -5045,7 +5046,6 @@ document.addEventListener('click', (e) => {
             if (input) input.focus();
         }, 150);
 
-        window.startCodeEntryIdleTimer();
     };
 
     window.resetMainButtonUI = function () {
@@ -7389,7 +7389,7 @@ window.startCodeEntryIdleTimer = function () {
             // يمكنك تفعيل السطر القادم أثناء التجربة فقط لمراقبة الوقت في الـ Console
             // console.log("Idle Time: " + elapsedTime); 
 
-            if (elapsedTime >= 4 ) {
+            if (elapsedTime >= 4) {
                 console.log("⏰ انتهى الوقت، العودة للرئيسية");
                 window.stopCodeEntryIdleTimer();
                 window.switchScreen('screenWelcome');
