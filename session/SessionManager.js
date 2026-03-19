@@ -7,54 +7,17 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { i18n } from '../i18n.js';
 import { applyVipTheme } from '../VipThemeManager.js';
+import './timer/SessionTimer.js';
+import './ui/SessionButtonUI.js';
+import './ui/modals/SessionEndModal.js';
+import './utils/TimeSync.js';
+import './auth/AdminAuth.js';
 
 
 const db = window.db;
 const auth = window.auth;
 
-window.globalTimeOffset = 0;
 
-
-async function syncServerTime() {
-    try {
-        const response = await fetch(window.location.href, { method: 'HEAD', cache: 'no-store' });
-
-        const serverDateStr = response.headers.get('Date');
-        if (!serverDateStr) return;
-
-        const serverTime = new Date(serverDateStr).getTime();
-        const localTime = Date.now();
-
-        window.globalTimeOffset = serverTime - localTime;
-
-        console.log("⏱️ Time Sync Offset:", window.globalTimeOffset, "ms");
-    } catch (e) {
-        console.warn("⚠️ Time Sync Failed, falling back to local time.", e);
-    }
-}
-
-syncServerTime();
-
-window.verifyAdminRole = async function () {
-    const user = auth.currentUser;
-    if (!user) return false;
-
-    try {
-        const docRef = doc(db, "faculty_members", user.uid);
-        const docSnap = await getDoc(docRef);
-
-        if (docSnap.exists()) {
-            const data = docSnap.data();
-            if (data.role === 'dean' || data.role === 'doctor') {
-                console.log("✅ Identity Verified: " + data.role);
-                return true;
-            }
-        }
-    } catch (e) {
-        console.error("Role Verification Failed:", e);
-    }
-    return false;
-};
 
 let sessionInterval = null;
 let unsubscribeLiveSnapshot = null;
@@ -469,11 +432,7 @@ window.performSessionPause = async function () {
     }
 };
 
-window.triggerSessionEndOptions = function () {
-    if (typeof playClick === 'function') playClick();
-    const modal = document.getElementById('sessionActionModal');
-    if (modal) modal.style.display = 'flex';
-};
+
 
 
 window.listenToSessionState = function () {
@@ -566,156 +525,10 @@ window.listenToSessionState = function () {
 };
 
 
-function updateSessionButtonUI(isOpen) {
-    const btn = document.getElementById('btnToggleSession');
-    const icon = document.getElementById('sessionIcon');
-    const txt = document.getElementById('sessionText');
-
-    const lang = localStorage.getItem('sys_lang') || 'en';
-
-    if (!btn) return;
-
-    btn.style.display = 'flex';
-
-    if (isOpen) {
-        btn.classList.add('session-open');
-        btn.style.background = "#dcfce7";
-        btn.style.color = "#166534";
-        btn.style.border = "2px solid #22c55e";
-
-        if (icon) icon.className = "fa-solid fa-tower-broadcast fa-fade";
-
-        if (txt) {
-            txt.setAttribute('data-i18n', 'session_active_btn');
-            txt.innerText = (lang === 'ar') ? "جلستك نشطة" : "Session Active";
-        }
-
-    } else {
-        btn.classList.remove('session-open');
-        btn.style.background = "#f1f5f9";
-        btn.style.color = "#334155";
-        btn.style.border = "2px solid #cbd5e1";
-
-        if (icon) icon.className = "fa-solid fa-play";
-
-        if (txt) {
-            txt.setAttribute('data-i18n', 'start_new_session_btn');
-            txt.innerText = (lang === 'ar') ? "بدء محاضرة جديدة" : "Start New Session";
-        }
-    }
-
-    window.lastSessionState = isOpen;
-}
 
 
-window.handleSessionTimer = function (isActive, startTime, duration) {
-    const btn = document.getElementById('btnToggleSession');
-    const icon = document.getElementById('sessionIcon');
-    const txt = document.getElementById('sessionText');
-    const floatTimer = document.getElementById('studentFloatingTimer');
-    const floatText = document.getElementById('floatingTimeText');
-    const doorStatus = document.getElementById('doorStatusText');
-
-    const isAdmin = !!sessionStorage.getItem("secure_admin_session_token_v99");
-
-    if (sessionInterval) clearInterval(sessionInterval);
-
-    if (!isActive) {
-        if (isAdmin && btn) {
-            const lang = localStorage.getItem('sys_lang') || 'en';
-
-            btn.classList.remove('session-open');
-            btn.style.background = "#f1f5f9";
-            btn.style.color = "#334155";
-            btn.style.border = "2px solid #cbd5e1";
-
-            if (txt) {
-                txt.setAttribute('data-i18n', 'start_new_session_btn');
-                txt.innerText = (lang === 'ar') ? "بدء محاضرة جديدة" : "Start New Session";
-            }
-
-            if (icon) icon.className = "fa-solid fa-play";
-        }
-        if (floatTimer) floatTimer.style.display = 'none';
-        return;
-    }
-
-    let startMs = 0;
-    if (startTime && typeof startTime.toMillis === 'function') {
-        startMs = startTime.toMillis();
-    } else {
-        startMs = startTime || (Date.now() + (window.globalTimeOffset || 0));
-    }
-
-    const updateTick = () => {
-        const currentServerTime = Date.now() + (window.globalTimeOffset || 0);
-
-        const elapsedSeconds = Math.floor((currentServerTime - startMs) / 1000);
-
-        let remaining = duration - elapsedSeconds;
-        if (remaining > duration) remaining = duration;
 
 
-        if (isAdmin) {
-            if (doorStatus) {
-                if (duration == -1) {
-                    doorStatus.innerHTML = '<i class="fa-solid fa-door-open"></i> OPEN (∞)';
-                    doorStatus.style.color = "#10b981";
-                } else if (remaining > 0) {
-                    doorStatus.innerHTML = `<i class="fa-solid fa-hourglass-half fa-spin"></i> ${remaining}s`;
-                    doorStatus.style.color = "#f59e0b";
-                } else {
-                    clearInterval(sessionInterval);
-                    const user = auth.currentUser;
-
-                    updateDoc(doc(db, "active_sessions", user.uid), {
-                        isDoorOpen: false,
-                        sessionCode: "EXPIRED"
-                    }).then(() => {
-                        doorStatus.innerHTML = '<i class="fa-solid fa-door-closed"></i> CLOSED';
-                        doorStatus.style.color = "#ef4444";
-                        showToast("⏰ انتهى وقت الدخول وقُفل الباب", 4000, "#ef4444");
-                    }).catch(err => console.error("Error closing door:", err));
-                }
-            }
-        }
-
-        else {
-            if (floatTimer) {
-                if (duration == -1) {
-                    floatTimer.style.display = 'flex';
-                    if (floatText) floatText.innerText = "OPEN";
-                } else if (remaining > 0) {
-                    floatTimer.style.display = 'flex';
-                    if (floatText) floatText.innerText = remaining + "s";
-
-                    if (remaining <= 10) floatTimer.classList.add('urgent');
-                    else floatTimer.classList.remove('urgent');
-
-                } else {
-                    clearInterval(sessionInterval);
-                    floatTimer.style.display = 'none';
-
-                    const currentScreen = document.querySelector('.section.active')?.id;
-
-                    if (currentScreen === 'screenDataEntry' && !window.isJoiningProcessActive) {
-
-                        if (typeof window.resetApplicationState === 'function') {
-                            window.resetApplicationState();
-                        }
-
-                        switchScreen('screenWelcome');
-                        const modal = document.getElementById('systemTimeoutModal');
-                        if (modal) modal.style.display = 'flex';
-                    }
-                }
-            }
-        }
-    };
-
-    updateTick();
-    sessionInterval = setInterval(updateTick, 1000);
-};
 
 document.addEventListener('input', function (e) {
     if (e.target && e.target.id === 'modalGroupInput') {
