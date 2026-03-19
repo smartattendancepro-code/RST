@@ -1,4 +1,4 @@
-function updateSessionButtonUI(isOpen) {
+window.updateSessionButtonUI = function (isOpen) {
     const btn = document.getElementById('btnToggleSession');
     const icon = document.getElementById('sessionIcon');
     const txt = document.getElementById('sessionText');
