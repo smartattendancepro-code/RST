@@ -1384,6 +1384,7 @@ document.addEventListener('click', (e) => {
         }
     });
     document.addEventListener('DOMContentLoaded', () => {
+        // 1. مراقبة حقول التسجيل لتفعيل التحقق الفوري
         const signupFields = [
             'regStudentID',
             'regFullName',
@@ -1409,6 +1410,7 @@ document.addEventListener('click', (e) => {
             }
         });
 
+        // 2. مزامنة اللغة المحفوظة عند تحميل الصفحة
         const savedLang = localStorage.getItem('sys_lang') || 'ar';
         if (typeof changeLanguage === 'function') {
             changeLanguage(savedLang);
@@ -1417,7 +1419,26 @@ document.addEventListener('click', (e) => {
             });
         }
 
-        console.log("🚀 Signup Monitor & Language Lock: ACTIVE");
+        // 3. ربط حقل إدخال الكود بمؤقت الخمول (تم التعديل للأسماء الصحيحة)
+        const pinInput = document.getElementById('attendanceCode');
+        if (pinInput) {
+            // عند بدء الضغط: نبلغ النظام أن المستخدم يكتب ونصفر العداد (Reset)
+            pinInput.addEventListener('keydown', () => {
+                if (typeof isTyping !== 'undefined') isTyping = true;
+                if (typeof elapsedTime !== 'undefined') elapsedTime = 0;
+            });
+
+            // عند رفع الإصبع أو لصق نص: نبلغ النظام أن التفاعل المباشر انتهى ليبدأ العد
+            pinInput.addEventListener('keyup', () => {
+                if (typeof isTyping !== 'undefined') isTyping = false;
+            });
+
+            pinInput.addEventListener('input', () => {
+                if (typeof isTyping !== 'undefined') isTyping = false;
+            });
+        }
+
+        console.log("🚀 Signup Monitor, Language Lock & Idle Timer: ACTIVE");
     });
 
     ['regEmail', 'regEmailConfirm', 'regPass', 'regPassConfirm', 'regGender', 'regLevel', 'regGroup'].forEach(id => {
@@ -1686,6 +1707,8 @@ document.addEventListener('click', (e) => {
             const result = await response.json();
 
             if (response.ok && result.success) {
+
+                if (typeof window.stopCodeEntryIdleTimer === 'function') window.stopCodeEntryIdleTimer();
                 if (typeof playSuccess === 'function') playSuccess();
                 showToast(`✅ ${result.message}`, 3000, "#10b981");
 
@@ -2076,6 +2099,9 @@ document.addEventListener('click', (e) => {
     function clearKey() { playClick(); document.getElementById('uniID').value = ''; }
 
     async function goBackToWelcome() {
+
+        window.stopCodeEntryIdleTimer();
+
         playClick();
         window.scrollTo({ top: 0, behavior: 'smooth' });
 
@@ -3288,6 +3314,8 @@ document.addEventListener('click', (e) => {
             const result = await response.json();
 
             if (response.ok && result.success) {
+
+                if (typeof window.stopCodeEntryIdleTimer === 'function') window.stopCodeEntryIdleTimer();
 
                 document.getElementById('studentPassModal').style.display = 'none';
                 if (typeof playSuccess === 'function') playSuccess();
@@ -5001,6 +5029,8 @@ document.addEventListener('click', (e) => {
             const input = document.getElementById('attendanceCode');
             if (input) input.focus();
         }, 150);
+
+        window.startCodeEntryIdleTimer();
     };
 
     window.resetMainButtonUI = function () {
@@ -6997,6 +7027,7 @@ window.startQrScanner = function () {
 
 const originalGoBack = window.goBackToWelcome;
 window.goBackToWelcome = async function () {
+
     await window.stopCameraSafely();
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -7314,3 +7345,42 @@ window.downloadSimpleSheet = function (subjectName) {
     performNetworkDiagnostic();
 
 })();
+
+// ============================================
+// نظام مؤقت الخمول لشاشة إدخال الكود
+// ============================================
+var idleTimer = null; // استخدام var لضمان الوصول العالمي
+var elapsedTime = 0;
+var isTyping = false;
+var tickInterval = null;
+
+window.startCodeEntryIdleTimer = function() {
+    window.stopCodeEntryIdleTimer(); // إيقاف أي عداد سابق لتجنب التداخل
+    elapsedTime = 0;
+    isTyping = false;
+    
+    console.log("⏳ مؤقت الخمول بدأ (15 ثانية)...");
+    
+    tickInterval = setInterval(() => {
+        if (!isTyping) {
+            elapsedTime++;
+            // يمكنك تفعيل السطر القادم أثناء التجربة فقط لمراقبة الوقت في الـ Console
+            // console.log("Idle Time: " + elapsedTime); 
+
+            if (elapsedTime >= 15) { 
+                console.log("⏰ انتهى الوقت، العودة للرئيسية");
+                window.stopCodeEntryIdleTimer();
+                window.switchScreen('screenWelcome');
+                if(typeof window.showToast === 'function') 
+                    window.showToast("⚠️ تم إلغاء العملية لعدم النشاط", 3000, "#f59e0b");
+            }
+        }
+    }, 1000);
+};
+
+window.stopCodeEntryIdleTimer = function() {
+    clearInterval(tickInterval);
+    tickInterval = null;
+    elapsedTime = 0;
+    isTyping = false;
+};
