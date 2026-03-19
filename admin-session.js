@@ -541,7 +541,7 @@ window.listenToSessionState = function () {
 
                     const codeDisplay = document.getElementById('liveSessionCodeDisplay');
                     if (codeDisplay) {
-                        if (isAdmin) {
+                        if (isAdmin && data.isDoorOpen === true) {
                             try {
                                 const securityRef = doc(db, "active_sessions", docSnap.id, "private", "security");
                                 const secSnap = await getDoc(securityRef);
@@ -558,7 +558,12 @@ window.listenToSessionState = function () {
                             }
                         } else {
                             codeDisplay.innerText = data.sessionCode || "------";
-                            codeDisplay.style.color = "";
+
+                            if (data.sessionCode === "EXPIRED" || data.isDoorOpen === false) {
+                                codeDisplay.style.color = "#ef4444";
+                            } else {
+                                codeDisplay.style.color = ""; 
+                            }
                         }
                     }
 
@@ -1006,7 +1011,7 @@ window.confirmOpenDoor = async function (seconds) {
 
         batch.update(sessionRef, {
             isDoorOpen: true,
-            sessionCode: newCode, 
+            sessionCode: newCode,
             startTime: serverTimestamp(),
             duration: seconds,
             maxStudents: maxStudentsVal,
@@ -1028,7 +1033,7 @@ window.confirmOpenDoor = async function (seconds) {
         const codeDisplay = document.getElementById('liveSessionCodeDisplay');
         if (codeDisplay) {
             codeDisplay.innerText = newCode;
-            codeDisplay.style.color = "#0ea5e9"; 
+            codeDisplay.style.color = "#0ea5e9";
             codeDisplay.classList.add('code-active-animation');
         }
 
