@@ -202,6 +202,11 @@ onAuthStateChanged(auth, async (_0xUser) => {
                         const _0xName = _0xData[_0x(41)]?.[_0x(20)] || _0xData[_0x(20)] || _0x(42);
 
                         if (typeof listenToSessionState === 'function') listenToSessionState();
+
+                        // ✅ مزامنة TARGET_DOCTOR_UID قبل monitorMyParticipation
+                        const _savedUID = localStorage.getItem('TARGET_DOCTOR_UID');
+                        if (_savedUID) sessionStorage.setItem('TARGET_DOCTOR_UID', _savedUID);
+
                         if (typeof monitorMyParticipation === 'function') monitorMyParticipation();
                         if (typeof window[_0x(72)] === 'function') window[_0x(72)](_0xName);
 
@@ -832,6 +837,12 @@ document.addEventListener('click', (e) => {
         const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`; window.open(mapsUrl, '_blank');
     }
     window.onload = function () {
+
+        const _savedUID = localStorage.getItem('TARGET_DOCTOR_UID');
+        if (_savedUID) {
+            sessionStorage.setItem('TARGET_DOCTOR_UID', _savedUID);
+            if (typeof window.resetMainButtonUI === 'function') window.resetMainButtonUI();
+        }
         initGlobalGuard();
         updateUIForMode();
         setupCustomSelects();
@@ -7298,4 +7309,3 @@ window.downloadSimpleSheet = function (subjectName) {
     performNetworkDiagnostic();
 
 })();
-
