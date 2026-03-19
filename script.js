@@ -1693,6 +1693,9 @@ document.addEventListener('click', (e) => {
                 sessionStorage.setItem('TARGET_DOCTOR_UID', targetDrUID);
                 sessionStorage.removeItem('TEMP_DR_UID');
 
+                if (typeof window.resetMainButtonUI === 'function') window.resetMainButtonUI();
+                if (typeof window.monitorMyParticipation === 'function') window.monitorMyParticipation();
+
                 try {
                     let cached = localStorage.getItem('cached_profile_data');
                     if (cached) {
