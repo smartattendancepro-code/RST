@@ -523,12 +523,10 @@ window.listenToSessionState = function () {
     }
 
     window.unsubscribeSessionListener = onSnapshot(doctorSessionRef,
-        async (docSnap) => {
+        (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 const isActive = data.isActive === true;
-
-                const isAdmin = !!sessionStorage.getItem("secure_admin_session_token_v99");
 
                 if (isActive) {
                     if (typeof updateSessionButtonUI === 'function') updateSessionButtonUI(true);
@@ -538,34 +536,7 @@ window.listenToSessionState = function () {
                     if (document.getElementById('liveSubjectTag')) document.getElementById('liveSubjectTag').innerText = data.allowedSubject || "";
                     if (document.getElementById('liveHallTag')) document.getElementById('liveHallTag').innerHTML = `<i class="fa-solid fa-building-columns"></i> ${data.hall || ""}`;
                     if (document.getElementById('liveGroupTag')) document.getElementById('liveGroupTag').innerText = `GROUPS: ${(data.targetGroups || []).join(', ')}`;
-
-                    const codeDisplay = document.getElementById('liveSessionCodeDisplay');
-                    if (codeDisplay) {
-                        if (isAdmin && data.isDoorOpen === true) {
-                            try {
-                                const securityRef = doc(db, "active_sessions", docSnap.id, "private", "security");
-                                const secSnap = await getDoc(securityRef);
-
-                                if (secSnap.exists() && secSnap.data().sessionCode) {
-                                    codeDisplay.innerText = secSnap.data().sessionCode;
-                                    codeDisplay.style.color = "#0ea5e9";
-                                } else {
-                                    codeDisplay.innerText = data.sessionCode || "------";
-                                }
-                            } catch (e) {
-                                console.warn("Security Sync: Waiting for session initialization...");
-                                codeDisplay.innerText = data.sessionCode || "------";
-                            }
-                        } else {
-                            codeDisplay.innerText = data.sessionCode || "------";
-
-                            if (data.sessionCode === "EXPIRED" || data.isDoorOpen === false) {
-                                codeDisplay.style.color = "#ef4444";
-                            } else {
-                                codeDisplay.style.color = "";
-                            }
-                        }
-                    }
+                    if (document.getElementById('liveSessionCodeDisplay')) document.getElementById('liveSessionCodeDisplay').innerText = data.sessionCode || "------";
 
                     const avatarLink = document.getElementById('liveDocAvatar');
                     if (avatarLink && data.doctorAvatar) {
@@ -749,68 +720,35 @@ window.closeDoorImmediately = async function () {
     const user = auth.currentUser;
     if (!user) return;
 
-    const lang = localStorage.getItem('sys_lang') || 'ar';
+    const lang = localStorage.getItem('sys_lang') || 'en';
     const dict = (typeof i18n !== 'undefined' && i18n[lang]) ? i18n[lang] : {};
     const t = (key, defaultText) => dict[key] || defaultText;
 
     const btn = document.getElementById('btnCloseDoor');
-    const originalBtnHTML = btn ? btn.innerHTML : "";
     if (btn) {
-        btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> ${t('closing_door_loading', 'جاري القفل...')}`;
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${t('closing_door_loading', 'Closing the Door...')}`;
         btn.style.pointerEvents = 'none';
-        btn.style.opacity = '0.8';
     }
 
     try {
         const sessionRef = doc(db, "active_sessions", user.uid);
-        const securityRef = doc(db, "active_sessions", user.uid, "private", "security");
 
-        const batch = writeBatch(db);
-
-        batch.update(sessionRef, {
+        await updateDoc(sessionRef, {
             isDoorOpen: false,
             sessionCode: "EXPIRED",
-            duration: 0,
-            lastStatusUpdate: serverTimestamp()
+            duration: 0
         });
 
-        batch.set(securityRef, {
-            sessionCode: "VOID_" + Math.random().toString(36).substring(7),
-            isActive: false,
-            closedAt: serverTimestamp()
-        }, { merge: true });
+        document.getElementById('doorDurationModal').style.display = 'none';
 
-        await batch.commit();
-
-        const modal = document.getElementById('doorDurationModal');
-        if (modal) modal.style.display = 'none';
-
-        const codeDisplay = document.getElementById('liveSessionCodeDisplay');
-        if (codeDisplay) {
-            codeDisplay.innerText = "------";
-            codeDisplay.style.opacity = "0.5";
-        }
-
-        const doorStatus = document.getElementById('doorStatusText');
-        if (doorStatus) {
-            doorStatus.innerHTML = '<i class="fa-solid fa-door-closed"></i> CLOSED';
-            doorStatus.style.color = "#ef4444";
-        }
-
-        showToast(`🔒 ${t('close_door_success_toast', 'تم إغلاق البوابة ')}`, 3000, "#10b981");
-
-        if (typeof playLockSound === 'function') playLockSound();
+        showToast(`🔒 ${t('close_door_success_toast', 'Door closed successfully')}`, 3000, "#10b981");
 
     } catch (e) {
-        console.error("Critical Security Error (CloseDoor):", e);
-
-        const errorMsg = lang === 'ar' ? "❌ فشل في إغلاق البوابة" : `❌ ${t('close_door_error_toast', 'Error closing door')}`;
-        showToast(errorMsg, 4000, "#ef4444");
-
+        console.error("Error Closing Door:", e);
+        showToast(`❌ ${t('close_door_error_toast', 'Error closing door')}`, 3000, "#ef4444");
         if (btn) {
-            btn.innerHTML = originalBtnHTML || `⛔ ${t('close_door_btn', 'Close the Door')}`;
+            btn.innerHTML = `⛔ ${t('close_door_btn', 'Close the Door')}`;
             btn.style.pointerEvents = 'auto';
-            btn.style.opacity = '1';
         }
     }
 };
@@ -989,81 +927,36 @@ window.openDoorActionModal = function () {
 
 window.confirmOpenDoor = async function (seconds) {
     const user = auth.currentUser;
-    if (!user) {
-        showToast("⚠️ يجب تسجيل الدخول أولاً", 3000, "#ef4444");
-        return;
-    }
 
     const maxInput = document.getElementById('doorMaxLimitInput');
     let maxStudentsVal = 9999;
-    if (maxInput && maxInput.value.trim() !== "") {
-        const parsed = parseInt(maxInput.value);
-        maxStudentsVal = isNaN(parsed) ? 9999 : parsed;
-    }
 
+    if (maxInput && maxInput.value.trim() !== "") {
+        maxStudentsVal = parseInt(maxInput.value);
+    }
     const newCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-    const sessionRef = doc(db, "active_sessions", user.uid);
-    const securityRef = doc(db, "active_sessions", user.uid, "private", "security");
-
     try {
-        const batch = writeBatch(db);
+        const sessionRef = doc(db, "active_sessions", user.uid);
 
-        batch.update(sessionRef, {
+        await updateDoc(sessionRef, {
             isDoorOpen: true,
             sessionCode: newCode,
             startTime: serverTimestamp(),
             duration: seconds,
-            maxStudents: maxStudentsVal,
-            lastStatusUpdate: serverTimestamp()
+            maxStudents: maxStudentsVal
         });
 
-        batch.set(securityRef, {
-            sessionCode: newCode,
-            updatedAt: serverTimestamp(),
-            isActive: true
-        }, { merge: true });
+        document.getElementById('doorDurationModal').style.display = 'none';
+        document.getElementById('liveSessionCodeDisplay').innerText = newCode;
+        document.getElementById('doorStatusText').innerHTML = '<i class="fa-solid fa-door-open fa-fade"></i>';
 
-        await batch.commit();
-
-        if (document.getElementById('doorDurationModal')) {
-            document.getElementById('doorDurationModal').style.display = 'none';
-        }
-
-        const codeDisplay = document.getElementById('liveSessionCodeDisplay');
-        if (codeDisplay) {
-            codeDisplay.innerText = newCode;
-            codeDisplay.style.color = "#0ea5e9";
-            codeDisplay.classList.add('code-active-animation');
-        }
-
-        const doorStatus = document.getElementById('doorStatusText');
-        if (doorStatus) {
-            doorStatus.innerHTML = '<i class="fa-solid fa-door-open fa-fade"></i> OPEN';
-            doorStatus.style.color = "#10b981";
-        }
-
-        const lang = localStorage.getItem('sys_lang') || 'ar';
-        let limitMsg = (maxStudentsVal >= 9999) ?
-            (lang === 'ar' ? "عدد مفتوح" : "Unlimited") :
-            `${lang === 'ar' ? 'حد' : 'Limit'}: ${maxStudentsVal}`;
-
-        const successMsg = lang === 'ar' ?
-            `🔓 تم توليد الكود وفتح الباب لمدة ${seconds}ث (${limitMsg})` :
-            `🔓 Code Generated & Door Open for ${seconds}s (${limitMsg})`;
-
-        showToast(successMsg, 4000, "#10b981");
-
-        if (typeof playSuccess === 'function') playSuccess();
+        let limitMsg = (maxStudentsVal === 9999) ? "عدد مفتوح" : `حد أقصى: ${maxStudentsVal}`;
+        showToast(`🔓 تم الفتح لمدة ${seconds}ث (${limitMsg})`, 4000, "#10b981");
 
     } catch (e) {
-        console.error("Critical Security Error (OpenDoor):", e);
-
-        if (e.code === 'permission-denied') {
-            showToast("❌ خطأ: لا تملك صلاحية الوصول للأمن", 4000, "#ef4444");
-        } else {
-            showToast("❌ فشل في تحديث بيانات البوابة", 3000, "#ef4444");
-        }
+        console.error(e);
+        showToast("خطأ في فتح البوابة", 3000, "#ef4444");
     }
 };
 
@@ -1256,54 +1149,7 @@ window.startLiveSnapshotListener = function () {
     if (isDoctor || isDean) {
         q = query(participantsRef, orderBy("timestamp", "desc"));
     } else {
-        const myRef = doc(db, "active_sessions", targetRoomUID, "participants", user.uid);
-
-        if (window.unsubscribeLiveSnapshot) window.unsubscribeLiveSnapshot();
-
-        window.unsubscribeLiveSnapshot = onSnapshot(myRef, (docSnap) => {
-            if (grid && docSnap.exists()) {
-                const s = docSnap.data();
-                if (s.status === 'expelled') return;
-
-                const isOnBreak = s.status === 'on_break';
-                const isLeft = s.status === 'left';
-                const opacityVal = (isLeft || isOnBreak) ? '0.5' : '1';
-                const borderStyle = isOnBreak ? '2px dashed #f59e0b' : '1px solid #e2e8f0';
-                const rawCount = s.segment_count;
-                const segCount = (rawCount && !isNaN(rawCount)) ? parseInt(rawCount) : 1;
-
-                let countBadge = '';
-                if (segCount > 1) {
-                    countBadge = `<div style="position:absolute; top:-10px; left:-10px; background:#0ea5e9; color:white; font-size:11px; font-weight:800; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:3px solid #f8fafc; z-index:100;">${segCount}</div>`;
-                }
-
-                let statusColor = isLeft ? "#94a3b8" : (s.isUnruly ? "#ef4444" : (s.isUniformViolation ? "#f97316" : "#10b981"));
-                let statusText = isLeft ? "مغادر" : (s.isUnruly ? "مشاغب" : (s.isUniformViolation ? "مخالف" : "حاضر"));
-
-                grid.innerHTML = '';
-                const card = document.createElement('div');
-                card.className = 'live-st-card student-view-card is-me-card';
-                card.style.cssText = `background:white; border-radius:15px; padding:20px; display:flex; flex-direction:column; align-items:center; opacity:${opacityVal}; width:100%; max-width:320px; margin:0 auto; border:${borderStyle}; position:relative; overflow:visible !important;`;
-                card.innerHTML = `
-                <div class="me-badge">أنت</div>
-                ${countBadge}
-                <div style="width:70px; height:70px; border-radius:50%; background:#f8fafc; border:3.5px solid ${statusColor}; display:flex; align-items:center; justify-content:center; font-size:30px; color:#0284c7; margin-bottom:10px; z-index:2;">
-                    <i class="fa-solid ${s.avatarClass || 'fa-user-graduate'}"></i>
-                </div>
-                <div style="text-align:center;">
-                    <div class="st-name notranslate" style="font-size:16px; font-weight:900; color:#1e293b; text-align:center;">${s.name}</div>
-                    <div class="st-id en-font" style="font-size:12px; color:#64748b;">#${s.id}</div>
-                </div>
-                <div style="margin-top:12px; padding:4px 15px; border-radius:6px; font-size:11px; font-weight:800; border:1px solid ${statusColor}30; background:${statusColor}15; color:${statusColor};">
-                    ${statusText}
-                </div>`;
-                grid.appendChild(card);
-            }
-        }, (error) => {
-            console.error("❌ Participant Listener Error:", error.code, error.message);
-        });
-
-        return; 
+        q = query(participantsRef, where("uid", "==", user.uid));
     }
 
     if (window.unsubscribeLiveSnapshot) window.unsubscribeLiveSnapshot();
