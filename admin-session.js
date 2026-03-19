@@ -302,8 +302,7 @@ window.closeSessionImmediately = function () {
             partsSnap.forEach(docSnap => {
                 const p = docSnap.data();
 
-                if (p.status === "active" || p.status === "on_break" || p.status === "expelled") {
-
+                if (p.status === "active" || p.status === "on_break") {
 
                     const recID = `${p.id}_${fixedDateStr.replace(/\//g, '-')}_${cleanSubKey}`;
                     const attRef = doc(db, "attendance", recID);
