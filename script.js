@@ -7357,6 +7357,13 @@ window.downloadSimpleSheet = function (subjectName) {
 
 })();
 
+window.addEventListener('pageshow', (event) => {
+    const pinInput = document.getElementById('attendanceCode');
+    if (pinInput) {
+        pinInput.value = '';
+    }
+});
+
 // ============================================
 // نظام مؤقت الخمول لشاشة إدخال الكود
 // ============================================
@@ -7378,12 +7385,12 @@ window.startCodeEntryIdleTimer = function () {
             // يمكنك تفعيل السطر القادم أثناء التجربة فقط لمراقبة الوقت في الـ Console
             // console.log("Idle Time: " + elapsedTime); 
 
-            if (elapsedTime >= 10) {
+            if (elapsedTime >= 3) {
                 console.log("⏰ انتهى الوقت، العودة للرئيسية");
                 window.stopCodeEntryIdleTimer();
                 window.switchScreen('screenWelcome');
                 if (typeof window.showToast === 'function')
-                    window.showToast("⚠️ تم إلغاء العملية لعدم النشاط", 3000, "#f59e0b");
+                    window.showToast("⚠️ كن سريعا في المرة القادمة  ", 3000, "#f59e0b");
             }
         }
     }, 1000);
@@ -7394,4 +7401,6 @@ window.stopCodeEntryIdleTimer = function () {
     tickInterval = null;
     elapsedTime = 0;
     isTyping = false;
+    const input = document.getElementById('attendanceCode');
+    if (input) input.value = '';
 };
