@@ -3519,7 +3519,6 @@ document.addEventListener('click', (e) => {
                     document.getElementById('profLevel').innerText = `الفرقة ${cData.level || '?'}`;
                     document.getElementById('profGender').innerText = cData.gender || "--";
                     document.getElementById('profEmail').innerText = cData.email || user.email;
-                    document.getElementById('profUID').innerText = cData.uid;
 
                     const cAvatarEl = document.getElementById('currentAvatar');
                     if (cAvatarEl) {
@@ -3600,8 +3599,6 @@ document.addEventListener('click', (e) => {
             document.getElementById('profGender').innerText = info.gender || "--";
 
             document.getElementById('profEmail').innerText = info.email || user.email || "--";
-
-            document.getElementById('profUID').innerText = data.uid || user.uid;
 
             const currentAvatarEl = document.getElementById('currentAvatar');
             if (currentAvatarEl) {
@@ -7301,5 +7298,4 @@ window.downloadSimpleSheet = function (subjectName) {
     performNetworkDiagnostic();
 
 })();
-
 
