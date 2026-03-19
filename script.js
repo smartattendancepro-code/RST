@@ -1694,7 +1694,9 @@ document.addEventListener('click', (e) => {
                 sessionStorage.removeItem('TEMP_DR_UID');
 
                 if (typeof window.resetMainButtonUI === 'function') window.resetMainButtonUI();
-                if (typeof window.monitorMyParticipation === 'function') window.monitorMyParticipation();
+                setTimeout(() => {
+                    if (typeof window.monitorMyParticipation === 'function') window.monitorMyParticipation();
+                }, 100);
 
                 try {
                     let cached = localStorage.getItem('cached_profile_data');
