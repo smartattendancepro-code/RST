@@ -1389,9 +1389,9 @@ document.addEventListener('click', (e) => {
     document.addEventListener('DOMContentLoaded', () => {
         const pinInput = document.getElementById('attendanceCode');
         if (pinInput) {
-            pinInput.value = ''; 
-            pinInput.setAttribute('autocomplete', 'off'); 
-            pinInput.setAttribute('inputmode', 'numeric'); 
+            pinInput.value = '';
+            pinInput.setAttribute('autocomplete', 'off');
+            pinInput.setAttribute('inputmode', 'numeric');
         }
 
         const signupFields = [
@@ -1445,6 +1445,17 @@ document.addEventListener('click', (e) => {
                     console.log("🚀 Code complete (6 digits). Auto-joining...");
                     if (typeof window.searchForSession === 'function') {
                         window.searchForSession();
+                    }
+                }
+            });
+        }
+        const passInputForEnter = document.getElementById('sessionPass');
+        if (passInputForEnter) {
+            passInputForEnter.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    console.log("⌨️ تم الضغط على Enter.. جاري الانضمام");
+                    if (typeof window.joinSessionAction === 'function') {
+                        window.joinSessionAction();
                     }
                 }
             });
@@ -1824,10 +1835,11 @@ document.addEventListener('click', (e) => {
 
             sessionStorage.setItem('TEMP_DR_UID', doctorUID);
 
+            // ✅ إيقاف مؤقت الخمول فوراً لأن الطالب نجح في الخطوة الأولى
             if (typeof window.stopCodeEntryIdleTimer === 'function') window.stopCodeEntryIdleTimer();
 
             const docNameEl = document.getElementById('foundDocName');
-            const subjectNameEl = document.getElementById('foundSubjectName'); // ✅ تم التعريف
+            const subjectNameEl = document.getElementById('foundSubjectName');
             const foundAvatar = document.getElementById('foundDocAvatar');
 
             if (docNameEl) {
@@ -1854,7 +1866,15 @@ document.addEventListener('click', (e) => {
             if (step1) step1.style.display = 'none';
             if (step2) {
                 step2.style.display = 'block';
-                step2.classList.add('active'); // تفعيل الأنيميشن
+                step2.classList.add('active');
+
+                // 🔥 التعديل المطلوب: فتح الكيبورد تلقائياً على حقل كلمة السر
+                setTimeout(() => {
+                    const passInput = document.getElementById('sessionPass');
+                    if (passInput) {
+                        passInput.focus(); // يضع المؤشر داخل الحقل ويفتح الكيبورد
+                    }
+                }, 400); // تأخير 400 مللي ثانية لضمان ظهور الشاشة تماماً
             }
 
         } catch (e) {
@@ -7370,16 +7390,13 @@ window.addEventListener('pageshow', (event) => {
     }
 });
 
-// ============================================
-// نظام مؤقت الخمول لشاشة إدخال الكود
-// ============================================
-var idleTimer = null; // استخدام var لضمان الوصول العالمي
+var idleTimer = null; 
 var elapsedTime = 0;
 var isTyping = false;
 var tickInterval = null;
 
 window.startCodeEntryIdleTimer = function () {
-    window.stopCodeEntryIdleTimer(); // إيقاف أي عداد سابق لتجنب التداخل
+    window.stopCodeEntryIdleTimer(); 
     elapsedTime = 0;
     isTyping = false;
 
@@ -7388,10 +7405,8 @@ window.startCodeEntryIdleTimer = function () {
     tickInterval = setInterval(() => {
         if (!isTyping) {
             elapsedTime++;
-            // يمكنك تفعيل السطر القادم أثناء التجربة فقط لمراقبة الوقت في الـ Console
-            // console.log("Idle Time: " + elapsedTime); 
 
-            if (elapsedTime >= 4) {
+            if (elapsedTime >= 5) {
                 console.log("⏰ انتهى الوقت، العودة للرئيسية");
                 window.stopCodeEntryIdleTimer();
                 window.switchScreen('screenWelcome');
