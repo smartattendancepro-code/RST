@@ -302,7 +302,8 @@ window.closeSessionImmediately = function () {
             partsSnap.forEach(docSnap => {
                 const p = docSnap.data();
 
-                if (p.status === "active" || p.status === "on_break") {
+                if (p.status === "active" || p.status === "on_break" || p.status === "expelled") {
+
 
                     const recID = `${p.id}_${fixedDateStr.replace(/\//g, '-')}_${cleanSubKey}`;
                     const attRef = doc(db, "attendance", recID);
@@ -927,86 +928,36 @@ window.openDoorActionModal = function () {
 
 window.confirmOpenDoor = async function (seconds) {
     const user = auth.currentUser;
-    if (!user) {
-        showToast("⚠️ يجب تسجيل الدخول أولاً", 3000, "#ef4444");
-        return;
-    }
 
-    // 1. جلب الحد الأقصى للطلاب بذكاء (Default: 9999)
     const maxInput = document.getElementById('doorMaxLimitInput');
     let maxStudentsVal = 9999;
-    if (maxInput && maxInput.value.trim() !== "") {
-        const parsed = parseInt(maxInput.value);
-        maxStudentsVal = isNaN(parsed) ? 9999 : parsed;
-    }
 
-    // 2. توليد الكود السري (6 أرقام)
+    if (maxInput && maxInput.value.trim() !== "") {
+        maxStudentsVal = parseInt(maxInput.value);
+    }
     const newCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // 3. تحديد المراجع (العام والسري)
-    const sessionRef = doc(db, "active_sessions", user.uid);
-    const securityRef = doc(db, "active_sessions", user.uid, "private", "security");
-
     try {
-        // 🔥 استخدام writeBatch لضمان تحديث كل شيء أو لا شيء (Atomic Transaction)
-        const batch = writeBatch(db);
+        const sessionRef = doc(db, "active_sessions", user.uid);
 
-        // أ. تحديث المستند العام (يراه الجميع لكن الكود الحقيقي مخفي)
-        batch.update(sessionRef, {
+        await updateDoc(sessionRef, {
             isDoorOpen: true,
-            sessionCode: "PROTECTED", // ⬅️ هذا ما سيراه الطالب "المتجسس"
+            sessionCode: newCode,
             startTime: serverTimestamp(),
             duration: seconds,
-            maxStudents: maxStudentsVal,
-            lastStatusUpdate: serverTimestamp()
+            maxStudents: maxStudentsVal
         });
 
-       
-        batch.set(securityRef, {
-            sessionCode: newCode,
-            updatedAt: serverTimestamp(),
-            isActive: true
-        }, { merge: true });
+        document.getElementById('doorDurationModal').style.display = 'none';
+        document.getElementById('liveSessionCodeDisplay').innerText = newCode;
+        document.getElementById('doorStatusText').innerHTML = '<i class="fa-solid fa-door-open fa-fade"></i>';
 
-        await batch.commit();
-
-        if (document.getElementById('doorDurationModal')) {
-            document.getElementById('doorDurationModal').style.display = 'none';
-        }
-        
-        const codeDisplay = document.getElementById('liveSessionCodeDisplay');
-        if (codeDisplay) {
-            codeDisplay.innerText = newCode;
-            codeDisplay.classList.add('code-active-animation'); 
-        }
-
-        const doorStatus = document.getElementById('doorStatusText');
-        if (doorStatus) {
-            doorStatus.innerHTML = '<i class="fa-solid fa-door-open fa-fade"></i> OPEN';
-            doorStatus.style.color = "#10b981";
-        }
-
-        const lang = localStorage.getItem('sys_lang') || 'ar';
-        let limitMsg = (maxStudentsVal >= 9999) ? 
-            (lang === 'ar' ? "عدد مفتوح" : "Unlimited") : 
-            `${lang === 'ar' ? 'حد' : 'Limit'}: ${maxStudentsVal}`;
-
-        const successMsg = lang === 'ar' ? 
-            `🔓 تم التشفير والفتح لمدة ${seconds}ث (${limitMsg})` : 
-            `🔓 Secure Open for ${seconds}s (${limitMsg})`;
-
-        showToast(successMsg, 4000, "#10b981");
-
-        if (typeof playSuccessSound === 'function') playSuccessSound();
+        let limitMsg = (maxStudentsVal === 9999) ? "عدد مفتوح" : `حد أقصى: ${maxStudentsVal}`;
+        showToast(`🔓 تم الفتح لمدة ${seconds}ث (${limitMsg})`, 4000, "#10b981");
 
     } catch (e) {
-        console.error("Critical Security Error (OpenDoor):", e);
-        
-        if (e.code === 'permission-denied') {
-            showToast("❌ خطأ: لا تملك صلاحية الوصول للأمن", 4000, "#ef4444");
-        } else {
-            showToast("❌ فشل في تأمين الكود.. حاول مجدداً", 3000, "#ef4444");
-        }
+        console.error(e);
+        showToast("خطأ في فتح البوابة", 3000, "#ef4444");
     }
 };
 
