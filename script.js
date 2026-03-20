@@ -366,6 +366,7 @@ window.monitorMyParticipation = async function () {
 
             sessionStorage.removeItem('TARGET_DOCTOR_UID');
             resetButtonToDefault();
+            window.resetMainButtonUI();
 
             const currentScreen = document.querySelector('.section.active')?.id;
             if (currentScreen === 'screenLiveSession') {
@@ -389,6 +390,7 @@ window.monitorMyParticipation = async function () {
 
             sessionStorage.removeItem('TARGET_DOCTOR_UID');
             localStorage.removeItem('TARGET_DOCTOR_UID');
+            window.resetMainButtonUI();
 
             resetButtonToDefault();
 
@@ -431,8 +433,10 @@ window.monitorMyParticipation = async function () {
             console.log("☕ Break Detected - Kicking to Home Screen");
 
             sessionStorage.removeItem('TARGET_DOCTOR_UID');
+            localStorage.removeItem('TARGET_DOCTOR_UID');
 
             resetButtonToDefault();
+            window.resetMainButtonUI();
 
             if (window.unsubscribeLiveSnapshot) {
                 window.unsubscribeLiveSnapshot();
@@ -458,12 +462,12 @@ window.monitorMyParticipation = async function () {
         }
 
         if (data.status === 'active') {
-            setButtonToEnterMode();
+            localStorage.setItem('TARGET_DOCTOR_UID', targetDoctorUID);
+            sessionStorage.setItem('TARGET_DOCTOR_UID', targetDoctorUID);
+            window.resetMainButtonUI();
 
             const breakModal = document.getElementById('breakModal');
             if (breakModal) breakModal.style.display = 'none';
-
-            sessionStorage.setItem('TARGET_DOCTOR_UID', targetDoctorUID);
         }
 
     }, (error) => {
@@ -2406,8 +2410,11 @@ document.addEventListener('click', (e) => {
     function hideConnectionLostModal() { document.getElementById('connectionLostModal').style.display = 'none'; }
     async function checkRealConnection() { return true; }
     function initGlobalGuard() {
-        setInterval(async () => { const o = await checkRealConnection(); if (!o) showConnectionLostModal(); else hideConnectionLostModal(); }, 2000);
-        if (!isMobileDevice()) { document.getElementById('desktop-blocker').style.display = 'flex'; document.body.style.overflow = 'hidden'; throw new Error("Desktop access denied."); }
+        if (!isMobileDevice()) {
+            document.getElementById('desktop-blocker').style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            throw new Error("Desktop access denied.");
+        }
     }
 
     let unsubscribeReport = null;
@@ -4365,7 +4372,7 @@ document.addEventListener('click', (e) => {
                         console.warn("⚠️ تعذر تحديث سجل الحضور:", attErr);
                     }
                 }
-                
+
                 showToast(_t('msg_status_updated', "تم تحديث حالة الطالب."), 2000, "#10b981");
             } catch (e) {
                 console.error("Error updating status:", e);
@@ -5110,49 +5117,95 @@ document.addEventListener('click', (e) => {
 
         if (!btn) return;
 
-        const targetDoctorUID = sessionStorage.getItem('TARGET_DOCTOR_UID');
+        const targetDoctorUID = sessionStorage.getItem('TARGET_DOCTOR_UID') ||
+            localStorage.getItem('TARGET_DOCTOR_UID');
 
         if (targetDoctorUID) {
-
             const enterText = isAr ? "دخول المحاضرة" : "Enter Lecture";
             btn.innerHTML = `${enterText} <i class="fa-solid fa-door-open fa-beat-fade"></i>`;
 
             btn.style.background = "linear-gradient(135deg, #10b981, #059669)";
             btn.style.boxShadow = "0 8px 25px -5px rgba(16, 185, 129, 0.5)";
             btn.style.border = "1px solid #10b981";
+            btn.style.pointerEvents = 'auto';
+            btn.style.opacity = "1";
+            btn.disabled = false;
+            btn.classList.remove('locked');
 
             btn.onclick = function () {
                 if (typeof playClick === 'function') playClick();
-                switchScreen('screenLiveSession');
+                if (typeof switchScreen === 'function') switchScreen('screenLiveSession');
                 if (typeof startLiveSnapshotListener === 'function') startLiveSnapshotListener();
             };
 
         } else {
-
             const dict = (typeof i18n !== 'undefined') ? i18n[lang] : null;
-            const regText = dict ? dict.main_reg_btn : (isAr ? "تسجيل الحضور" : "Register Attendance");
+            const regText = dict?.main_reg_btn || (isAr ? "تسجيل الحضور" : "Register Attendance");
 
             btn.innerHTML = `${regText} <i class="fa-solid fa-fingerprint"></i>`;
 
             btn.style.background = "";
             btn.style.boxShadow = "";
             btn.style.border = "";
+            btn.style.pointerEvents = 'auto';
+            btn.style.opacity = "1";
+            btn.disabled = false;
+            btn.classList.remove('locked');
 
             btn.onclick = function () {
-                if (typeof window.forceOpenPinScreen === 'function') {
-                    window.forceOpenPinScreen();
-                } else {
-                    window.startProcess(false);
+                if (typeof playClick === 'function') playClick();
+
+                // امنع الضغط المتكرر
+                if (btn._isWaiting) return;
+
+                const dot = document.getElementById('userStatusDot');
+                const isGreen = dot && dot.style.background.includes('#22c55e');
+
+                if (isGreen) {
+                    if (typeof window.forceOpenPinScreen === 'function') {
+                        window.forceOpenPinScreen();
+                    } else {
+                        window.startProcess(false);
+                    }
+                    return;
                 }
+
+                // البروفايل لسه بيتحمل → Smart Wait
+                btn._isWaiting = true;
+                btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i>`;
+                btn.style.opacity = "0.7";
+                btn.style.pointerEvents = "none";
+
+                const checkInterval = setInterval(() => {
+                    const d = document.getElementById('userStatusDot');
+                    const green = d && d.style.background.includes('#22c55e');
+
+                    if (green) {
+                        clearInterval(checkInterval);
+                        clearTimeout(giveUp);
+                        btn._isWaiting = false;
+                        window.resetMainButtonUI();
+
+                        if (typeof window.forceOpenPinScreen === 'function') {
+                            window.forceOpenPinScreen();
+                        } else {
+                            window.startProcess(false);
+                        }
+                    }
+                }, 200);
+
+                // بعد 6 ثواني لو مفيش يوزر → افتح login
+                const giveUp = setTimeout(() => {
+                    clearInterval(checkInterval);
+                    btn._isWaiting = false;
+                    window.resetMainButtonUI();
+                    if (typeof window.openAuthDrawer === 'function') {
+                        window.openAuthDrawer();
+                    }
+                }, 6000);
             };
         }
-
-        btn.style.pointerEvents = 'auto';
-        btn.style.opacity = "1";
-        btn.classList.remove('locked');
-        btn.disabled = false;
     };
-
     window.selectStar = function (val) {
         const stars = document.querySelectorAll('.star-btn');
         const textField = document.getElementById('ratingText');
