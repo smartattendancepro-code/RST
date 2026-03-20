@@ -360,6 +360,26 @@ window.monitorMyParticipation = async function () {
 
     if (window.studentStatusListener) window.studentStatusListener();
 
+    const sessionRef = doc(db, "active_sessions", targetDoctorUID);
+
+    if (window.sessionStatusListener) window.sessionStatusListener();
+
+    window.sessionStatusListener = onSnapshot(sessionRef, (sessionSnap) => {
+        if (!sessionSnap.exists() || !sessionSnap.data().isActive) {
+            console.log("🔒 Session closed - Resetting button");
+
+            localStorage.removeItem('TARGET_DOCTOR_UID');
+            sessionStorage.removeItem('TARGET_DOCTOR_UID');
+
+            resetButtonToDefault();
+
+            if (window.studentStatusListener) {
+                window.studentStatusListener();
+                window.studentStatusListener = null;
+            }
+        }
+    });
+
     window.studentStatusListener = onSnapshot(studentRef, (docSnap) => {
         if (!docSnap.exists()) {
             console.log("🚨 Student removed or session ended.");
@@ -4365,7 +4385,7 @@ document.addEventListener('click', (e) => {
                         console.warn("⚠️ تعذر تحديث سجل الحضور:", attErr);
                     }
                 }
-                
+
                 showToast(_t('msg_status_updated', "تم تحديث حالة الطالب."), 2000, "#10b981");
             } catch (e) {
                 console.error("Error updating status:", e);
