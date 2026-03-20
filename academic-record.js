@@ -8,7 +8,8 @@ const auth = window.auth;
 let cachedAttendance = [];
 let cachedAbsence = [];
 let currentTab = 'attendance';     // لتتبع التاب الحالي
-let showAll = false;                
+let showAll = false;                // لعرض الكل أو جزء
+
 const ATTENDANCE_COLLECTIONS = [
     "attendance_NURS",
     "attendance_PT",
@@ -16,7 +17,8 @@ const ATTENDANCE_COLLECTIONS = [
 ];
 
 const CACHE_EXPIRY = 30 * 60 * 1000; // 30 دقيقة
-=
+
+
 function getUniqueKey(item) {
     return `${item.id}_${item.subject}_${item.date}_${item.doctorName}`.toLowerCase().replace(/\s+/g, '');
 }
@@ -69,6 +71,7 @@ function sortByDateDesc(data) {
         return dateB - dateA;
     });
 }
+
 function groupByDate(data) {
     const groups = new Map(); // key: date string, value: array of records
     data.forEach(record => {
@@ -81,6 +84,7 @@ function groupByDate(data) {
         .sort((a, b) => parseDate(b[0]) - parseDate(a[0]))
         .map(([date, records]) => ({ date, records }));
 }
+
 
 function setCachedAttendance(data) {
     const cache = {
@@ -134,9 +138,12 @@ function renderListWithMore(data, type, lang) {
         return;
     }
 
+    // ترتيب البيانات من الأحدث إلى الأقدم
     const sorted = sortByDateDesc(data);
+    // تجميع حسب اليوم
     const grouped = groupByDate(sorted);
 
+    // تحديد عدد الأيام التي نعرضها
     let daysToShow = showAll ? grouped.length : 1;
     if (daysToShow < 1) daysToShow = 1;
     const visibleGroups = grouped.slice(0, daysToShow);
@@ -196,6 +203,7 @@ function renderListWithMore(data, type, lang) {
         html += `</div>`;
     });
 
+    // زر عرض المزيد إذا كان هناك أيام إضافية
     if (!showAll && grouped.length > 1) {
         html += `
             <div style="text-align: center; margin-top: 10px;">
@@ -228,9 +236,13 @@ function renderListWithMore(data, type, lang) {
     }
 }
 
+// ========================================================
+// التبديل بين تابات الحضور والغياب
+// ========================================================
 window.switchAcademicTab = function (tab) {
     currentTab = tab;
-    showAll = false; 
+    showAll = false; // إعادة تعيين عرض الكل عند تبديل التاب
+
     const tabAttendance = document.getElementById('tabAttendance');
     const tabAbsence    = document.getElementById('tabAbsence');
     const lang          = localStorage.getItem('sys_lang') || 'en';
@@ -254,6 +266,9 @@ window.switchAcademicTab = function (tab) {
     }
 };
 
+// ========================================================
+// عرض رسالة خطأ
+// ========================================================
 function showError(msg) {
     document.getElementById('academicRecordContent').innerHTML = `
         <div style="text-align: center; padding: 30px; color: #ef4444;">
@@ -262,7 +277,9 @@ function showError(msg) {
         </div>`;
 }
 
-
+// ========================================================
+// فتح نافذة السجل الأكاديمي
+// ========================================================
 window.openAcademicRecord = async function () {
     const user = auth.currentUser;
     if (!user) return;
@@ -295,10 +312,12 @@ window.openAcademicRecord = async function () {
             return;
         }
 
+        // التحقق من وجود بيانات مخزنة وصالحة
         let attendanceData = getCachedAttendance();
         let absenceData = getCachedAbsence();
 
         if (!attendanceData || !absenceData) {
+            // جلب البيانات الجديدة من Firestore
             const [attendance, absence] = await Promise.all([
                 fetchAllAttendance(studentID, "ATTENDED"),
                 fetchAllAttendance(studentID, "ABSENT")
@@ -307,6 +326,7 @@ window.openAcademicRecord = async function () {
             attendanceData = attendance;
             absenceData = absence;
 
+            // تخزينها في الكاش
             setCachedAttendance(attendanceData);
             setCachedAbsence(absenceData);
         }
@@ -317,6 +337,7 @@ window.openAcademicRecord = async function () {
         document.getElementById('attendanceTabCount').innerText = cachedAttendance.length;
         document.getElementById('absenceTabCount').innerText    = cachedAbsence.length;
 
+        // عرض التاب الحالي (افتراضي attendance)
         currentTab = 'attendance';
         showAll = false;
         switchAcademicTab('attendance');
