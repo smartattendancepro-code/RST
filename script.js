@@ -5064,24 +5064,8 @@ document.addEventListener('click', (e) => {
         const user = (typeof auth !== 'undefined') ? auth.currentUser : (window.auth ? window.auth.currentUser : null);
 
         if (!user) {
-            console.log("⛔ Access Denied: Blocked attempt to access PIN screen without login.");
-
-            if (typeof showToast === 'function') {
-                showToast("⚠️ عذراً، يجب تسجيل الدخول أولاً", 3000, "#f59e0b");
-            } else {
-                alert("⚠️ يجب تسجيل الدخول أولاً");
-            }
-
-            // استنى Firebase تخلص
-            if (!auth.currentUser) {
-                setTimeout(() => window.forceOpenPinScreen(), 1000);
-                return;
-            }
-
-            if (typeof window.openAuthDrawer === 'function') {
-                window.openAuthDrawer();
-            }
-
+            // استنى Firebase تخلص بدل ما تفتح login
+            setTimeout(() => window.forceOpenPinScreen(), 1000);
             return;
         }
         console.log("🚀 Forcing PIN Screen (User Authenticated)...");
