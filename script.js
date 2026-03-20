@@ -165,8 +165,12 @@ onAuthStateChanged(auth, async (_0xUser) => {
             if (_0xFM) _0xFM[_0x(7)][_0x(8)] = _0x(9);
 
             try {
-                const _0xRef = doc(db, _0x(17), _0xUser[_0x(10)]);
-                const _0xSnap = await getDoc(_0xRef);
+                // ✅ جيب الاتنين في نفس الوقت
+                const [_0xSnap, _0xStuDoc] = await Promise.all([
+                    getDoc(doc(db, _0x(17), _0xUser[_0x(10)])),
+                    getDoc(doc(db, _0x(40), _0xUser[_0x(10)]))
+                ]);
+
                 let _0xData = null;
 
                 if (_0xSnap[_0x(18)]()) {
@@ -193,35 +197,32 @@ onAuthStateChanged(auth, async (_0xUser) => {
                         _0xStat[_0x(7)][_0x(37)] = _0x(38);
                     }
 
-                } else {
+                } else if (_0xStuDoc[_0x(18)]()) {
                     sessionStorage[_0x(39)](_0x(29));
 
-                    const _0xStuDoc = await getDoc(doc(db, _0x(40), _0xUser[_0x(10)]));
-                    if (_0xStuDoc[_0x(18)]()) {
-                        _0xData = _0xStuDoc[_0x(19)]();
-                        const _0xName = _0xData[_0x(41)]?.[_0x(20)] || _0xData[_0x(20)] || _0x(42);
+                    _0xData = _0xStuDoc[_0x(19)]();
+                    const _0xName = _0xData[_0x(41)]?.[_0x(20)] || _0xData[_0x(20)] || _0x(42);
 
-                        if (typeof listenToSessionState === 'function') listenToSessionState();
+                    if (typeof listenToSessionState === 'function') listenToSessionState();
 
-                        // ✅ مزامنة TARGET_DOCTOR_UID قبل monitorMyParticipation
-                        const _savedUID = localStorage.getItem('TARGET_DOCTOR_UID');
-                        if (_savedUID) sessionStorage.setItem('TARGET_DOCTOR_UID', _savedUID);
+                    // ✅ مزامنة TARGET_DOCTOR_UID قبل monitorMyParticipation
+                    const _savedUID = localStorage.getItem('TARGET_DOCTOR_UID');
+                    if (_savedUID) sessionStorage.setItem('TARGET_DOCTOR_UID', _savedUID);
 
-                        if (typeof monitorMyParticipation === 'function') monitorMyParticipation();
-                        if (typeof window[_0x(72)] === 'function') window[_0x(72)](_0xName);
+                    if (typeof monitorMyParticipation === 'function') monitorMyParticipation();
+                    if (typeof window[_0x(72)] === 'function') window[_0x(72)](_0xName);
 
-                        if (typeof window[_0x(43)] === 'function') {
-                            setTimeout(window[_0x(43)], 2500);
-                        }
+                    if (typeof window[_0x(43)] === 'function') {
+                        setTimeout(window[_0x(43)], 2500);
+                    }
 
-                        const _0xAvatar = _0xData[_0x(31)] || _0xData[_0x(41)]?.[_0x(31)] || _0x(44);
-                        if (_0xPI) _0xPI[_0x(33)] = _0x(34) + _0xAvatar;
+                    const _0xAvatar = _0xData[_0x(31)] || _0xData[_0x(41)]?.[_0x(31)] || _0x(44);
+                    if (_0xPI) _0xPI[_0x(33)] = _0x(34) + _0xAvatar;
 
-                        if (_0xPW) _0xPW[_0x(7)][_0x(35)] = _0x(45);
-                        if (_0xStat) {
-                            _0xStat[_0x(7)][_0x(35)] = _0x(46);
-                            _0xStat[_0x(7)][_0x(37)] = _0x(47);
-                        }
+                    if (_0xPW) _0xPW[_0x(7)][_0x(35)] = _0x(45);
+                    if (_0xStat) {
+                        _0xStat[_0x(7)][_0x(35)] = _0x(46);
+                        _0xStat[_0x(7)][_0x(37)] = _0x(47);
                     }
                 }
 
@@ -1646,7 +1647,15 @@ document.addEventListener('click', (e) => {
 
         try {
             const sessionRef = doc(db, "active_sessions", targetDrUID);
-            const sessionSnap = await getDoc(sessionRef);
+            const sensRef = doc(db, "user_registrations", user.uid, "sensitive_info", "main");
+
+            const [sessionSnap, gpsData, deviceFingerprint, idToken, sensSnap] = await Promise.all([
+                getDoc(sessionRef),
+                window.getGPSForJoin(),
+                window.getUniqueDeviceId(),
+                user.getIdToken(),
+                getDoc(sensRef)
+            ]);
 
             if (!sessionSnap.exists()) {
                 throw new Error("⛔ الجلسة غير موجودة");
@@ -1664,24 +1673,14 @@ document.addEventListener('click', (e) => {
 
             console.log("⚡ جاري إرسال الطلب للمصيدة الأمنية...");
 
-            const gpsData = await window.getGPSForJoin();
-
-            const deviceFingerprint = await window.getUniqueDeviceId();
-
-            // 🔐 [تعديل جراحي] نظام البصمة المزدوجة - الفرونت إند
             let isDeviceMatch = true;
             try {
-                const sensRef = doc(db, "user_registrations", user.uid, "sensitive_info", "main");
-                const sensSnap = await getDoc(sensRef);
-
                 if (sensSnap.exists()) {
                     const sensData = sensSnap.data();
-                    // جلب البصمات المسجلة (دعم النظام القديم والجديد)
                     let allowed = sensData.allowed_devices || (sensData.bound_device_id ? [sensData.bound_device_id] : []);
 
                     if (!allowed.includes(deviceFingerprint)) {
                         if (allowed.length < 2) {
-                            // الطالب عنده بصمة واحدة.. سجل التانية فوراً كبصمة قانونية
                             allowed.push(deviceFingerprint);
                             await setDoc(sensRef, {
                                 allowed_devices: allowed,
@@ -1690,19 +1689,16 @@ document.addEventListener('click', (e) => {
                             console.log("✅ تم تسجيل بصمة الجهاز الثانية كجهاز موثوق.");
                             isDeviceMatch = true;
                         } else {
-                            // مسجل جهازين بالفعل وده جهاز تالت
                             isDeviceMatch = false;
                         }
                     } else {
-                        isDeviceMatch = true; // الجهاز الحالي هو واحد من الاتنين
+                        isDeviceMatch = true;
                     }
                 }
             } catch (e) {
                 console.error("Security Sync Error:", e);
-                isDeviceMatch = true; // نمررها في حالة الخطأ عشان الطالب ميعطلش
+                isDeviceMatch = true;
             }
-
-            const idToken = await user.getIdToken();
 
             await AuditManager.sendSecretLog(db, user, sessionData, {
                 deviceFingerprint: deviceFingerprint,
@@ -1723,7 +1719,7 @@ document.addEventListener('click', (e) => {
                     gpsLat: gpsData.lat || 0,
                     gpsLng: gpsData.lng || 0,
                     deviceFingerprint: deviceFingerprint,
-                    isDeviceMatch: isDeviceMatch, // النتيجة اللي الفرونت إند حسبها
+                    isDeviceMatch: isDeviceMatch,
                     codeInput: sessionData.sessionCode
                 })
             });
@@ -1731,7 +1727,6 @@ document.addEventListener('click', (e) => {
             const result = await response.json();
 
             if (response.ok && result.success) {
-
                 if (typeof window.stopCodeEntryIdleTimer === 'function') window.stopCodeEntryIdleTimer();
                 if (typeof playSuccess === 'function') playSuccess();
                 showToast(`✅ ${result.message}`, 3000, "#10b981");
@@ -3693,8 +3688,16 @@ document.addEventListener('click', (e) => {
                 const studentUID = user.uid;
                 const myGroup = (info.group && info.group.trim() !== "") ? info.group.trim() : "General";
 
-                const myStatsRef = doc(db, "student_stats", studentUID);
-                const myStatsSnap = await getDoc(myStatsRef);
+                const countersQuery = query(
+                    collection(db, "course_counters"),
+                    where("targetGroups", "array-contains", myGroup)
+                );
+
+                // ✅ الاتنين في نفس الوقت
+                const [myStatsSnap, countersSnap] = await Promise.all([
+                    getDoc(doc(db, "student_stats", studentUID)),
+                    getDocs(countersQuery)
+                ]);
 
                 let myAttendedSubjects = {};
                 let disciplineStatus = "good";
@@ -3706,13 +3709,6 @@ document.addEventListener('click', (e) => {
                     if (sData.cumulative_unruly >= 3) disciplineStatus = "bad";
                     else if (sData.cumulative_unruly > 0) disciplineStatus = "warning";
                 }
-
-                const countersQuery = query(
-                    collection(db, "course_counters"),
-                    where("targetGroups", "array-contains", myGroup)
-                );
-
-                const countersSnap = await getDocs(countersQuery);
 
                 let totalSessionsHeldMap = {};
                 countersSnap.forEach(doc => {
@@ -4115,7 +4111,11 @@ document.addEventListener('click', (e) => {
             const userCredential = await signInWithEmailAndPassword(window.auth, email, pass);
             const user = userCredential.user;
 
-            await user.reload();
+            // ✅ reload و getDoc في نفس الوقت
+            const [_, facSnap] = await Promise.all([
+                user.reload(),
+                getDoc(doc(db, "faculty_members", user.uid))
+            ]);
 
             if (!user.emailVerified) {
                 console.warn("⛔ Account not verified. Attempting auto-resend...");
@@ -4132,7 +4132,6 @@ document.addEventListener('click', (e) => {
                 }
 
                 showToast(msg, 6000, "#ef4444");
-
                 await signOut(window.auth);
 
                 if (btn) {
@@ -4142,9 +4141,6 @@ document.addEventListener('click', (e) => {
                 }
                 return;
             }
-
-            const facRef = doc(db, "faculty_members", user.uid);
-            const facSnap = await getDoc(facRef);
 
             if (facSnap.exists()) {
                 const userData = facSnap.data();
@@ -4188,7 +4184,7 @@ document.addEventListener('click', (e) => {
                 showToast(_t('login_access_denied', "🚫 Access Denied: Account not found in faculty records."), 5000, "#ef4444");
 
                 await signOut(window.auth);
-                sessionStorage.removeItem("secure_admin_session_token_v99");
+                sessionStorage.removeValue("secure_admin_session_token_v99");
 
                 if (typeof updateUIForMode === 'function') updateUIForMode();
             }
@@ -4333,6 +4329,43 @@ document.addEventListener('click', (e) => {
             const studentRef = doc(db, "active_sessions", user.uid, "participants", docId);
             try {
                 await updateDoc(studentRef, { status: newStatus });
+
+                // ✅ 2. لو الحالة طرد، حدّث سجل الحضور
+                if (newStatus === 'expelled') {
+                    try {
+                        const now = new Date();
+                        const dateStr = ('0' + now.getDate()).slice(-2) + '/' +
+                            ('0' + (now.getMonth() + 1)).slice(-2) + '/' +
+                            now.getFullYear();
+
+                        const studentSnap = await getDoc(studentRef);
+                        if (studentSnap.exists()) {
+                            const studentData = studentSnap.data();
+
+                            const q = query(
+                                collection(db, "attendance"),
+                                where("id", "==", studentData.id),
+                                where("date", "==", dateStr)
+                            );
+                            const attSnap = await getDocs(q);
+
+                            if (!attSnap.empty) {
+                                const batch = writeBatch(db);
+                                attSnap.forEach(attDoc => {
+                                    batch.update(attDoc.ref, {
+                                        notes: "⛔ مطرود",
+                                        isExpelled: true,
+                                        expelled_at: serverTimestamp()
+                                    });
+                                });
+                                await batch.commit();
+                            }
+                        }
+                    } catch (attErr) {
+                        console.warn("⚠️ تعذر تحديث سجل الحضور:", attErr);
+                    }
+                }
+                
                 showToast(_t('msg_status_updated', "تم تحديث حالة الطالب."), 2000, "#10b981");
             } catch (e) {
                 console.error("Error updating status:", e);
@@ -7272,11 +7305,10 @@ window.downloadSimpleSheet = function (subjectName) {
 (function () {
     const indicator = document.getElementById('superWifiIndicator');
     const statusText = indicator.querySelector('.wifi-text');
-    const slashIcon = document.getElementById('wifiSlashIcon');
     let pingInterval = null;
 
     const PING_URL = 'https://cp.cloudflare.com/generate_204';
-    const PING_INTERVAL_MS = 2000;
+    const PING_INTERVAL_MS = 60000;
     const TIMEOUT_MS = 3000;
 
     const STATE = {
@@ -7286,9 +7318,6 @@ window.downloadSimpleSheet = function (subjectName) {
         LOADING: 'LOADING'
     };
 
-    /**
-     * @param {string} state 
-     */
     function updateUI(state) {
         indicator.classList.remove('state-loading', 'state-weak', 'wifi-status-hidden');
 
@@ -7350,7 +7379,9 @@ window.downloadSimpleSheet = function (subjectName) {
 
             const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
             if (conn) {
-                if (conn.effectiveType === 'slow-2g' || conn.effectiveType === '2g' || conn.rtt > 1000) {
+                if (conn.effectiveType === 'slow-2g' ||
+                    conn.effectiveType === '2g' ||
+                    conn.rtt > 1000) {
                     updateUI(STATE.WEAK);
                 } else {
                     updateUI(STATE.ONLINE);
@@ -7367,6 +7398,16 @@ window.downloadSimpleSheet = function (subjectName) {
     window.addEventListener('online', performNetworkDiagnostic);
     window.addEventListener('offline', () => updateUI(STATE.OFFLINE));
 
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            clearInterval(pingInterval);
+            pingInterval = null;
+        } else {
+            performNetworkDiagnostic();
+            pingInterval = setInterval(performNetworkDiagnostic, PING_INTERVAL_MS);
+        }
+    });
+
     if (document.readyState !== 'complete') {
         updateUI(STATE.LOADING);
     }
@@ -7376,7 +7417,6 @@ window.downloadSimpleSheet = function (subjectName) {
         performNetworkDiagnostic();
     });
 
-    clearInterval(pingInterval);
     pingInterval = setInterval(performNetworkDiagnostic, PING_INTERVAL_MS);
 
     performNetworkDiagnostic();
@@ -7390,13 +7430,13 @@ window.addEventListener('pageshow', (event) => {
     }
 });
 
-var idleTimer = null; 
+var idleTimer = null;
 var elapsedTime = 0;
 var isTyping = false;
 var tickInterval = null;
 
 window.startCodeEntryIdleTimer = function () {
-    window.stopCodeEntryIdleTimer(); 
+    window.stopCodeEntryIdleTimer();
     elapsedTime = 0;
     isTyping = false;
 
