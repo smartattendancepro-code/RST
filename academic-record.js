@@ -1,14 +1,15 @@
 import {
     collection, query, where, getDocs, doc, getDoc
-} from "https://www.gstatic.com/firebasejs/10.7.1/firestore.js";
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+// تأكد أن هذه القيم معرفة مسبقاً في ملف الإعدادات الخاص بك
 const db = window.db;
 const auth = window.auth;
 
 let cachedAttendance = [];
 let cachedAbsence = [];
-let currentTab = 'attendance';     // لتتبع التاب الحالي
-let showAll = false;                // لعرض الكل أو جزء
+let currentTab = 'attendance';     
+let showAll = false;                
 
 const ATTENDANCE_COLLECTIONS = [
     "attendance_NURS",
@@ -16,7 +17,7 @@ const ATTENDANCE_COLLECTIONS = [
     "attendance"
 ];
 
-const CACHE_EXPIRY = 30 * 60 * 1000; // 30 دقيقة
+const CACHE_EXPIRY = 30 * 60 * 1000; // 30 دقيقةدقيقة
 
 
 function getUniqueKey(item) {
