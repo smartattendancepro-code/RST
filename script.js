@@ -5072,6 +5072,12 @@ document.addEventListener('click', (e) => {
                 alert("⚠️ يجب تسجيل الدخول أولاً");
             }
 
+            // استنى Firebase تخلص
+            if (!auth.currentUser) {
+                setTimeout(() => window.forceOpenPinScreen(), 1000);
+                return;
+            }
+
             if (typeof window.openAuthDrawer === 'function') {
                 window.openAuthDrawer();
             }
