@@ -1,15 +1,15 @@
 /**
- * GPS Permission Manager v5.1
+ * GPS Permission Manager v5.2
  * ─────────────────────────────────────────────────────────────────────────────
  * Scenario 1 — granted  : silent fetch → cache → nothing shown
  * Scenario 2 — prompt   : simple centered modal (Allow + optional How-to)
  * Scenario 3 — denied   : modal + compact guide (Safari or Chrome steps only)
  *
  * Guarantees:
- *   • Modal re-appears if student turns off location after granting
- *   • Safari: periodic check every 30s detects location turned off
+ *   • Modal only closes on fresh location success (no stale cache)
+ *   • Reappears if location is turned off after granting
+ *   • Safari: periodic check every 30s
  *   • Chrome/Edge/Firefox: PermissionStatus.onchange instant detection
- *   • Runs once per page — _initialized guard
  *   • No hanging — 8s hard timeout
  *   • Admin sessions skipped completely
  * ─────────────────────────────────────────────────────────────────────────────
@@ -34,6 +34,7 @@
   let _modalEl       = null;
   let _guideEl       = null;
   let _bdEl          = null;
+  let _fetchInProgress = false;
 
   /* ── Helpers ────────────────────────────────────────────────────────── */
   const _lang    = () => localStorage.getItem("sys_lang") === "en" ? "en" : "ar";
@@ -298,22 +299,19 @@
     if (btn) { btn.disabled = true; btn.textContent = _t("status_fetching"); }
     _setStatus(_t("status_fetching"), "#0ea5e9");
 
-    // Force fresh fetch — ignore any cached result
+    // Force fresh fetch
     _cache = null;
-    const r = await _silentFetch();
+    const r = await _silentFetch(true);
 
     if (r.gps_success) {
-      // ✅ Only case where modal closes
       _setStatus(_t("status_ok"), "#10b981");
       setTimeout(_destroyModal, 1200);
       _startRefresh();
+    } else if (r.status === "denied") {
+      _setStatus(_t("status_denied"), "#ef4444");
+      if (btn) { btn.disabled = false; btn.textContent = _t("modal_allow"); }
     } else {
-      // ❌ Location still off or denied — modal STAYS, button restores
-      if (r.status === "denied") {
-        _setStatus(_t("status_denied"), "#ef4444");
-      } else {
-        _setStatus(_t("status_retry"), "#f59e0b");
-      }
+      _setStatus(_t("status_retry"), "#f59e0b");
       if (btn) { btn.disabled = false; btn.textContent = _t("modal_allow"); }
     }
   }
@@ -344,7 +342,6 @@
 
     document.getElementById("gps-guide-done").addEventListener("click", () => {
       _hideGuide();
-      // Reset modal button so student can retry
       const btn = document.getElementById("gps-btn-allow");
       if (btn) { btn.disabled = false; btn.textContent = _t("modal_allow"); }
       _setStatus("", "");
@@ -361,34 +358,44 @@
 
   /* ── Re-show modal if location turned off ───────────────────────────── */
   function _handlePermissionLost () {
+    if (_modalEl || _isAdmin()) return;
     _cache = null;
     clearInterval(_refreshTimer);
-    // Small delay so any in-progress fetch settles first
     setTimeout(() => {
-      if (_isAdmin()) return;
+      if (_isAdmin() || _modalEl) return;
       _hideGuide();
-      _destroyModal();
-      setTimeout(_showModal, 150);
+      _showModal();
     }, 400);
   }
 
   /* ── Core GPS fetch ─────────────────────────────────────────────────── */
-  function _silentFetch () {
+  function _silentFetch(forceFresh = false) {
     return new Promise(resolve => {
       if (!navigator.geolocation) {
         const r = { status:"no_support", gps_success:false, inRange:false, ts:Date.now() };
         _cache = r; resolve(r); return;
       }
+
+      if (_fetchInProgress) {
+        setTimeout(() => resolve(_silentFetch(forceFresh)), 100);
+        return;
+      }
+
+      _fetchInProgress = true;
       let done = false;
       const finish = r => {
-        if (done) return; done = true;
+        if (done) return;
+        done = true;
+        _fetchInProgress = false;
         _cache = { ...r, ts: Date.now() };
         resolve(_cache);
       };
+
       const timer = setTimeout(
         () => finish({ status:"timeout", gps_success:false, inRange:false }),
         FETCH_TIMEOUT
       );
+
       navigator.geolocation.getCurrentPosition(
         pos => {
           clearTimeout(timer);
@@ -401,7 +408,11 @@
           finish({ status: err.code === 1 ? "denied" : "error",
             gps_success:false, inRange:false });
         },
-        { enableHighAccuracy:false, timeout:FETCH_TIMEOUT, maximumAge:30_000 }
+        {
+          enableHighAccuracy: false,
+          timeout: FETCH_TIMEOUT,
+          maximumAge: 0           // always fresh
+        }
       );
     });
   }
@@ -410,17 +421,19 @@
   async function _watchPermission () {
     if (!navigator.permissions) return;
     try {
-      _permWatch = await navigator.permissions.query({ name:"geolocation" });
-      _permWatch.addEventListener("change", async () => {
-        if (_permWatch.state === "granted") {
-          // Student re-enabled location
-          _destroyModal(); _hideGuide();
-          const r = await _silentFetch();
+      const perm = await navigator.permissions.query({ name:"geolocation" });
+      _permWatch = perm;
+      perm.addEventListener("change", async () => {
+        if (perm.state === "granted") {
+          if (_modalEl) {
+            _destroyModal();
+            _hideGuide();
+          }
+          const r = await _silentFetch(true);
           if (r.gps_success) _startRefresh();
-          return;
+        } else if (perm.state === "denied" || perm.state === "prompt") {
+          _handlePermissionLost();
         }
-        // Student turned off location (denied or prompt)
-        _handlePermissionLost();
       });
     } catch (_) {}
   }
@@ -429,14 +442,12 @@
   function _startSafariRecheck () {
     clearInterval(_recheckTimer);
     _recheckTimer = setInterval(async () => {
-      if (_isAdmin() || _modalEl) return;   // skip if modal already showing
-      // Only recheck if we previously had a successful cache
-      if (!_cache || !_cache.gps_success) return;
-
-      const r = await _silentFetch();
-      if (!r.gps_success) {
-        // Location was turned off
-        _handlePermissionLost();
+      if (_isAdmin()) return;
+      if (_cache && _cache.gps_success && !_modalEl) {
+        const r = await _silentFetch(true);
+        if (!r.gps_success) {
+          _handlePermissionLost();
+        }
       }
     }, RECHECK_MS);
   }
@@ -464,7 +475,6 @@
 
     _watchPermission();
 
-    /* Path A — Permissions API (Chrome, Edge, Firefox, Samsung) */
     if (navigator.permissions) {
       let perm = null;
       try { perm = await navigator.permissions.query({ name:"geolocation" }); } catch (_) {}
@@ -474,18 +484,15 @@
           _silentFetch().then(r => { if (r.gps_success) _startRefresh(); });
           return;
         }
-        // "denied" or "prompt"
         _showModal();
         return;
       }
     }
 
-    /* Path B — Safari (no Permissions API)
-       Show modal instantly, fetch in background */
     _showModal();
     _startSafariRecheck();
 
-    _silentFetch().then(probe => {
+    _silentFetch(true).then(probe => {
       if (probe.gps_success) {
         _destroyModal();
         _startRefresh();
@@ -516,7 +523,6 @@
     isReady  : () => !!(_cache && _cache.gps_success),
   };
 
-  /* ── Drop-in replacements ───────────────────────────────────────────── */
   window.getGPSForJoin         = () => window.GPSManager.getForJoin();
   window.initGPSOnStartup      = () => {};
   window.getSilentLocationData = () => Promise.resolve(window.GPSManager.getForJoin());
