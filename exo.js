@@ -298,17 +298,22 @@
     if (btn) { btn.disabled = true; btn.textContent = _t("status_fetching"); }
     _setStatus(_t("status_fetching"), "#0ea5e9");
 
+    // Force fresh fetch — ignore any cached result
+    _cache = null;
     const r = await _silentFetch();
 
     if (r.gps_success) {
+      // ✅ Only case where modal closes
       _setStatus(_t("status_ok"), "#10b981");
       setTimeout(_destroyModal, 1200);
       _startRefresh();
-    } else if (r.status === "denied") {
-      _setStatus(_t("status_denied"), "#ef4444");
-      if (btn) { btn.disabled = false; btn.textContent = _t("modal_allow"); }
     } else {
-      _setStatus(_t("status_retry"), "#f59e0b");
+      // ❌ Location still off or denied — modal STAYS, button restores
+      if (r.status === "denied") {
+        _setStatus(_t("status_denied"), "#ef4444");
+      } else {
+        _setStatus(_t("status_retry"), "#f59e0b");
+      }
       if (btn) { btn.disabled = false; btn.textContent = _t("modal_allow"); }
     }
   }
