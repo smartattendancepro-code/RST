@@ -1,521 +1,394 @@
 /**
- * GPS Permission Manager v3.1
+ * GPS Permission Manager v5.0
  * ─────────────────────────────────────────────────────────────────────────────
- * Scenario 1 — granted  : silent fetch → cache → nothing shown to user
- * Scenario 2 — prompt   : Toast with "Allow" button → browser native dialog
- *                          Toast disappears instantly on grant
- * Scenario 3 — denied   : Guidance modal (tabs per browser) + "Done" retry btn
+ * Scenario 1 — granted : silent fetch → cache → nothing shown
+ * Scenario 2 — prompt  : simple centered modal (Allow + optional How-to)
+ * Scenario 3 — denied  : compact guide (Safari or Chrome steps only)
  *
  * Guarantees:
- *   • Runs once (_initialized guard)
- *   • No hanging: 8s hard timeout on every fetch
- *   • No polling: PermissionStatus.onchange for instant UI cleanup
- *   • Safari: Toast shown INSTANTLY before fetch — zero wait for user
- *   • Admin sessions are completely skipped
- *   • window.getGPSForJoin() is replaced — drop-in compatible
- *   • Old GPS functions neutralised to prevent conflicts
+ *   • Shows on FIRST open (not just refresh) — sessionStorage flag
+ *   • Runs once — _initialized guard
+ *   • No hanging — 8s hard timeout
+ *   • Safari: modal shown instantly, fetch in background
+ *   • PermissionStatus.onchange — instant cleanup on grant
+ *   • Admin sessions skipped
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-window.GPSManager = (function () {
+(function () {
 
   /* ── Constants ──────────────────────────────────────────────────────── */
-  const CACHE_TTL_MS  = 5  * 60 * 1000;
-  const REFRESH_MS    = 3  * 60 * 1000;
+  const CACHE_TTL_MS  = 10 * 60 * 1000;
+  const REFRESH_MS    =  3 * 60 * 1000;
   const FETCH_TIMEOUT = 8_000;
   const ADMIN_KEY     = "secure_admin_session_token_v99";
-  const STYLE_ID      = "gps-mgr-v3-style";
+  const STYLE_ID      = "gps-mgr-v5";
 
-  /* ── Singleton state ────────────────────────────────────────────────── */
+  /* ── State ──────────────────────────────────────────────────────────── */
   let _cache        = null;
   let _initialized  = false;
   let _permWatch    = null;
   let _refreshTimer = null;
-  let _toastEl      = null;
+  let _modalEl      = null;
   let _guideEl      = null;
-  let _toastTimer   = null;
+
+  /* ── Helpers ────────────────────────────────────────────────────────── */
+  const _lang    = () => localStorage.getItem("sys_lang") === "en" ? "en" : "ar";
+  const _dir     = () => _lang() === "ar" ? "rtl" : "ltr";
+  const _isAdmin = () => !!sessionStorage.getItem(ADMIN_KEY);
+  const _isSafari= () =>
+    /iP(hone|ad|od)/i.test(navigator.userAgent) ||
+    (/Safari/i.test(navigator.userAgent) && !/Chrome/i.test(navigator.userAgent));
 
   /* ── i18n ───────────────────────────────────────────────────────────── */
-  const STRINGS = {
+  const STR = {
     ar: {
-      toast_msg     : "📍 هذا التطبيق يحتاج موقعك للتحقق الأمني",
-      toast_btn     : "السماح",
-      toast_fetching: "⏳ جاري تحديد الموقع…",
-      toast_ok      : "✅ تم تحديد الموقع بنجاح",
-      toast_denied  : "⚠️ الموقع مرفوض — اتبع الخطوات أدناه",
-      guide_title   : "كيفية تفعيل الموقع",
-      guide_note    : "اتبع خطوات متصفحك ثم اضغط «تم»",
-      guide_btn     : "✅ تم — أعد التحقق",
-      browsers: [
-        {
-          id   : "chrome",
-          name : "Chrome",
-          icon : "🌐",
-          steps: [
-            "اضغط على أيقونة 🔒 أو ⓘ بجانب عنوان الصفحة",
-            "اختر «إعدادات الموقع»",
-            "غيّر الموقع إلى «السماح»",
-            "أعد تحميل الصفحة",
-          ],
-        },
-        {
-          id   : "safari",
-          name : "Safari",
-          icon : "🧭",
-          steps: [
-            "افتح الإعدادات ← الخصوصية والأمان",
-            "خدمات الموقع ← Safari",
-            "اختر «عند استخدام التطبيق»",
-            "عُد للصفحة وأعد تحميلها",
-          ],
-        },
-        {
-          id   : "firefox",
-          name : "Firefox",
-          icon : "🦊",
-          steps: [
-            "اضغط على أيقونة 🔒 بجانب عنوان الصفحة",
-            "اختر «مزيد من المعلومات»",
-            "تبويب «الأذونات» ← الموقع",
-            "أزل «الحظر» وأعد التحميل",
-          ],
-        },
-        {
-          id   : "samsung",
-          name : "Samsung Internet",
-          icon : "📱",
-          steps: [
-            "اضغط ⋮ ← الإعدادات ← مواقع الويب",
-            "أذونات مواقع الويب ← الموقع",
-            "تحقق أن الموقع الحالي غير محظور",
-            "أعد تحميل الصفحة",
-          ],
-        },
-        {
-          id   : "edge",
-          name : "Edge",
-          icon : "🔷",
-          steps: [
-            "اضغط على أيقونة القفل بجانب العنوان",
-            "اختر «أذونات هذا الموقع»",
-            "الموقع ← «السماح»",
-            "أعد تحميل الصفحة",
-          ],
-        },
-        {
-          id   : "opera",
-          name : "Opera",
-          icon : "🔴",
-          steps: [
-            "اضغط على أيقونة القفل أو ⓘ بجانب العنوان",
-            "اختر «إعدادات الموقع»",
-            "الموقع الجغرافي ← «السماح»",
-            "أعد تحميل الصفحة",
-          ],
-        },
+      modal_title   : "تحديد الموقع مطلوب",
+      modal_body    : "يحتاج التطبيق إذن الوصول إلى موقعك للتحقق الأمني أثناء تسجيل الحضور.",
+      modal_allow   : "📍 السماح بالموقع",
+      modal_how     : "كيف أفعّل الموقع؟",
+      guide_title_s : "تفعيل الموقع — Safari",
+      guide_title_c : "تفعيل الموقع — Chrome",
+      guide_steps_safari: [
+        "افتح الإعدادات ← الخصوصية والأمان",
+        "خدمات الموقع ← Safari",
+        "اختر «عند استخدام التطبيق»",
+        "عُد للصفحة وأعد تحميلها",
       ],
+      guide_steps_chrome: [
+        "اضغط على 🔒 بجانب عنوان الصفحة",
+        "اختر «إعدادات الموقع»",
+        "الموقع الجغرافي ← «السماح»",
+        "أعد تحميل الصفحة",
+      ],
+      guide_done    : "✅ تم — أعد المحاولة",
+      fetching      : "⏳ جاري تحديد الموقع…",
+      success       : "✅ تم تحديد الموقع",
+      denied        : "⚠️ الموقع مرفوض — اضغط «كيف أفعّل»",
     },
     en: {
-      toast_msg     : "📍 This app needs your location for secure check-in",
-      toast_btn     : "Allow",
-      toast_fetching: "⏳ Fetching your location…",
-      toast_ok      : "✅ Location acquired",
-      toast_denied  : "⚠️ Location blocked — follow the steps below",
-      guide_title   : "How to enable location",
-      guide_note    : "Follow the steps for your browser, then tap Done",
-      guide_btn     : "✅ Done — retry",
-      browsers: [
-        {
-          id   : "chrome",
-          name : "Chrome",
-          icon : "🌐",
-          steps: [
-            "Tap the 🔒 or ⓘ icon next to the address bar",
-            'Choose "Site settings"',
-            'Set Location to "Allow"',
-            "Reload the page",
-          ],
-        },
-        {
-          id   : "safari",
-          name : "Safari",
-          icon : "🧭",
-          steps: [
-            "Open Settings → Privacy & Security",
-            "Location Services → Safari",
-            'Choose "While Using the App"',
-            "Return to the page and reload",
-          ],
-        },
-        {
-          id   : "firefox",
-          name : "Firefox",
-          icon : "🦊",
-          steps: [
-            "Tap the 🔒 icon next to the address bar",
-            'Choose "More Information"',
-            "Permissions tab → Location",
-            'Remove the "Block" and reload',
-          ],
-        },
-        {
-          id   : "samsung",
-          name : "Samsung Internet",
-          icon : "📱",
-          steps: [
-            "Tap ⋮ → Settings → Sites and downloads",
-            "Site permissions → Location",
-            "Make sure this site is not blocked",
-            "Reload the page",
-          ],
-        },
-        {
-          id   : "edge",
-          name : "Edge",
-          icon : "🔷",
-          steps: [
-            "Tap the lock icon next to the address bar",
-            'Choose "Permissions for this site"',
-            'Location → "Allow"',
-            "Reload the page",
-          ],
-        },
-        {
-          id   : "opera",
-          name : "Opera",
-          icon : "🔴",
-          steps: [
-            "Tap the lock or ⓘ icon next to the address bar",
-            'Choose "Site settings"',
-            'Geolocation → "Allow"',
-            "Reload the page",
-          ],
-        },
+      modal_title   : "Location Required",
+      modal_body    : "This app needs your location to verify attendance securely.",
+      modal_allow   : "📍 Allow Location",
+      modal_how     : "How to enable location?",
+      guide_title_s : "Enable Location — Safari",
+      guide_title_c : "Enable Location — Chrome",
+      guide_steps_safari: [
+        "Open Settings → Privacy & Security",
+        "Location Services → Safari",
+        "Choose \"While Using the App\"",
+        "Return here and reload",
       ],
+      guide_steps_chrome: [
+        "Tap 🔒 next to the address bar",
+        "Choose \"Site settings\"",
+        "Location → \"Allow\"",
+        "Reload the page",
+      ],
+      guide_done    : "✅ Done — retry",
+      fetching      : "⏳ Getting location…",
+      success       : "✅ Location ready",
+      denied        : "⚠️ Still blocked — tap How to enable",
     },
   };
+  const _t = k => (STR[_lang()] || STR.ar)[k];
 
-  const _lang = () => localStorage.getItem("sys_lang") === "en" ? "en" : "ar";
-  const _t    = (key) => (STRINGS[_lang()] || STRINGS.ar)[key];
-  const _dir  = () => _lang() === "ar" ? "rtl" : "ltr";
-  const _isAdmin = () => !!sessionStorage.getItem(ADMIN_KEY);
-
-  /* ── Detect likely browser ──────────────────────────────────────────── */
-  function _detectBrowser () {
-    const ua = navigator.userAgent;
-    if (/SamsungBrowser/i.test(ua)) return "samsung";
-    if (/OPR|OPX|Opera/i.test(ua))  return "opera";
-    if (/Edg\//i.test(ua))           return "edge";
-    if (/Firefox/i.test(ua))         return "firefox";
-    if (/iP(hone|ad|od)/i.test(ua)) return "safari";
-    return "chrome";
-  }
-
-  /* ── Inject CSS (once) ──────────────────────────────────────────────── */
+  /* ── Styles ─────────────────────────────────────────────────────────── */
   function _injectStyles () {
     if (document.getElementById(STYLE_ID)) return;
     const s = document.createElement("style");
     s.id = STYLE_ID;
     s.textContent = `
-#gps-toast {
-  position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%) translateY(120px);
-  z-index: 2147483640;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: #0f172a;
-  color: #f1f5f9;
-  padding: 12px 16px 12px 20px;
-  border-radius: 16px;
-  font-family: 'Tajawal','Cairo',sans-serif;
-  font-size: 13px;
-  font-weight: 600;
-  box-shadow: 0 8px 32px rgba(0,0,0,.35);
-  transition: transform .35s cubic-bezier(.22,.68,0,1.2), opacity .25s ease;
+/* ── Backdrop ── */
+.gps-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(15,23,42,.55);
+  backdrop-filter: blur(4px);
+  z-index: 2147483638;
   opacity: 0;
-  max-width: calc(100vw - 32px);
-  line-height: 1.4;
+  transition: opacity .22s ease;
 }
-#gps-toast.visible { transform: translateX(-50%) translateY(0); opacity: 1; }
-#gps-toast.success { background: #064e3b; }
-#gps-toast.warning { background: #78350f; }
-#gps-toast.fetching{ background: #1e3a5f; }
-#gps-toast-msg { flex: 1; }
-#gps-toast-btn {
-  flex-shrink: 0;
+.gps-backdrop.show { opacity: 1; }
+
+/* ── Centered modal ── */
+#gps-modal {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -54%);
+  z-index: 2147483639;
+  background: #fff;
+  border-radius: 20px;
+  padding: 24px 20px 20px;
+  width: min(320px, calc(100vw - 32px));
+  box-shadow: 0 12px 40px rgba(0,0,0,.22);
+  font-family: 'Tajawal','Cairo',sans-serif;
+  opacity: 0;
+  transition: transform .28s cubic-bezier(.22,.68,0,1.2), opacity .22s ease;
+  pointer-events: none;
+}
+#gps-modal.show {
+  transform: translate(-50%, -50%);
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (prefers-color-scheme: dark) {
+  #gps-modal { background: #1e293b; }
+  #gps-modal-title { color: #f1f5f9 !important; }
+  #gps-modal-body  { color: #94a3b8 !important; }
+}
+#gps-modal-icon {
+  font-size: 36px;
+  text-align: center;
+  margin-bottom: 10px;
+}
+#gps-modal-title {
+  font-size: 15px;
+  font-weight: 900;
+  color: #0f172a;
+  text-align: center;
+  margin: 0 0 8px;
+}
+#gps-modal-body {
+  font-size: 12px;
+  color: #64748b;
+  text-align: center;
+  line-height: 1.6;
+  margin: 0 0 18px;
+}
+#gps-modal-status {
+  font-size: 12px;
+  text-align: center;
+  min-height: 18px;
+  margin-bottom: 12px;
+  font-weight: 600;
+  color: #64748b;
+  transition: color .2s;
+}
+#gps-btn-allow {
+  width: 100%;
+  padding: 12px;
   background: #2563eb;
   color: #fff;
   border: none;
-  border-radius: 10px;
-  padding: 7px 14px;
-  font-size: 12px;
+  border-radius: 12px;
+  font-size: 14px;
   font-weight: 800;
   cursor: pointer;
   font-family: inherit;
-  white-space: nowrap;
-  transition: transform .1s;
+  margin-bottom: 8px;
+  transition: opacity .15s;
 }
-#gps-toast-btn:active { transform: scale(.95); }
-#gps-guide-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(15,23,42,.65);
-  backdrop-filter: blur(5px);
-  z-index: 2147483641;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity .25s ease;
-}
-#gps-guide-overlay.visible { opacity: 1; pointer-events: auto; }
-#gps-guide-card {
-  background: #fff;
-  border-radius: 24px 24px 0 0;
-  padding: 20px 20px 44px;
+#gps-btn-allow:active { opacity: .85; }
+#gps-btn-allow:disabled { opacity: .5; cursor: default; }
+#gps-btn-how {
   width: 100%;
-  max-width: 480px;
-  max-height: 88vh;
-  overflow-y: auto;
-  transform: translateY(40px);
-  transition: transform .32s cubic-bezier(.22,.68,0,1.2);
-  font-family: 'Tajawal','Cairo',sans-serif;
-}
-#gps-guide-overlay.visible #gps-guide-card { transform: translateY(0); }
-@media (prefers-color-scheme: dark) {
-  #gps-guide-card { background: #1e293b; }
-  .gps-step { background: #0f172a !important; color: #e2e8f0 !important; }
-  .gps-browser-title { color: #38bdf8 !important; }
-  #gps-guide-title { color: #f1f5f9 !important; }
-  #gps-guide-note  { color: #94a3b8 !important; }
-  .gps-tab { background: #0f172a !important; }
-  .gps-tab.active { background: #1d4ed8 !important; }
-  .gps-tab-label { color: #e2e8f0 !important; }
-  .gps-tab.active .gps-tab-label { color: #fff !important; }
-}
-.gps-handle {
-  width: 36px; height: 4px; border-radius: 2px;
-  background: #e2e8f0; margin: 0 auto 16px;
-}
-#gps-guide-title {
-  font-size: 16px; font-weight: 900; color: #0f172a;
-  text-align: center; margin: 0 0 4px;
-}
-#gps-guide-note {
-  font-size: 12px; color: #64748b;
-  text-align: center; margin: 0 0 16px;
-}
-#gps-tabs {
-  display: flex; gap: 8px; overflow-x: auto;
-  padding-bottom: 6px; margin-bottom: 14px;
-  scrollbar-width: none;
-}
-#gps-tabs::-webkit-scrollbar { display: none; }
-.gps-tab {
-  flex-shrink: 0;
-  background: #f1f5f9;
-  border: none; border-radius: 10px;
-  padding: 6px 14px;
+  padding: 9px;
+  background: transparent;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
   cursor: pointer;
-  display: flex; align-items: center; gap: 6px;
   font-family: inherit;
   transition: background .15s;
 }
-.gps-tab.active { background: #1d4ed8; }
-.gps-tab-icon  { font-size: 15px; }
-.gps-tab-label { font-size: 12px; font-weight: 700; color: #334155; white-space: nowrap; }
-.gps-tab.active .gps-tab-label { color: #fff; }
-.gps-panel { display: none; }
-.gps-panel.active { display: block; }
-.gps-browser-title {
-  font-size: 13px; font-weight: 800; color: #0ea5e9;
-  margin: 0 0 10px;
-  display: flex; align-items: center; gap: 6px;
+#gps-btn-how:active { background: #f1f5f9; }
+
+/* ── Compact guide (bottom sheet) ── */
+#gps-guide {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 2147483640;
+  background: #fff;
+  border-radius: 18px 18px 0 0;
+  padding: 14px 18px 32px;
+  max-width: 420px;
+  margin: 0 auto;
+  box-shadow: 0 -4px 24px rgba(0,0,0,.15);
+  font-family: 'Tajawal','Cairo',sans-serif;
+  transform: translateY(110%);
+  transition: transform .28s cubic-bezier(.22,.68,0,1.2);
+}
+#gps-guide.show { transform: translateY(0); }
+@media (prefers-color-scheme: dark) {
+  #gps-guide { background: #1e293b; }
+  #gps-guide-title { color: #f1f5f9 !important; }
+  .gps-step { background: #0f172a !important; color: #cbd5e1 !important; }
+}
+.gps-guide-bar {
+  width: 32px; height: 4px; border-radius: 2px;
+  background: #e2e8f0; margin: 0 auto 12px;
+}
+#gps-guide-title {
+  font-size: 13px; font-weight: 900;
+  color: #0f172a; margin: 0 0 12px;
+  text-align: center;
 }
 .gps-step {
-  background: #f8fafc; border-radius: 10px;
-  padding: 9px 12px; margin-bottom: 7px;
+  display: flex; align-items: center; gap: 9px;
+  background: #f8fafc; border-radius: 9px;
+  padding: 8px 10px; margin-bottom: 5px;
   font-size: 12px; color: #334155; font-weight: 500;
-  display: flex; align-items: center; gap: 10px;
-  line-height: 1.5;
+  line-height: 1.45;
 }
-.gps-step-num {
-  width: 22px; height: 22px; border-radius: 50%;
+.gps-step-n {
+  width: 19px; height: 19px; border-radius: 50%;
   background: #0ea5e9; color: #fff;
-  font-size: 10px; font-weight: 900;
+  font-size: 9px; font-weight: 900;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
 #gps-guide-done {
-  width: 100%; padding: 14px; margin-top: 12px;
-  background: linear-gradient(135deg, #10b981, #059669);
-  color: #fff; border: none; border-radius: 14px;
-  font-size: 14px; font-weight: 800;
+  width: 100%; padding: 12px; margin-top: 10px;
+  background: #10b981; color: #fff;
+  border: none; border-radius: 12px;
+  font-size: 13px; font-weight: 800;
   cursor: pointer; font-family: inherit;
-  box-shadow: 0 6px 20px rgba(16,185,129,.3);
-  transition: transform .15s;
 }
-#gps-guide-done:active { transform: scale(.97); }
+#gps-guide-done:active { opacity: .88; }
     `;
     document.head.appendChild(s);
   }
 
-  /* ── Toast helpers ──────────────────────────────────────────────────── */
-  function _showToast (msg, type, withBtn) {
-    _destroyToast();
-    const el = document.createElement("div");
-    el.id        = "gps-toast";
-    el.className = type || "info";
-    el.setAttribute("dir", _dir());
-    el.innerHTML = `<span id="gps-toast-msg">${msg}</span>
-      ${withBtn ? `<button id="gps-toast-btn">${_t("toast_btn")}</button>` : ""}`;
-    document.body.appendChild(el);
-    _toastEl = el;
-    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add("visible")));
-    if (withBtn) {
-      document.getElementById("gps-toast-btn")
-        .addEventListener("click", _onAllowClick, { once: true });
-    } else {
-      _toastTimer = setTimeout(_destroyToast, 3000);
-    }
+  /* ── Backdrop ───────────────────────────────────────────────────────── */
+  let _bdEl = null;
+  function _showBackdrop (onClick) {
+    if (_bdEl) return;
+    const bd = document.createElement("div");
+    bd.className = "gps-backdrop";
+    document.body.appendChild(bd);
+    _bdEl = bd;
+    requestAnimationFrame(() => requestAnimationFrame(() => bd.classList.add("show")));
+    if (onClick) bd.addEventListener("click", onClick);
+  }
+  function _hideBackdrop () {
+    if (!_bdEl) return;
+    _bdEl.classList.remove("show");
+    const el = _bdEl; _bdEl = null;
+    setTimeout(() => el?.remove(), 300);
   }
 
-  function _updateToast (msg, type) {
-    clearTimeout(_toastTimer);
-    if (!_toastEl) return;
-    const msgEl = document.getElementById("gps-toast-msg");
-    const btnEl = document.getElementById("gps-toast-btn");
-    if (msgEl) msgEl.textContent = msg;
-    _toastEl.className = type;
-    if (btnEl) btnEl.remove();
+  /* ── Modal ──────────────────────────────────────────────────────────── */
+  function _showModal () {
+    if (_modalEl) return;
+    const dir = _dir();
+    const modal = document.createElement("div");
+    modal.id = "gps-modal";
+    modal.setAttribute("dir", dir);
+    modal.innerHTML = `
+      <div id="gps-modal-icon">📍</div>
+      <h3 id="gps-modal-title">${_t("modal_title")}</h3>
+      <p  id="gps-modal-body">${_t("modal_body")}</p>
+      <div id="gps-modal-status"></div>
+      <button id="gps-btn-allow">${_t("modal_allow")}</button>
+      <button id="gps-btn-how">${_t("modal_how")}</button>
+    `;
+    document.body.appendChild(modal);
+    _modalEl = modal;
+    _showBackdrop();
+    requestAnimationFrame(() => requestAnimationFrame(() => modal.classList.add("show")));
+
+    document.getElementById("gps-btn-allow").addEventListener("click", _onAllow);
+    document.getElementById("gps-btn-how").addEventListener("click", () => {
+      _hideGuide();
+      _showGuide();
+    });
   }
 
-  function _destroyToast () {
-    clearTimeout(_toastTimer);
-    if (!_toastEl) return;
-    _toastEl.classList.remove("visible");
-    const el = _toastEl; _toastEl = null;
-    setTimeout(() => el.remove(), 380);
+  function _destroyModal () {
+    if (!_modalEl) return;
+    _modalEl.classList.remove("show");
+    const el = _modalEl; _modalEl = null;
+    _hideBackdrop();
+    setTimeout(() => el?.remove(), 320);
   }
 
-  /* ── Allow button handler ───────────────────────────────────────────── */
-  async function _onAllowClick () {
-    _updateToast(_t("toast_fetching"), "fetching");
+  function _setStatus (msg, color) {
+    const el = document.getElementById("gps-modal-status");
+    if (!el) return;
+    el.textContent = msg;
+    el.style.color = color || "#64748b";
+  }
+
+  /* ── Allow handler ──────────────────────────────────────────────────── */
+  async function _onAllow () {
+    const btn = document.getElementById("gps-btn-allow");
+    if (btn) { btn.disabled = true; btn.textContent = _t("fetching"); }
+    _setStatus(_t("fetching"), "#0ea5e9");
+
     const r = await _silentFetch();
+
     if (r.gps_success) {
-      _updateToast(_t("toast_ok"), "success");
-      setTimeout(_destroyToast, 2000);
+      _setStatus(_t("success"), "#10b981");
+      setTimeout(_destroyModal, 1200);
       _startRefresh();
     } else if (r.status === "denied") {
-      _updateToast(_t("toast_denied"), "warning");
-      setTimeout(() => { _destroyToast(); _showGuide(); }, 1800);
+      _setStatus(_t("denied"), "#ef4444");
+      if (btn) { btn.disabled = false; btn.textContent = _t("modal_allow"); }
     } else {
-      // timeout / error → restore button for retry
-      _updateToast(_t("toast_msg"), "info");
-      if (_toastEl) {
-        const btn = document.createElement("button");
-        btn.id = "gps-toast-btn"; btn.textContent = _t("toast_btn");
-        btn.addEventListener("click", _onAllowClick, { once: true });
-        _toastEl.appendChild(btn);
-      }
+      // timeout / error — restore button
+      _setStatus("", "");
+      if (btn) { btn.disabled = false; btn.textContent = _t("modal_allow"); }
     }
   }
 
-  /* ── Guidance modal ─────────────────────────────────────────────────── */
+  /* ── Guide ──────────────────────────────────────────────────────────── */
   function _showGuide () {
     if (_guideEl) return;
-    const browsers = _t("browsers");
-    const active   = _detectBrowser();
-    const dir      = _dir();
+    const safari = _isSafari();
+    const steps  = safari ? _t("guide_steps_safari") : _t("guide_steps_chrome");
+    const title  = safari ? _t("guide_title_s") : _t("guide_title_c");
+    const dir    = _dir();
 
-    const tabsHtml = browsers.map(b =>
-      `<button class="gps-tab${b.id === active ? " active" : ""}" data-tab="${b.id}">
-         <span class="gps-tab-icon">${b.icon}</span>
-         <span class="gps-tab-label">${b.name}</span>
-       </button>`
-    ).join("");
+    const stepsHtml = steps.map((s, i) => `
+      <div class="gps-step">
+        <span class="gps-step-n">${i + 1}</span>
+        <span>${s}</span>
+      </div>`).join("");
 
-    const panelsHtml = browsers.map(b =>
-      `<div class="gps-panel${b.id === active ? " active" : ""}" id="gps-panel-${b.id}">
-         <div class="gps-browser-title">${b.icon} ${b.name}</div>
-         ${b.steps.map((s, i) =>
-           `<div class="gps-step">
-              <span class="gps-step-num">${i + 1}</span>
-              <span>${s}</span>
-            </div>`
-         ).join("")}
-       </div>`
-    ).join("");
+    const g = document.createElement("div");
+    g.id = "gps-guide";
+    g.setAttribute("dir", dir);
+    g.innerHTML = `
+      <div class="gps-guide-bar"></div>
+      <h3 id="gps-guide-title">${title}</h3>
+      ${stepsHtml}
+      <button id="gps-guide-done">${_t("guide_done")}</button>
+    `;
+    document.body.appendChild(g);
+    _guideEl = g;
+    requestAnimationFrame(() => requestAnimationFrame(() => g.classList.add("show")));
 
-    const overlay = document.createElement("div");
-    overlay.id    = "gps-guide-overlay";
-    overlay.innerHTML = `
-      <div id="gps-guide-card" dir="${dir}">
-        <div class="gps-handle"></div>
-        <h3 id="gps-guide-title">⚙️ ${_t("guide_title")}</h3>
-        <p id="gps-guide-note">${_t("guide_note")}</p>
-        <div id="gps-tabs">${tabsHtml}</div>
-        ${panelsHtml}
-        <button id="gps-guide-done">${_t("guide_btn")}</button>
-      </div>`;
-
-    document.body.appendChild(overlay);
-    _guideEl = overlay;
-
-    // Tab switching
-    overlay.querySelectorAll(".gps-tab").forEach(tab => {
-      tab.addEventListener("click", () => {
-        overlay.querySelectorAll(".gps-tab").forEach(t => t.classList.remove("active"));
-        overlay.querySelectorAll(".gps-panel").forEach(p => p.classList.remove("active"));
-        tab.classList.add("active");
-        document.getElementById("gps-panel-" + tab.dataset.tab)?.classList.add("active");
-      });
-    });
-
-    // Done / retry
     document.getElementById("gps-guide-done").addEventListener("click", async () => {
-      _destroyGuide();
-      _showToast(_t("toast_fetching"), "fetching");
-      const r = await _silentFetch();
-      if (r.gps_success) {
-        _updateToast(_t("toast_ok"), "success");
-        setTimeout(_destroyToast, 2000);
-        _startRefresh();
-      } else if (r.status === "denied") {
-        _updateToast(_t("toast_denied"), "warning");
-        setTimeout(() => { _destroyToast(); _showGuide(); }, 1800);
+      _hideGuide();
+      if (_modalEl) {
+        const btn = document.getElementById("gps-btn-allow");
+        if (btn) { btn.disabled = false; btn.textContent = _t("modal_allow"); }
+        _setStatus("", "");
       } else {
-        _destroyToast();
-        _showToast(_t("toast_msg"), "info", true);
+        _showModal();
       }
     });
-
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => overlay.classList.add("visible"))
-    );
   }
 
-  function _destroyGuide () {
+  function _hideGuide () {
     if (!_guideEl) return;
-    _guideEl.classList.remove("visible");
+    _guideEl.classList.remove("show");
     const el = _guideEl; _guideEl = null;
-    setTimeout(() => el.remove(), 380);
+    setTimeout(() => el?.remove(), 320);
   }
 
-  /* ── Core GPS fetch (8s timeout, no hanging) ────────────────────────── */
+  /* ── Core fetch ─────────────────────────────────────────────────────── */
   function _silentFetch () {
     return new Promise(resolve => {
       if (!navigator.geolocation) {
         const r = { status:"no_support", gps_success:false, inRange:false, ts:Date.now() };
         _cache = r; resolve(r); return;
       }
-      let settled = false;
-      const finish = (r) => {
-        if (settled) return; settled = true;
+      let done = false;
+      const finish = r => {
+        if (done) return; done = true;
         _cache = { ...r, ts: Date.now() };
         resolve(_cache);
       };
@@ -526,35 +399,30 @@ window.GPSManager = (function () {
       navigator.geolocation.getCurrentPosition(
         pos => {
           clearTimeout(timer);
-          finish({
-            status:"success", gps_success:true, inRange:true,
+          finish({ status:"success", gps_success:true, inRange:true,
             lat:pos.coords.latitude, lng:pos.coords.longitude,
-            accuracy:pos.coords.accuracy,
-          });
+            accuracy:pos.coords.accuracy });
         },
         err => {
           clearTimeout(timer);
-          finish({ status: err.code === 1 ? "denied" : "error", gps_success:false, inRange:false });
+          finish({ status: err.code === 1 ? "denied" : "error",
+            gps_success:false, inRange:false });
         },
         { enableHighAccuracy:false, timeout:FETCH_TIMEOUT, maximumAge:30_000 }
       );
     });
   }
 
-  /* ── PermissionStatus watcher ───────────────────────────────────────── */
+  /* ── Permission watcher ─────────────────────────────────────────────── */
   async function _watchPermission () {
     if (!navigator.permissions) return;
     try {
       _permWatch = await navigator.permissions.query({ name:"geolocation" });
       _permWatch.addEventListener("change", async () => {
         if (_permWatch.state !== "granted") return;
-        _destroyToast(); _destroyGuide();
+        _destroyModal(); _hideGuide();
         const r = await _silentFetch();
-        if (r.gps_success) {
-          _showToast(_t("toast_ok"), "success");
-          setTimeout(_destroyToast, 2000);
-          _startRefresh();
-        }
+        if (r.gps_success) _startRefresh();
       });
     } catch (_) {}
   }
@@ -564,24 +432,29 @@ window.GPSManager = (function () {
     clearInterval(_refreshTimer);
     _refreshTimer = setInterval(() => {
       if (_isAdmin()) return;
-      _silentFetch().then(r => {
-        if (r.gps_success) console.log("[GPS] bg refresh ✓", Math.round(r.accuracy) + "m");
-      });
+      _silentFetch();
     }, REFRESH_MS);
   }
 
-  /* ── Main init (runs once) ──────────────────────────────────────────── */
+  /* ── Main init ──────────────────────────────────────────────────────── */
   async function _init () {
     if (_initialized) return;
     _initialized = true;
+
+    // Wait for body (handles script in <head>)
+    if (!document.body) {
+      await new Promise(r => window.addEventListener("DOMContentLoaded", r, { once:true }));
+    }
+
     _injectStyles();
     if (_isAdmin()) return;
     _watchPermission();
 
-    /* ── Path A: Permissions API (Chrome, Edge, Firefox, Samsung) ────── */
+    /* Path A — Permissions API (Chrome, Edge, Firefox, Samsung) */
     if (navigator.permissions) {
       let perm = null;
       try { perm = await navigator.permissions.query({ name:"geolocation" }); } catch (_) {}
+
       if (perm) {
         if (perm.state === "granted") {
           // Silent — user sees nothing
@@ -589,43 +462,40 @@ window.GPSManager = (function () {
           return;
         }
         if (perm.state === "denied") {
-          _showGuide();
+          _showModal();
           return;
         }
-        // "prompt" — show Toast immediately, no fetch yet
-        _showToast(_t("toast_msg"), "info", true);
+        // "prompt"
+        _showModal();
         return;
       }
     }
 
-    /* ── Path B: Safari / WKWebView (no Permissions API) ─────────────── */
-    // Show Toast INSTANTLY — zero wait for user
-    _showToast(_t("toast_msg"), "info", true);
+    /* Path B — Safari (no Permissions API)
+       Show modal instantly, fetch in background */
+    _showModal();
 
-    // Fetch in background — never blocks the UI
     _silentFetch().then(probe => {
       if (probe.gps_success) {
-        // User already tapped Allow in Safari's native dialog
-        _destroyToast();
+        _destroyModal();
         _startRefresh();
       } else if (probe.status === "denied") {
-        // User tapped Deny — swap to guide
-        _destroyToast();
-        _showGuide();
+        _setStatus(_t("denied"), "#ef4444");
+        const btn = document.getElementById("gps-btn-allow");
+        if (btn) { btn.disabled = false; btn.textContent = _t("modal_allow"); }
       }
-      // timeout / error → Toast stays, user can tap "Allow" to retry
     });
   }
 
   /* ── Boot ───────────────────────────────────────────────────────────── */
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", _init, { once: true });
+    document.addEventListener("DOMContentLoaded", _init, { once:true });
   } else {
     _init();
   }
 
   /* ── Public API ─────────────────────────────────────────────────────── */
-  return {
+  window.GPSManager = {
     getForJoin () {
       if (_cache && _cache.gps_success && (Date.now() - _cache.ts) < CACHE_TTL_MS * 2) {
         return { ..._cache };
@@ -636,11 +506,11 @@ window.GPSManager = (function () {
     isReady  : () => !!(_cache && _cache.gps_success),
   };
 
-})();
+  /* ── Drop-in replacements ───────────────────────────────────────────── */
+  window.getGPSForJoin         = () => window.GPSManager.getForJoin();
+  window.initGPSOnStartup      = () => {};
+  window.getSilentLocationData = () => Promise.resolve(window.GPSManager.getForJoin());
+  window._showGPSForceModal    = () => {};
+  window._retryGPSPermission   = () => {};
 
-/* ── Drop-in replacements (no conflicts) ─────────────────────────────────── */
-window.getGPSForJoin         = () => window.GPSManager.getForJoin();
-window.initGPSOnStartup      = () => {};
-window.getSilentLocationData = () => Promise.resolve(window.GPSManager.getForJoin());
-window._showGPSForceModal    = () => {};
-window._retryGPSPermission   = () => {};
+})();
