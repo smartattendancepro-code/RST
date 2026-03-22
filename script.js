@@ -327,16 +327,20 @@ window.monitorMyParticipation = async function () {
 
             console.log("🔍 Cache cleared, searching server for active session...");
 
-            const mySessionQuery = query(
-                collectionGroup(db, "participants"),
-                where("uid", "==", user.uid),
-                where("status", "==", "active")
+            const activeSessionsQ = query(
+                collection(db, "active_sessions"),
+                where("isActive", "==", true),
+                limit(20)
             );
-            const mySnap = await getDocs(mySessionQuery);
+            const sessionsSnap = await getDocs(activeSessionsQ);
 
-            if (!mySnap.empty) {
-                const participantDoc = mySnap.docs[0];
-                targetDoctorUID = participantDoc.ref.parent.parent.id;
+            for (const sessionDoc of sessionsSnap.docs) {
+                const studentRef = doc(db, "active_sessions", sessionDoc.id, "participants", user.uid);
+                const studentSnap = await getDoc(studentRef);
+                if (studentSnap.exists() && studentSnap.data().status === 'active') {
+                    targetDoctorUID = sessionDoc.id;
+                    break;
+                }
             }
 
             if (targetDoctorUID) {
