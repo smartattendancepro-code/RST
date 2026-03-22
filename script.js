@@ -25,7 +25,8 @@ import {
     arrayUnion,
     arrayRemove,
     increment,
-    getCountFromServer
+    getCountFromServer,
+    collectionGroup
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 import {
@@ -326,17 +327,17 @@ window.monitorMyParticipation = async function () {
 
             console.log("🔍 Cache cleared, searching server for active session...");
 
-            const activeSessionsQ = query(collection(db, "active_sessions"), where("isActive", "==", true));
-            const sessionsSnap = await getDocs(activeSessionsQ);
+            const mySessionQuery = query(
+                collectionGroup(db, "participants"),
+                where("uid", "==", user.uid),
+                where("status", "==", "active")
+            );
+            const mySnap = await getDocs(mySessionQuery);
 
-            const checkPromises = sessionsSnap.docs.map(async (sessionDoc) => {
-                const studentRef = doc(db, "active_sessions", sessionDoc.id, "participants", user.uid);
-                const studentSnap = await getDoc(studentRef);
-                return (studentSnap.exists() && studentSnap.data().status === 'active') ? sessionDoc.id : null;
-            });
-
-            const results = await Promise.all(checkPromises);
-            targetDoctorUID = results.find(id => id !== null);
+            if (!mySnap.empty) {
+                const participantDoc = mySnap.docs[0];
+                targetDoctorUID = participantDoc.ref.parent.parent.id;
+            }
 
             if (targetDoctorUID) {
                 localStorage.setItem('TARGET_DOCTOR_UID', targetDoctorUID);
