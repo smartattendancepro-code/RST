@@ -20,6 +20,8 @@ window.startLiveSnapshotListener = function () {
     }
 
     if (window.studentCountInterval) clearInterval(window.studentCountInterval);
+    const adminFab = document.getElementById('adminFabControls');
+    if (adminFab) adminFab.style.setProperty('display', 'none', 'important');
 
     const grid = document.getElementById('liveStudentsGrid');
     if (grid) grid.innerHTML = '';
