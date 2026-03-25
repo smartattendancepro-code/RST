@@ -256,6 +256,7 @@
     requestAnimationFrame(() => requestAnimationFrame(() => modal.classList.add("show")));
     document.getElementById("gps-btn-allow").addEventListener("click", _onAllow);
     /* DEV_BYPASS_START */
+    /* DEV_BYPASS_START */
     let _bypassTaps = 0, _bypassTimer = null;
     /* DEV_BYPASS_END */
     document.getElementById("gps-btn-how").addEventListener("click", () => {
@@ -270,9 +271,11 @@
         _startRefresh();
         return;
       }
-      _bypassTimer = setTimeout(() => { _bypassTaps = 0; }, 1000);
+      _bypassTimer = setTimeout(() => {
+        _bypassTaps = 0;
+        _showGuide();
+      }, 400);
       /* DEV_BYPASS_END */
-      _showGuide();
     });
   }
 
