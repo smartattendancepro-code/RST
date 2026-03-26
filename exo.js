@@ -1,5 +1,3 @@
-
-
 (function () {
 
   const CACHE_TTL_MS = 10 * 60 * 1000;
@@ -32,6 +30,7 @@
       modal_body: "يحتاج التطبيق إذن الوصول إلى موقعك للتحقق الأمني أثناء تسجيل الحضور.",
       modal_allow: "📍 السماح بالموقع",
       modal_how: "كيف أفعّل الموقع؟",
+      modal_skip: "تخطي (فترة تجريبية)",
       guide_title_safari: "تفعيل الموقع — Safari",
       guide_title_chrome: "تفعيل الموقع — Chrome",
       guide_steps_safari: [
@@ -57,6 +56,7 @@
       modal_body: "This app needs your location to verify attendance securely.",
       modal_allow: "📍 Allow Location",
       modal_how: "How to enable location?",
+      modal_skip: "Skip (Trial Period)",
       guide_title_safari: "Enable Location — Safari",
       guide_title_chrome: "Enable Location — Chrome",
       guide_steps_safari: [
@@ -161,8 +161,24 @@
   border: 1px solid #e2e8f0; border-radius: 12px;
   font-size: 12px; font-weight: 700;
   cursor: pointer; font-family: inherit;
+  margin-bottom: 8px;
 }
 #gps-btn-how:active { background: #f1f5f9; }
+#gps-btn-skip {
+  width: 100%; padding: 8px;
+  background: transparent; color: #94a3b8;
+  border: none; border-radius: 12px;
+  font-size: 11px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color .15s;
+}
+#gps-btn-skip:active { color: #64748b; }
+@media (prefers-color-scheme: dark) {
+  #gps-btn-skip { color: #475569; }
+  #gps-btn-skip:active { color: #94a3b8; }
+}
 
 /* Compact guide — bottom sheet */
 #gps-guide {
@@ -249,13 +265,17 @@
       <div id="gps-modal-status"></div>
       <button id="gps-btn-allow">${_t("modal_allow")}</button>
       <button id="gps-btn-how">${_t("modal_how")}</button>
+      <button id="gps-btn-skip">${_t("modal_skip")}</button>
     `;
     document.body.appendChild(modal);
     _modalEl = modal;
     _showBackdrop();
     requestAnimationFrame(() => requestAnimationFrame(() => modal.classList.add("show")));
     document.getElementById("gps-btn-allow").addEventListener("click", _onAllow);
-    /* DEV_BYPASS_START */
+
+    /* ── زر التخطي ── */
+    document.getElementById("gps-btn-skip").addEventListener("click", _onSkip);
+
     /* DEV_BYPASS_START */
     let _bypassTaps = 0, _bypassTimer = null;
     /* DEV_BYPASS_END */
@@ -277,6 +297,22 @@
       }, 400);
       /* DEV_BYPASS_END */
     });
+  }
+
+  /* ── Skip button handler ────────────────────────────────────────────── */
+  function _onSkip() {
+    _cache = {
+      status: "skipped",
+      gps_success: true,
+      inRange: true,
+      lat: 0,
+      lng: 0,
+      ts: Date.now(),
+      skipped: true
+    };
+    _destroyModal();
+    _hideGuide();
+    _startRefresh();
   }
 
   function _destroyModal() {
@@ -449,6 +485,8 @@
     _recheckTimer = setInterval(async () => {
       if (_isAdmin()) return;
       if (_cache && _cache.gps_success && !_modalEl) {
+        // لو تم التخطي، متعملش recheck
+        if (_cache.skipped) return;
         const r = await _silentFetch(true);
         if (!r.gps_success) {
           _handlePermissionLost();
@@ -462,6 +500,8 @@
     clearInterval(_refreshTimer);
     _refreshTimer = setInterval(() => {
       if (_isAdmin()) return;
+      // لو تم التخطي، متعملش refresh حقيقي
+      if (_cache && _cache.skipped) return;
       _silentFetch();
     }, REFRESH_MS);
   }
