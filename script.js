@@ -293,8 +293,8 @@ window.monitorMyParticipation = async function () {
             if (window.unsubscribeLiveSnapshot) { window.unsubscribeLiveSnapshot(); window.unsubscribeLiveSnapshot = null; }
             const liveScreen = document.getElementById('screenLiveSession');
             const welcomeScreen = document.getElementById('screenWelcome');
-            if (liveScreen) { liveScreen.style.display = 'none'; liveScreen.classList.remove('active'); }
-            if (welcomeScreen) { welcomeScreen.style.display = 'block'; welcomeScreen.classList.add('active'); }
+            if (liveScreen) { liveScreen.style.cssText = ""; liveScreen.style.setProperty('display', 'none', 'important'); }
+            window.switchScreen('screenWelcome');
             if (typeof window.showToast === 'function') window.showToast("⏸️ استراحة: يرجى تسجيل الدخول مجدداً عند الاستئناف", 4000, "#f59e0b");
             return;
         }
@@ -944,6 +944,8 @@ window.resetSearchSession = function () {
         if (errMsg) errMsg.style.display = 'none';
         if (step1) step1.style.cssText = "display: block !important; visibility: visible !important;";
         setTimeout(() => { const input = document.getElementById('attendanceCode'); if (input) input.focus(); }, 150);
+        if (typeof window.startCodeEntryIdleTimer === 'function') window.startCodeEntryIdleTimer();
+
     };
     window.openAuthDrawer = function () {
         const drawer = document.getElementById('studentAuthDrawer');
@@ -1488,6 +1490,8 @@ window.resetSearchSession = function () {
         if (errMsg) errMsg.style.display = 'none';
         if (step1) step1.style.cssText = "display: block !important; opacity: 1 !important; visibility: visible !important; width: 100%;";
         setTimeout(() => { const input = document.getElementById('attendanceCode'); if (input) input.focus(); }, 150);
+        if (typeof window.startCodeEntryIdleTimer === 'function') window.startCodeEntryIdleTimer();
+
     };
     window.resetMainButtonUI = function () {
         const btn = document.getElementById('mainActionBtn');
@@ -1525,6 +1529,8 @@ window.resetSearchSession = function () {
     };
 
     window.goHome = function () {
+        const liveScreen = document.getElementById('screenLiveSession');
+        if (liveScreen) { liveScreen.style.cssText = ""; liveScreen.style.setProperty('display', 'none', 'important'); }
         window.switchScreen('screenWelcome');
         const infoBtn = document.getElementById('infoBtn');
         if (infoBtn) infoBtn.style.display = 'flex';
