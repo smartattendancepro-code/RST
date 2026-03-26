@@ -1483,9 +1483,7 @@ window.resetSearchSession = function () {
             if (typeof window.openAuthDrawer === 'function') window.openAuthDrawer();
             return;
         }
-        document.querySelectorAll('.section').forEach(sec => { sec.style.display = 'none'; sec.classList.remove('active'); });
-        const parentScreen = document.getElementById('screenDataEntry');
-        if (parentScreen) { parentScreen.style.cssText = "display: block !important; opacity: 1 !important;"; parentScreen.classList.add('active'); }
+        window.switchScreen('screenDataEntry');
         const step1 = document.getElementById('step1_search');
         const step2 = document.getElementById('step2_auth');
         const errMsg = document.getElementById('screenError');
@@ -1531,10 +1529,17 @@ window.resetSearchSession = function () {
     };
 
     window.goHome = function () {
-        const liveScreen = document.getElementById('screenLiveSession');
+        document.querySelectorAll('.section').forEach(sec => {
+            sec.style.cssText = "";
+            sec.style.setProperty('display', 'none', 'important');
+            sec.classList.remove('active');
+        });
         const welcomeScreen = document.getElementById('screenWelcome');
-        if (liveScreen) liveScreen.style.display = 'none';
-        if (welcomeScreen) { welcomeScreen.style.display = 'block'; welcomeScreen.classList.add('active'); }
+        if (welcomeScreen) {
+            welcomeScreen.style.cssText = "";
+            welcomeScreen.style.setProperty('display', 'flex', 'important');
+            welcomeScreen.classList.add('active');
+        }
         const infoBtn = document.getElementById('infoBtn');
         if (infoBtn) infoBtn.style.display = 'flex';
         document.body.classList.add('on-welcome-screen');
