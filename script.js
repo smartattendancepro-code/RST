@@ -25,20 +25,24 @@ import { i18n, t, changeLanguage, toggleSystemLanguage } from './i18n.js';
 import { AuditManager } from './AuditManager.js';
 
 window.HARDWARE_ID = null;
-const DEVICE_CACHE_KEY = "nursing_secure_device_v4";
+const DEVICE_CACHE_KEY = "nursing_secure_device_v5";
+
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        if (window.FingerprintJS) {
-            const fp = await FingerprintJS.load();
-            const result = await fp.get();
-            window.HARDWARE_ID = result.visitorId;
-            localStorage.setItem(DEVICE_CACHE_KEY, result.visitorId);
-        }
+        await window.getUniqueDeviceId();
     } catch (err) {
         console.warn("Fingerprint Pre-load warning:", err);
     }
 });
+
+async function hashString(str) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(str);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 32);
+}
 
 window.getUniqueDeviceId = async function () {
     if (window.HARDWARE_ID) return window.HARDWARE_ID;
@@ -46,22 +50,35 @@ window.getUniqueDeviceId = async function () {
     let stored = localStorage.getItem(DEVICE_CACHE_KEY);
     if (stored) { window.HARDWARE_ID = stored; return stored; }
 
+    const extras = [
+        navigator.hardwareConcurrency || 0,
+        navigator.deviceMemory || 0,
+        screen.colorDepth,
+        screen.width + "x" + screen.height,
+        screen.pixelDepth || 0,
+        navigator.platform || "",
+        navigator.maxTouchPoints || 0,
+        Intl.DateTimeFormat().resolvedOptions().timeZone,
+        navigator.languages ? navigator.languages.join(",") : "",
+    ].join("||");
+
+    let fpId = "FALLBACK_" + Date.now().toString(36);
     try {
         if (window.FingerprintJS) {
             const fp = await FingerprintJS.load();
             const result = await fp.get();
-            window.HARDWARE_ID = result.visitorId;
-            localStorage.setItem(DEVICE_CACHE_KEY, result.visitorId);
-            return result.visitorId;
+            fpId = result.visitorId;
         }
     } catch (e) {
-        console.warn("FingerprintJS failed. Generating Fallback.");
+        console.warn("FingerprintJS failed:", e);
     }
 
-    const fallbackId = "NURS_" + Date.now().toString(36) + "_" + Math.random().toString(36).substring(2);
-    window.HARDWARE_ID = fallbackId;
-    localStorage.setItem(DEVICE_CACHE_KEY, fallbackId);
-    return fallbackId;
+    const combined = fpId + "|" + extras;
+    const finalId = await hashString(combined);
+
+    window.HARDWARE_ID = finalId;
+    localStorage.setItem(DEVICE_CACHE_KEY, finalId);
+    return finalId;
 };
 
 window.isJoiningProcessActive = false;
