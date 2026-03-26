@@ -1817,7 +1817,7 @@ window.startCodeEntryIdleTimer = function () {
     tickInterval = setInterval(() => {
         if (!isTyping) {
             elapsedTime++;
-            if (elapsedTime >= 5) {
+            if (elapsedTime >= 60) {
                 window.stopCodeEntryIdleTimer();
                 window.switchScreen('screenWelcome');
                 if (typeof window.showToast === 'function') window.showToast("⚠️ كن سريعا في المرة القادمة", 3000, "#f59e0b");
