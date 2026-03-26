@@ -716,17 +716,28 @@ window.startAuthScreenTimer = function (doctorUID) {
 window.resetSearchSession = function () {
     const step1 = document.getElementById('step1_search');
     const step2 = document.getElementById('step2_auth');
-    if (step2) { step2.style.display = 'none'; step2.classList.remove('active'); }
-    if (step1) { step1.style.display = 'block'; step1.style.opacity = '1'; step1.style.visibility = 'visible'; }
+
+    if (step2) {
+        step2.style.display = 'none';
+        step2.classList.remove('active');
+    }
+    if (step1) {
+        step1.style.display = 'block';
+        step1.style.opacity = '1';
+        step1.style.visibility = 'visible';
+    }
+
     const passInput = document.getElementById('sessionPass');
     const codeInput = document.getElementById('attendanceCode');
     if (passInput) passInput.value = '';
     if (codeInput) codeInput.value = '';
-    const errorContainer = document.getElementById('screenError');
-    if (errorContainer) errorContainer.style.display = 'none';
+
+    // تأكد أن الشاشة نفسها لا تملك ستايل يدوي يعطل الإخفاء
+    const screen = document.getElementById('screenDataEntry');
+    if (screen) screen.style.cssText = ""; // تنظيف أي ستايل يدوي
+
     if (typeof window.startCodeEntryIdleTimer === 'function') window.startCodeEntryIdleTimer();
 };
-
 (function () {
     let hallsList = MASTER_HALLS;
     let subjectsData = MASTER_SUBJECTS;
@@ -795,18 +806,9 @@ window.resetSearchSession = function () {
         const currentActive = document.querySelector('.section.active');
         if (currentActive && currentActive.id === screenId) return;
         window.scrollTo({ top: 0, behavior: 'auto' });
-        document.querySelectorAll('.section').forEach(sec => {
-            sec.style.cssText = "";
-            sec.style.setProperty('display', 'none', 'important');
-            sec.classList.remove('active');
-        });
+        document.querySelectorAll('.section').forEach(sec => { sec.style.display = 'none'; sec.classList.remove('active'); });
         const target = document.getElementById(screenId);
-        if (target) {
-            target.style.cssText = "";
-            target.style.setProperty('display', 'flex', 'important');
-            target.style.flexDirection = 'column';
-            setTimeout(() => target.classList.add('active'), 10);
-        }
+        if (target) { target.style.display = 'flex'; target.style.flexDirection = 'column'; setTimeout(() => target.classList.add('active'), 10); }
         const infoBtn = document.getElementById('infoBtn');
         if (infoBtn) infoBtn.style.display = (screenId === 'screenWelcome') ? 'flex' : 'none';
     };
@@ -927,7 +929,10 @@ window.resetSearchSession = function () {
     window.startProcess = async function (isRetry) {
         if (typeof playClick === 'function') playClick();
         const user = auth.currentUser;
-        if (!user) { if (typeof window.openAuthDrawer === 'function') window.openAuthDrawer(); return; }
+        if (!user) {
+            if (typeof window.openAuthDrawer === 'function') window.openAuthDrawer();
+            return;
+        }
 
         const savedDoctorUID = sessionStorage.getItem('TARGET_DOCTOR_UID');
         if (savedDoctorUID) {
@@ -936,16 +941,24 @@ window.resetSearchSession = function () {
             return;
         }
 
-        document.querySelectorAll('.section').forEach(el => { el.style.display = 'none'; el.classList.remove('active'); });
-        const screen = document.getElementById('screenDataEntry');
-        if (screen) { screen.style.cssText = "display: block !important; opacity: 1 !important;"; screen.classList.add('active'); }
+        // استخدام الوظيفة الموحدة هنا أيضاً
+        window.switchScreen('screenDataEntry');
+
         const step1 = document.getElementById('step1_search');
         const step2 = document.getElementById('step2_auth');
         const errMsg = document.getElementById('screenError');
-        if (step2) step2.style.setProperty('display', 'none', 'important');
+
+        if (step2) step2.style.display = 'none';
         if (errMsg) errMsg.style.display = 'none';
-        if (step1) step1.style.cssText = "display: block !important; visibility: visible !important;";
-        setTimeout(() => { const input = document.getElementById('attendanceCode'); if (input) input.focus(); }, 150);
+        if (step1) {
+            step1.style.display = 'block';
+            step1.style.visibility = 'visible';
+        }
+
+        setTimeout(() => {
+            const input = document.getElementById('attendanceCode');
+            if (input) input.focus();
+        }, 150);
     };
 
     window.openAuthDrawer = function () {
@@ -1483,14 +1496,26 @@ window.resetSearchSession = function () {
             if (typeof window.openAuthDrawer === 'function') window.openAuthDrawer();
             return;
         }
+
+        // بدلاً من التلاعب بالـ style يدوياً بـ !important، نستخدم الوظيفة الموحدة
         window.switchScreen('screenDataEntry');
+
         const step1 = document.getElementById('step1_search');
         const step2 = document.getElementById('step2_auth');
         const errMsg = document.getElementById('screenError');
-        if (step2) step2.style.setProperty('display', 'none', 'important');
+
+        if (step2) step2.style.display = 'none';
         if (errMsg) errMsg.style.display = 'none';
-        if (step1) step1.style.cssText = "display: block !important; opacity: 1 !important; visibility: visible !important; width: 100%;";
-        setTimeout(() => { const input = document.getElementById('attendanceCode'); if (input) input.focus(); }, 150);
+        if (step1) {
+            step1.style.display = 'block';
+            step1.style.opacity = '1';
+            step1.style.visibility = 'visible';
+        }
+
+        setTimeout(() => {
+            const input = document.getElementById('attendanceCode');
+            if (input) input.focus();
+        }, 150);
     };
 
     window.resetMainButtonUI = function () {
@@ -1529,17 +1554,10 @@ window.resetSearchSession = function () {
     };
 
     window.goHome = function () {
-        document.querySelectorAll('.section').forEach(sec => {
-            sec.style.cssText = "";
-            sec.style.setProperty('display', 'none', 'important');
-            sec.classList.remove('active');
-        });
+        const liveScreen = document.getElementById('screenLiveSession');
         const welcomeScreen = document.getElementById('screenWelcome');
-        if (welcomeScreen) {
-            welcomeScreen.style.cssText = "";
-            welcomeScreen.style.setProperty('display', 'flex', 'important');
-            welcomeScreen.classList.add('active');
-        }
+        if (liveScreen) liveScreen.style.display = 'none';
+        if (welcomeScreen) { welcomeScreen.style.display = 'block'; welcomeScreen.classList.add('active'); }
         const infoBtn = document.getElementById('infoBtn');
         if (infoBtn) infoBtn.style.display = 'flex';
         document.body.classList.add('on-welcome-screen');
