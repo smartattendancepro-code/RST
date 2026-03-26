@@ -30,7 +30,7 @@
       modal_body: "يحتاج التطبيق إذن الوصول إلى موقعك للتحقق الأمني أثناء تسجيل الحضور.",
       modal_allow: "📍 السماح بالموقع",
       modal_how: "كيف أفعّل الموقع؟",
-      modal_skip: "تخطي (فترة تجريبية)",
+      modal_skip: "⚡ تخطي (فترة تجريبية)",
       guide_title_safari: "تفعيل الموقع — Safari",
       guide_title_chrome: "تفعيل الموقع — Chrome",
       guide_steps_safari: [
@@ -56,7 +56,7 @@
       modal_body: "This app needs your location to verify attendance securely.",
       modal_allow: "📍 Allow Location",
       modal_how: "How to enable location?",
-      modal_skip: "Skip (Trial Period)",
+      modal_skip: "⚡ Skip (Trial Period)",
       guide_title_safari: "Enable Location — Safari",
       guide_title_chrome: "Enable Location — Chrome",
       guide_steps_safari: [
@@ -165,19 +165,19 @@
 }
 #gps-btn-how:active { background: #f1f5f9; }
 #gps-btn-skip {
-  width: 100%; padding: 8px;
-  background: transparent; color: #94a3b8;
+  width: 100%; padding: 10px;
+  background: linear-gradient(135deg, #f59e0b, #f97316);
+  color: #fff;
   border: none; border-radius: 12px;
-  font-size: 11px; font-weight: 600;
+  font-size: 12px; font-weight: 800;
   cursor: pointer; font-family: inherit;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  transition: color .15s;
+  box-shadow: 0 3px 10px rgba(249,115,22,.35);
+  transition: opacity .15s, transform .1s;
+  letter-spacing: .3px;
 }
-#gps-btn-skip:active { color: #64748b; }
+#gps-btn-skip:active { opacity: .88; transform: scale(.98); }
 @media (prefers-color-scheme: dark) {
-  #gps-btn-skip { color: #475569; }
-  #gps-btn-skip:active { color: #94a3b8; }
+  #gps-btn-skip { box-shadow: 0 3px 14px rgba(249,115,22,.45); }
 }
 
 /* Compact guide — bottom sheet */
