@@ -741,6 +741,7 @@ window.resetSearchSession = function () {
     if (codeInput) codeInput.value = '';
     const errorContainer = document.getElementById('screenError');
     if (errorContainer) errorContainer.style.display = 'none';
+    if (typeof window.startCodeEntryIdleTimer === 'function') window.startCodeEntryIdleTimer();
 };
 
 (function () {
@@ -960,6 +961,7 @@ window.resetSearchSession = function () {
         if (errMsg) errMsg.style.display = 'none';
         if (step1) step1.style.cssText = "display: block !important; visibility: visible !important;";
         setTimeout(() => { const input = document.getElementById('attendanceCode'); if (input) input.focus(); }, 150);
+        if (typeof window.startCodeEntryIdleTimer === 'function') window.startCodeEntryIdleTimer();
 
     };
     window.openAuthDrawer = function () {
@@ -1079,12 +1081,6 @@ window.resetSearchSession = function () {
             pinInput.addEventListener('input', (e) => {
                 if (typeof isTyping !== 'undefined') isTyping = false;
                 if (typeof elapsedTime !== 'undefined') elapsedTime = 0;
-
-                if (e.target.value.trim().length === 1) {
-                    if (typeof window.startCodeEntryIdleTimer === 'function')
-                        window.startCodeEntryIdleTimer();
-                }
-
                 if (e.target.value.trim().length === 6) {
                     if (typeof window.searchForSession === 'function') window.searchForSession();
                 }
@@ -1511,6 +1507,7 @@ window.resetSearchSession = function () {
         if (errMsg) errMsg.style.display = 'none';
         if (step1) step1.style.cssText = "display: block !important; opacity: 1 !important; visibility: visible !important; width: 100%;";
         setTimeout(() => { const input = document.getElementById('attendanceCode'); if (input) input.focus(); }, 150);
+        if (typeof window.startCodeEntryIdleTimer === 'function') window.startCodeEntryIdleTimer();
 
     };
     window.resetMainButtonUI = function () {
