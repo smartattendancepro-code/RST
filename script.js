@@ -76,17 +76,17 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 onAuthStateChanged(auth, async (user) => {
-    const drawerEl   = document.getElementById('studentAuthDrawer');
+    const drawerEl = document.getElementById('studentAuthDrawer');
     const profileWrap = document.getElementById('profileIconWrapper');
     const profileIcon = document.getElementById('profileIconImg');
-    const statusDot   = document.getElementById('userStatusDot');
+    const statusDot = document.getElementById('userStatusDot');
 
     if (user) {
         await user.reload();
 
         let isManuallyVerified = false;
         try {
-            const stRef  = doc(db, "user_registrations", user.uid);
+            const stRef = doc(db, "user_registrations", user.uid);
             const stSnap = await getDoc(stRef);
             if (stSnap.exists()) {
                 const d = stSnap.data();
@@ -125,8 +125,8 @@ onAuthStateChanged(auth, async (user) => {
                     if (profileIcon) profileIcon.className = 'fa-solid ' + avatarClass;
                     if (profileWrap) profileWrap.style.background = 'linear-gradient(135deg, #10b981, #059669)';
                     if (statusDot) {
-                        statusDot.style.background    = '#22c55e';
-                        statusDot.style.boxShadow     = '0 0 10px #22c55e, 0 0 20px rgba(34,197,94,0.5)';
+                        statusDot.style.background = '#22c55e';
+                        statusDot.style.boxShadow = '0 0 10px #22c55e, 0 0 20px rgba(34,197,94,0.5)';
                     }
 
                     if (data.preferredLanguage) {
@@ -143,14 +143,14 @@ onAuthStateChanged(auth, async (user) => {
             sessionStorage.clear();
             if (profileIcon) profileIcon.className = 'fa-solid fa-envelope-circle-check';
             if (profileWrap) profileWrap.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
-            if (statusDot)  statusDot.style.background = '#f59e0b';
+            if (statusDot) statusDot.style.background = '#f59e0b';
         }
     } else {
         sessionStorage.clear();
         if (window.studentStatusListener) { window.studentStatusListener(); window.studentStatusListener = null; }
         if (profileIcon) profileIcon.className = 'fa-solid fa-user-astronaut';
         if (profileWrap) profileWrap.style.background = 'rgba(15, 23, 42, 0.8)';
-        if (statusDot)  { statusDot.style.background = '#94a3b8'; statusDot.style.boxShadow = 'none'; }
+        if (statusDot) { statusDot.style.background = '#94a3b8'; statusDot.style.boxShadow = 'none'; }
     }
 
     if (typeof updateUIForMode === 'function') updateUIForMode();
@@ -159,18 +159,18 @@ onAuthStateChanged(auth, async (user) => {
 window.studentStatusListener = null;
 
 window.monitorMyParticipation = async function () {
-    const user    = auth.currentUser;
+    const user = auth.currentUser;
     const mainBtn = document.getElementById('mainActionBtn');
     if (!user) return;
 
     const setButtonToEnterMode = () => {
         if (!mainBtn) return;
-        const lang      = localStorage.getItem('sys_lang') || 'ar';
+        const lang = localStorage.getItem('sys_lang') || 'ar';
         const enterText = (lang === 'ar') ? "دخول المحاضرة" : "Enter Lecture";
-        mainBtn.innerHTML  = `${enterText} <i class="fa-solid fa-door-open fa-beat-fade"></i>`;
-        mainBtn.style.background  = "linear-gradient(135deg, #10b981, #059669)";
-        mainBtn.style.boxShadow   = "0 8px 25px -5px rgba(16, 185, 129, 0.5)";
-        mainBtn.style.border      = "1px solid #10b981";
+        mainBtn.innerHTML = `${enterText} <i class="fa-solid fa-door-open fa-beat-fade"></i>`;
+        mainBtn.style.background = "linear-gradient(135deg, #10b981, #059669)";
+        mainBtn.style.boxShadow = "0 8px 25px -5px rgba(16, 185, 129, 0.5)";
+        mainBtn.style.border = "1px solid #10b981";
         mainBtn.onclick = function () {
             if (typeof window.playClick === 'function') window.playClick();
             if (typeof window.switchScreen === 'function') window.switchScreen('screenLiveSession');
@@ -180,12 +180,12 @@ window.monitorMyParticipation = async function () {
 
     const resetButtonToDefault = () => {
         if (!mainBtn) return;
-        const lang    = localStorage.getItem('sys_lang') || 'ar';
+        const lang = localStorage.getItem('sys_lang') || 'ar';
         const regText = (lang === 'ar') ? "تسجيل الحضور" : "Register Attendance";
         mainBtn.innerHTML = `${regText} <i class="fa-solid fa-fingerprint"></i>`;
         mainBtn.style.background = "";
-        mainBtn.style.boxShadow  = "";
-        mainBtn.style.border     = "";
+        mainBtn.style.boxShadow = "";
+        mainBtn.style.border = "";
         mainBtn.onclick = () => {
             if (typeof window.forceOpenPinScreen === 'function') window.forceOpenPinScreen();
             else if (typeof window.startProcess === 'function') window.startProcess(false);
@@ -197,16 +197,16 @@ window.monitorMyParticipation = async function () {
     if (!targetDoctorUID) {
         try {
             if (mainBtn) {
-                mainBtn.innerHTML       = `<i class="fa-solid fa-arrows-rotate fa-spin"></i> جاري المزامنة...`;
-                mainBtn.style.opacity   = "0.7";
+                mainBtn.innerHTML = `<i class="fa-solid fa-arrows-rotate fa-spin"></i> جاري المزامنة...`;
+                mainBtn.style.opacity = "0.7";
                 mainBtn.style.pointerEvents = "none";
             }
 
             const activeSessionsQ = query(collection(db, "active_sessions"), where("isActive", "==", true), limit(20));
-            const sessionsSnap    = await getDocs(activeSessionsQ);
+            const sessionsSnap = await getDocs(activeSessionsQ);
 
             for (const sessionDoc of sessionsSnap.docs) {
-                const studentRef  = doc(db, "active_sessions", sessionDoc.id, "participants", user.uid);
+                const studentRef = doc(db, "active_sessions", sessionDoc.id, "participants", user.uid);
                 const studentSnap = await getDoc(studentRef);
                 if (studentSnap.exists() && studentSnap.data().status === 'active') {
                     targetDoctorUID = sessionDoc.id;
@@ -267,17 +267,17 @@ window.monitorMyParticipation = async function () {
             if (liveScreen) { liveScreen.style.setProperty('display', 'none', 'important'); liveScreen.classList.remove('active'); }
             if (typeof window.goHome === 'function') window.goHome();
 
-            const exModal  = document.getElementById('expulsionModal');
-            const exTitle  = document.getElementById('expelTitle');
-            const exBody   = document.getElementById('expelBody');
-            if (exTitle) exTitle.innerText  = _t('modal_expel_title', "⛔ You have been expelled!");
-            if (exBody)  exBody.innerHTML   = _t('modal_expel_body', "The instructor has removed you from this session.<br>You cannot rejoin.");
+            const exModal = document.getElementById('expulsionModal');
+            const exTitle = document.getElementById('expelTitle');
+            const exBody = document.getElementById('expelBody');
+            if (exTitle) exTitle.innerText = _t('modal_expel_title', "⛔ You have been expelled!");
+            if (exBody) exBody.innerHTML = _t('modal_expel_body', "The instructor has removed you from this session.<br>You cannot rejoin.");
             if (exModal) {
                 exModal.style.setProperty('display', 'flex', 'important');
                 const leaveBtn = exModal.querySelector('button') || exModal.querySelector('.btn-danger');
                 if (leaveBtn) {
                     leaveBtn.innerHTML = _t('btn_leave_hall', "Leave Hall ➜");
-                    leaveBtn.onclick   = function () { exModal.style.display = 'none'; window.location.reload(); };
+                    leaveBtn.onclick = function () { exModal.style.display = 'none'; window.location.reload(); };
                 }
                 if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
             } else {
@@ -291,9 +291,9 @@ window.monitorMyParticipation = async function () {
             sessionStorage.removeItem('TARGET_DOCTOR_UID');
             resetButtonToDefault();
             if (window.unsubscribeLiveSnapshot) { window.unsubscribeLiveSnapshot(); window.unsubscribeLiveSnapshot = null; }
-            const liveScreen    = document.getElementById('screenLiveSession');
+            const liveScreen = document.getElementById('screenLiveSession');
             const welcomeScreen = document.getElementById('screenWelcome');
-            if (liveScreen)    { liveScreen.style.display = 'none'; liveScreen.classList.remove('active'); }
+            if (liveScreen) { liveScreen.style.display = 'none'; liveScreen.classList.remove('active'); }
             if (welcomeScreen) { welcomeScreen.style.display = 'block'; welcomeScreen.classList.add('active'); }
             if (typeof window.showToast === 'function') window.showToast("⏸️ استراحة: يرجى تسجيل الدخول مجدداً عند الاستئناف", 4000, "#f59e0b");
             return;
@@ -314,15 +314,15 @@ window.monitorMyParticipation = async function () {
 
 window.performStudentSignup = async function () {
     const lang = localStorage.getItem('sys_lang') || 'ar';
-    const _t   = (typeof t === 'function') ? t : (key, def) => def;
+    const _t = (typeof t === 'function') ? t : (key, def) => def;
 
-    const email     = document.getElementById('regEmail').value.trim();
-    const pass      = document.getElementById('regPass').value;
-    const fullName  = document.getElementById('regFullName').value.trim();
+    const email = document.getElementById('regEmail').value.trim();
+    const pass = document.getElementById('regPass').value;
+    const fullName = document.getElementById('regFullName').value.trim();
     const studentID = document.getElementById('regStudentID').value.trim();
-    const level     = document.getElementById('regLevel').value;
-    const gender    = document.getElementById('regGender').value;
-    const group     = document.getElementById('regGroup') ? document.getElementById('regGroup').value : "عام";
+    const level = document.getElementById('regLevel').value;
+    const gender = document.getElementById('regGender').value;
+    const group = document.getElementById('regGroup') ? document.getElementById('regGroup').value : "عام";
 
     if (!email || !pass || !fullName || !studentID) {
         if (typeof playBeep === 'function') playBeep();
@@ -335,7 +335,7 @@ window.performStudentSignup = async function () {
         return;
     }
 
-    const btn          = document.getElementById('btnDoSignup');
+    const btn = document.getElementById('btnDoSignup');
     const originalText = btn ? btn.innerText : "REGISTER";
     if (btn) { btn.disabled = true; btn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up fa-fade"></i> ${_t('status_connecting', 'جاري الاتصال بالسيرفر...')}`; }
 
@@ -362,29 +362,29 @@ window.performStudentSignup = async function () {
             if (typeof playSuccess === 'function') playSuccess();
             showToast(_t('msg_account_created', "✅ تم إنشاء الحساب بنجاح!"), 4000, "#10b981");
             if (typeof closeAuthDrawer === 'function') closeAuthDrawer();
-            if (typeof toggleAuthMode  === 'function') toggleAuthMode('login');
+            if (typeof toggleAuthMode === 'function') toggleAuthMode('login');
 
             const loginEmailInput = document.getElementById('studentLoginEmail');
             if (loginEmailInput) loginEmailInput.value = email;
-            document.getElementById('regPass').value  = "";
+            document.getElementById('regPass').value = "";
             document.getElementById('regEmail').value = "";
 
-            const firstName  = (typeof arabToEng === 'function') ? arabToEng(fullName.split(' ')[0]) : fullName.split(' ')[0];
+            const firstName = (typeof arabToEng === 'function') ? arabToEng(fullName.split(' ')[0]) : fullName.split(' ')[0];
             const modalTitle = document.getElementById('successModalTitle');
-            const modalBody  = document.getElementById('successModalBody');
+            const modalBody = document.getElementById('successModalBody');
             const successModal = document.getElementById('signupSuccessModal');
 
             if (modalTitle) modalTitle.innerText = `${_t('modal_welcome_title', '🎉 Welcome')} ${firstName}!`;
             if (modalBody) {
                 modalBody.innerHTML = `
                     <div style="background:#f8fafc;padding:15px;border-radius:12px;margin-bottom:20px;border:1px dashed #cbd5e1;text-align:center;">
-                        <div style="font-size:12px;font-weight:bold;color:#64748b;margin-bottom:5px;">${_t('modal_id_reserved','تم حجز الكود الجامعي:')}</div>
+                        <div style="font-size:12px;font-weight:bold;color:#64748b;margin-bottom:5px;">${_t('modal_id_reserved', 'تم حجز الكود الجامعي:')}</div>
                         <div style="font-size:24px;font-weight:900;color:#0ea5e9;font-family:'Outfit',sans-serif;letter-spacing:1px;">${studentID}</div>
                     </div>
-                    <p style="font-size:14px;color:#334155;margin-bottom:8px;">📨 ${_t('modal_email_sent','تم إرسال رابط تفعيل إلى بريدك الإلكتروني.')}</p>
+                    <p style="font-size:14px;color:#334155;margin-bottom:8px;">📨 ${_t('modal_email_sent', 'تم إرسال رابط تفعيل إلى بريدك الإلكتروني.')}</p>
                     <div style="background:#fee2e2;color:#b91c1c;padding:10px;border-radius:8px;font-weight:bold;font-size:12px;display:flex;align-items:center;gap:8px;">
                         <i class="fa-solid fa-triangle-exclamation"></i>
-                        <span>${_t('modal_verify_warning','يرجى تفعيل الحساب من الإيميل قبل تسجيل الدخول.')}</span>
+                        <span>${_t('modal_verify_warning', 'يرجى تفعيل الحساب من الإيميل قبل تسجيل الدخول.')}</span>
                     </div>`;
             }
             if (successModal) successModal.style.display = 'flex';
@@ -402,13 +402,13 @@ window.performStudentSignup = async function () {
 };
 
 window.performStudentLogin = async () => {
-    const _t   = (typeof t === 'function') ? t : (key, def) => def;
+    const _t = (typeof t === 'function') ? t : (key, def) => def;
     const email = document.getElementById('studentLoginEmail').value.trim();
-    const pass  = document.getElementById('studentLoginPass').value;
-    const btn   = document.querySelector('#loginSection .btn-modern-action') || document.querySelector('#loginSection .btn-main');
+    const pass = document.getElementById('studentLoginPass').value;
+    const btn = document.querySelector('#loginSection .btn-modern-action') || document.querySelector('#loginSection .btn-main');
 
     let originalText = "Sign In";
-    if (btn) { originalText = btn.innerHTML; btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${_t('status_verifying','جاري التحقق...')}`; btn.disabled = true; }
+    if (btn) { originalText = btn.innerHTML; btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${_t('status_verifying', 'جاري التحقق...')}`; btn.disabled = true; }
 
     if (!email || !pass) {
         showToast(_t('msg_enter_creds', "⚠️ أدخل الإيميل والباسورد"), 3000, "#f59e0b");
@@ -418,9 +418,9 @@ window.performStudentLogin = async () => {
 
     try {
         const userCredential = await signInWithEmailAndPassword(auth, email, pass);
-        const user           = userCredential.user;
+        const user = userCredential.user;
 
-        const userRef  = doc(db, "user_registrations", user.uid);
+        const userRef = doc(db, "user_registrations", user.uid);
         const userSnap = await getDoc(userRef);
 
         let isManuallyVerified = false;
@@ -437,7 +437,7 @@ window.performStudentLogin = async () => {
 
         if (userSnap.exists()) {
             const userData = userSnap.data();
-            const info     = userData.registrationInfo || userData;
+            const info = userData.registrationInfo || userData;
             const profileCache = {
                 fullName: info.fullName, email: info.email, studentID: info.studentID,
                 level: info.level, gender: info.gender, group: info.group || "",
@@ -447,7 +447,7 @@ window.performStudentLogin = async () => {
             localStorage.setItem('cached_profile_data', JSON.stringify(profileCache));
 
             let currentDeviceId = "UNKNOWN_DEVICE";
-            try { currentDeviceId = await getUniqueDeviceId(); } catch (e) {}
+            try { currentDeviceId = await getUniqueDeviceId(); } catch (e) { }
             try {
                 await updateDoc(userRef, {
                     bound_device_id: currentDeviceId,
@@ -464,13 +464,13 @@ window.performStudentLogin = async () => {
         console.error("Login Error:", error.code);
         let msg = "";
         switch (error.code) {
-            case 'auth/user-not-found':     msg = _t('error_user_not_found', "❌ هذا البريد الإلكتروني غير مسجل لدينا!"); break;
-            case 'auth/wrong-password':     msg = _t('error_wrong_pass',     "❌ كلمة المرور غير صحيحة!"); break;
-            case 'auth/invalid-credential': msg = _t('error_invalid_cred',   "❌ البريد الإلكتروني أو كلمة المرور غير صحيحة."); break;
-            case 'auth/invalid-email':      msg = _t('error_invalid_email',  "⚠️ صيغة البريد الإلكتروني غير سليمة!"); break;
-            case 'auth/user-disabled':      msg = _t('error_user_disabled',  "⛔ تم تعطيل هذا الحساب من قبل الإدارة."); break;
-            case 'auth/too-many-requests':  msg = _t('error_too_many',       "⏳ محاولات كثيرة! تم إيقاف الدخول مؤقتاً."); break;
-            case 'auth/network-request-failed': msg = _t('error_network',   "📡 فشل الاتصال! تأكد من الإنترنت."); break;
+            case 'auth/user-not-found': msg = _t('error_user_not_found', "❌ هذا البريد الإلكتروني غير مسجل لدينا!"); break;
+            case 'auth/wrong-password': msg = _t('error_wrong_pass', "❌ كلمة المرور غير صحيحة!"); break;
+            case 'auth/invalid-credential': msg = _t('error_invalid_cred', "❌ البريد الإلكتروني أو كلمة المرور غير صحيحة."); break;
+            case 'auth/invalid-email': msg = _t('error_invalid_email', "⚠️ صيغة البريد الإلكتروني غير سليمة!"); break;
+            case 'auth/user-disabled': msg = _t('error_user_disabled', "⛔ تم تعطيل هذا الحساب من قبل الإدارة."); break;
+            case 'auth/too-many-requests': msg = _t('error_too_many', "⏳ محاولات كثيرة! تم إيقاف الدخول مؤقتاً."); break;
+            case 'auth/network-request-failed': msg = _t('error_network', "📡 فشل الاتصال! تأكد من الإنترنت."); break;
             default: msg = _t('error_unknown', "❌ خطأ غير معروف") + ": " + error.code;
         }
         showToast(msg, 5000, "#ef4444");
@@ -481,11 +481,11 @@ window.performStudentLogin = async () => {
 };
 
 window.joinSessionAction = async function () {
-    const passInput   = document.getElementById('sessionPass').value.trim();
-    const btn         = document.getElementById('btnJoinFinal');
+    const passInput = document.getElementById('sessionPass').value.trim();
+    const btn = document.getElementById('btnJoinFinal');
     const targetDrUID = sessionStorage.getItem('TEMP_DR_UID');
     const originalText = btn.innerHTML;
-    const user        = auth.currentUser;
+    const user = auth.currentUser;
 
     if (!user) { showToast("❌ يجب تسجيل الدخول أولاً", 3000, "#ef4444"); return; }
     if (!targetDrUID) {
@@ -495,12 +495,12 @@ window.joinSessionAction = async function () {
     }
 
     window.isJoiningProcessActive = true;
-    btn.innerHTML        = '<i class="fa-solid fa-circle-notch fa-spin"></i> Verifying & Joining...';
+    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Verifying & Joining...';
     btn.style.pointerEvents = 'none';
 
     try {
         const sessionRef = doc(db, "active_sessions", targetDrUID);
-        const sensRef    = doc(db, "user_registrations", user.uid, "sensitive_info", "main");
+        const sensRef = doc(db, "user_registrations", user.uid, "sensitive_info", "main");
 
         const [sessionSnap, gpsData, deviceFingerprint, idToken, sensSnap] = await Promise.all([
             getDoc(sessionRef),
@@ -570,7 +570,7 @@ window.joinSessionAction = async function () {
                 }
             } catch (err) { console.warn("Cache update skipped."); }
 
-            if (document.getElementById('liveDocName'))    document.getElementById('liveDocName').innerText    = sessionData.doctorName    || "Professor";
+            if (document.getElementById('liveDocName')) document.getElementById('liveDocName').innerText = sessionData.doctorName || "Professor";
             if (document.getElementById('liveSubjectTag')) document.getElementById('liveSubjectTag').innerText = sessionData.allowedSubject || "Subject";
             const liveAvatar = document.getElementById('liveDocAvatar');
             if (liveAvatar && sessionData.doctorAvatar) liveAvatar.innerHTML = `<i class="fa-solid ${sessionData.doctorAvatar}"></i>`;
@@ -595,38 +595,38 @@ window.joinSessionAction = async function () {
 
 window.searchForSession = async function () {
     const codeInput = document.getElementById('attendanceCode').value.trim();
-    const btn       = document.getElementById('btnSearchSession');
+    const btn = document.getElementById('btnSearchSession');
 
     if (!codeInput) { showToast("⚠️ Please enter session PIN", 3000, "#f59e0b"); return; }
 
-    const originalText      = btn.innerHTML;
-    btn.innerHTML            = '<i class="fa-solid fa-circle-notch fa-spin"></i> SEARCHING...';
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> SEARCHING...';
     btn.style.pointerEvents = 'none';
 
     try {
-        const q             = query(collection(db, "active_sessions"), where("sessionCode", "==", codeInput), where("isActive", "==", true), where("isDoorOpen", "==", true));
+        const q = query(collection(db, "active_sessions"), where("sessionCode", "==", codeInput), where("isActive", "==", true), where("isDoorOpen", "==", true));
         const querySnapshot = await getDocs(q);
 
         if (querySnapshot.empty) {
-            const checkQ    = query(collection(db, "active_sessions"), where("sessionCode", "==", codeInput));
+            const checkQ = query(collection(db, "active_sessions"), where("sessionCode", "==", codeInput));
             const checkSnap = await getDocs(checkQ);
             showToast(checkSnap.empty ? "❌ Invalid Session PIN" : "🔒 Session is currently CLOSED", 4000, "#ef4444");
             btn.innerHTML = originalText; btn.style.pointerEvents = 'auto';
             return;
         }
 
-        const sessionDoc  = querySnapshot.docs[0];
+        const sessionDoc = querySnapshot.docs[0];
         const sessionData = sessionDoc.data();
-        const doctorUID   = sessionDoc.id;
+        const doctorUID = sessionDoc.id;
         sessionStorage.setItem('TEMP_DR_UID', doctorUID);
 
         if (typeof window.stopCodeEntryIdleTimer === 'function') window.stopCodeEntryIdleTimer();
 
-        const docNameEl     = document.getElementById('foundDocName');
+        const docNameEl = document.getElementById('foundDocName');
         const subjectNameEl = document.getElementById('foundSubjectName');
-        const foundAvatar   = document.getElementById('foundDocAvatar');
+        const foundAvatar = document.getElementById('foundDocAvatar');
 
-        if (docNameEl)     { docNameEl.innerText = "Dr. " + (sessionData.doctorName || "Unknown"); docNameEl.style.fontFamily = "'Outfit', sans-serif"; }
+        if (docNameEl) { docNameEl.innerText = "Dr. " + (sessionData.doctorName || "Unknown"); docNameEl.style.fontFamily = "'Outfit', sans-serif"; }
         if (subjectNameEl) { subjectNameEl.innerText = sessionData.allowedSubject || "--"; subjectNameEl.style.fontFamily = "'Outfit', sans-serif"; }
         if (foundAvatar && sessionData.doctorAvatar) foundAvatar.innerHTML = `<i class="fa-solid ${sessionData.doctorAvatar}"></i>`;
 
@@ -650,11 +650,11 @@ window.searchForSession = async function () {
 
 window.startAuthScreenTimer = function (doctorUID) {
     const display = document.getElementById('authTimerDisplay');
-    const pill    = document.querySelector('.auth-timer-pill');
-    const _t      = window.t || ((key, def) => def);
+    const pill = document.querySelector('.auth-timer-pill');
+    const _t = window.t || ((key, def) => def);
 
-    if (window.authUnsubscribe)    { window.authUnsubscribe();    window.authUnsubscribe    = null; }
-    if (window.localTicker)        { clearInterval(window.localTicker); window.localTicker  = null; }
+    if (window.authUnsubscribe) { window.authUnsubscribe(); window.authUnsubscribe = null; }
+    if (window.localTicker) { clearInterval(window.localTicker); window.localTicker = null; }
     if (window.authScreenInterval) { clearInterval(window.authScreenInterval); window.authScreenInterval = null; }
 
     const sessionRef = doc(db, "active_sessions", doctorUID);
@@ -673,9 +673,9 @@ window.startAuthScreenTimer = function (doctorUID) {
             return;
         }
         const serverReadTime = docSnap.readTime ? docSnap.readTime.toMillis() : Date.now();
-        const timeOffset     = serverReadTime - Date.now();
-        const startMs        = data.startTime ? data.startTime.toMillis() : serverReadTime;
-        const deadline       = startMs + (data.duration * 1000);
+        const timeOffset = serverReadTime - Date.now();
+        const startMs = data.startTime ? data.startTime.toMillis() : serverReadTime;
+        const deadline = startMs + (data.duration * 1000);
         if (window.localTicker) clearInterval(window.localTicker);
         runSyncedTimer(deadline, timeOffset, display, pill, _t);
         window.localTicker = setInterval(() => runSyncedTimer(deadline, timeOffset, display, pill, _t), 1000);
@@ -707,7 +707,7 @@ window.startAuthScreenTimer = function (doctorUID) {
 
     function handleSessionEnd(t, msg) {
         if (window.authUnsubscribe) window.authUnsubscribe();
-        if (window.localTicker)     clearInterval(window.localTicker);
+        if (window.localTicker) clearInterval(window.localTicker);
         showToast(t('toast_session_closed_manual', msg), 4000, "#ef4444");
         setTimeout(() => location.reload(), 2500);
     }
@@ -728,7 +728,7 @@ window.resetSearchSession = function () {
 };
 
 (function () {
-    let hallsList    = MASTER_HALLS;
+    let hallsList = MASTER_HALLS;
     let subjectsData = MASTER_SUBJECTS;
     window.subjectsData = MASTER_SUBJECTS;
     localStorage.removeItem('subjectsData_v4');
@@ -741,12 +741,12 @@ window.resetSearchSession = function () {
         modelsUrl: './models'
     };
 
-    let userIP             = "Unknown";
-    let geo_watch_id       = null;
+    let userIP = "Unknown";
+    let geo_watch_id = null;
     let countdownInterval;
-    let processIsActive    = false;
+    let processIsActive = false;
     let userLat = "", userLng = "";
-    let isOpeningMaps      = false;
+    let isOpeningMaps = false;
 
     let deferredPrompt;
     const installBox = document.getElementById('installAppPrompt');
@@ -761,12 +761,12 @@ window.resetSearchSession = function () {
 
     fetch('https://api.ipify.org?format=json').then(r => r.json()).then(d => userIP = d.ip).catch(() => userIP = "Hidden IP");
 
-    function playSuccess() { document.getElementById('successSound').play().catch(() => {}); if (navigator.vibrate) navigator.vibrate([50, 50, 50]); }
-    function playBeep()    { document.getElementById('beepSound').play().catch(() => {}); }
+    function playSuccess() { document.getElementById('successSound').play().catch(() => { }); if (navigator.vibrate) navigator.vibrate([50, 50, 50]); }
+    function playBeep() { document.getElementById('beepSound').play().catch(() => { }); }
 
     let wakeLock = null;
-    async function requestWakeLock() { try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {} }
-    function releaseWakeLock()       { if (wakeLock !== null) { wakeLock.release().then(() => { wakeLock = null; }); } }
+    async function requestWakeLock() { try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (err) { } }
+    function releaseWakeLock() { if (wakeLock !== null) { wakeLock.release().then(() => { wakeLock = null; }); } }
 
     window.history.pushState(null, null, window.location.href);
     window.onpopstate = function () {
@@ -779,15 +779,15 @@ window.resetSearchSession = function () {
 
     function updateHeaderState(screenId) {
         const wrapper = document.getElementById('heroIconWrapper');
-        const icon    = document.getElementById('statusIcon');
+        const icon = document.getElementById('statusIcon');
         if (!wrapper || !icon) return;
         wrapper.classList.remove('show-icon');
         if (screenId !== 'screenWelcome') {
             wrapper.classList.add('show-icon');
-            if (screenId === 'screenLoading')    { icon.className = "fa-solid fa-satellite-dish hero-icon fa-spin"; icon.style.color = "var(--primary)"; }
+            if (screenId === 'screenLoading') { icon.className = "fa-solid fa-satellite-dish hero-icon fa-spin"; icon.style.color = "var(--primary)"; }
             else if (screenId === 'screenDataEntry') { icon.className = "fa-solid fa-user-pen hero-icon"; icon.style.color = "var(--primary)"; icon.style.animation = "none"; }
-            else if (screenId === 'screenSuccess')   { icon.className = "fa-solid fa-check hero-icon"; icon.style.color = "#10b981"; icon.style.animation = "none"; }
-            else if (screenId === 'screenError')     { icon.className = "fa-solid fa-triangle-exclamation hero-icon"; icon.style.color = "#ef4444"; icon.style.animation = "none"; }
+            else if (screenId === 'screenSuccess') { icon.className = "fa-solid fa-check hero-icon"; icon.style.color = "#10b981"; icon.style.animation = "none"; }
+            else if (screenId === 'screenError') { icon.className = "fa-solid fa-triangle-exclamation hero-icon"; icon.style.color = "#ef4444"; icon.style.animation = "none"; }
         }
     }
 
@@ -795,9 +795,18 @@ window.resetSearchSession = function () {
         const currentActive = document.querySelector('.section.active');
         if (currentActive && currentActive.id === screenId) return;
         window.scrollTo({ top: 0, behavior: 'auto' });
-        document.querySelectorAll('.section').forEach(sec => { sec.style.display = 'none'; sec.classList.remove('active'); });
+        document.querySelectorAll('.section').forEach(sec => {
+            sec.style.cssText = "";
+            sec.style.setProperty('display', 'none', 'important');
+            sec.classList.remove('active');
+        });
         const target = document.getElementById(screenId);
-        if (target) { target.style.display = 'flex'; target.style.flexDirection = 'column'; setTimeout(() => target.classList.add('active'), 10); }
+        if (target) {
+            target.style.cssText = "";
+            target.style.setProperty('display', 'flex', 'important');
+            target.style.flexDirection = 'column';
+            setTimeout(() => target.classList.add('active'), 10);
+        }
         const infoBtn = document.getElementById('infoBtn');
         if (infoBtn) infoBtn.style.display = (screenId === 'screenWelcome') ? 'flex' : 'none';
     };
@@ -829,7 +838,7 @@ window.resetSearchSession = function () {
         if (hallSearchInput) hallSearchInput.addEventListener('input', (e) => renderHallOptions(e.target.value));
 
         setInterval(() => {
-            const now    = new Date();
+            const now = new Date();
             const timeEl = document.getElementById('currentTime');
             const dateEl = document.getElementById('currentDate');
             if (timeEl) timeEl.innerText = now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' });
@@ -839,16 +848,16 @@ window.resetSearchSession = function () {
 
     function renderHallOptions(filter = "") {
         const hallContainer = document.getElementById('hallOptionsContainer');
-        const hallSelect    = document.getElementById('hallSelect');
+        const hallSelect = document.getElementById('hallSelect');
         if (!hallSelect || !hallContainer) return;
 
-        hallSelect.innerHTML  = '<option value="" disabled selected>-- اختر المدرج --</option>';
+        hallSelect.innerHTML = '<option value="" disabled selected>-- اختر المدرج --</option>';
         hallContainer.innerHTML = '';
 
         const filteredHalls = hallsList.filter(h => h.includes(filter));
         filteredHalls.forEach(val => {
-            let opt      = document.createElement('option');
-            opt.value    = val; opt.text = val;
+            let opt = document.createElement('option');
+            opt.value = val; opt.text = val;
             hallSelect.appendChild(opt);
 
             let cOpt = document.createElement('div');
@@ -876,7 +885,7 @@ window.resetSearchSession = function () {
         if (navigator.geolocation) {
             geo_watch_id = navigator.geolocation.watchPosition(
                 (pos) => { userLat = pos.coords.latitude; userLng = pos.coords.longitude; },
-                () => {},
+                () => { },
                 { enableHighAccuracy: true, maximumAge: 30000, timeout: 20000 }
             );
         }
@@ -884,30 +893,30 @@ window.resetSearchSession = function () {
 
     window.updateUIForMode = function () {
         const adminToken = sessionStorage.getItem("secure_admin_session_token_v99");
-        const isStaff    = !!adminToken;
+        const isStaff = !!adminToken;
 
         document.body.classList.remove('is-dean', 'is-doctor', 'is-student');
         document.body.classList.add('is-student');
 
-        const sessionBtn       = document.getElementById('btnToggleSession');
-        const quickModeBtn     = document.getElementById('btnQuickMode');
-        const toolsBtn         = document.getElementById('btnToolsRequest');
-        const deanZone         = document.getElementById('deanPrivateZone');
-        const btnDataEntry     = document.getElementById('btnDataEntry');
-        const reportBtn        = document.getElementById('btnViewReport');
+        const sessionBtn = document.getElementById('btnToggleSession');
+        const quickModeBtn = document.getElementById('btnQuickMode');
+        const toolsBtn = document.getElementById('btnToolsRequest');
+        const deanZone = document.getElementById('deanPrivateZone');
+        const btnDataEntry = document.getElementById('btnDataEntry');
+        const reportBtn = document.getElementById('btnViewReport');
         const facultyProfileBtn = document.getElementById('facultyProfileBtn');
         const studentProfileBtn = document.getElementById('studentProfileBtn');
-        const mainActionBtn    = document.getElementById('mainActionBtn');
-        const makaniBar        = document.getElementById('makaniSearchBar');
-        const btnFeed          = document.getElementById('btnLiveFeedback');
+        const mainActionBtn = document.getElementById('mainActionBtn');
+        const makaniBar = document.getElementById('makaniSearchBar');
+        const btnFeed = document.getElementById('btnLiveFeedback');
 
         [sessionBtn, quickModeBtn, toolsBtn, deanZone, btnDataEntry, facultyProfileBtn, btnFeed].forEach(el => {
             if (el) el.style.setProperty('display', 'none', 'important');
         });
 
-        if (reportBtn)        reportBtn.classList.add('locked');
-        if (mainActionBtn)    mainActionBtn.style.display   = 'flex';
-        if (makaniBar)        makaniBar.style.display       = 'block';
+        if (reportBtn) reportBtn.classList.add('locked');
+        if (mainActionBtn) mainActionBtn.style.display = 'flex';
+        if (makaniBar) makaniBar.style.display = 'block';
         if (studentProfileBtn) studentProfileBtn.style.display = 'flex';
 
         const savedLang = localStorage.getItem('sys_lang') || 'ar';
@@ -930,12 +939,12 @@ window.resetSearchSession = function () {
         document.querySelectorAll('.section').forEach(el => { el.style.display = 'none'; el.classList.remove('active'); });
         const screen = document.getElementById('screenDataEntry');
         if (screen) { screen.style.cssText = "display: block !important; opacity: 1 !important;"; screen.classList.add('active'); }
-        const step1  = document.getElementById('step1_search');
-        const step2  = document.getElementById('step2_auth');
+        const step1 = document.getElementById('step1_search');
+        const step2 = document.getElementById('step2_auth');
         const errMsg = document.getElementById('screenError');
-        if (step2)  step2.style.setProperty('display', 'none', 'important');
+        if (step2) step2.style.setProperty('display', 'none', 'important');
         if (errMsg) errMsg.style.display = 'none';
-        if (step1)  step1.style.cssText  = "display: block !important; visibility: visible !important;";
+        if (step1) step1.style.cssText = "display: block !important; visibility: visible !important;";
         setTimeout(() => { const input = document.getElementById('attendanceCode'); if (input) input.focus(); }, 150);
     };
 
@@ -960,10 +969,10 @@ window.resetSearchSession = function () {
     };
 
     window.toggleAuthMode = (mode) => {
-        const loginSec  = document.getElementById('loginSection');
+        const loginSec = document.getElementById('loginSection');
         const signupSec = document.getElementById('signupSection');
-        const title     = document.getElementById('authTitle');
-        const subtitle  = document.getElementById('authSubtitle');
+        const title = document.getElementById('authTitle');
+        const subtitle = document.getElementById('authSubtitle');
         if (mode === 'signup') {
             loginSec.classList.remove('active'); signupSec.classList.add('active');
             title.innerText = 'Create Account'; subtitle.innerText = 'Join our nursing community below';
@@ -980,51 +989,51 @@ window.resetSearchSession = function () {
         input.type = isPassword ? 'text' : 'password';
         if (icon) {
             if (isPassword) { icon.classList.replace('fa-eye', 'fa-eye-slash'); icon.style.color = "#0ea5e9"; icon.style.filter = "drop-shadow(0 0 5px rgba(14,165,233,0.5))"; }
-            else            { icon.classList.replace('fa-eye-slash', 'fa-eye'); icon.style.color = "#94a3b8"; icon.style.filter = "none"; }
+            else { icon.classList.replace('fa-eye-slash', 'fa-eye'); icon.style.color = "#94a3b8"; icon.style.filter = "none"; }
         }
         if (navigator.vibrate) navigator.vibrate(10);
     };
 
     window.validateSignupForm = function () {
-        const getEl  = (id) => document.getElementById(id);
+        const getEl = (id) => document.getElementById(id);
         const getVal = (id) => getEl(id)?.value?.trim() || "";
 
-        const email        = getVal('regEmail');
+        const email = getVal('regEmail');
         const emailConfirm = getVal('regEmailConfirm');
-        const pass         = getVal('regPass');
-        const passConfirm  = getVal('regPassConfirm');
-        const level        = getVal('regLevel');
-        const gender       = getVal('regGender');
-        const name         = getVal('regFullName');
-        const groupRaw     = getVal('regGroup').toUpperCase();
+        const pass = getVal('regPass');
+        const passConfirm = getVal('regPassConfirm');
+        const level = getVal('regLevel');
+        const gender = getVal('regGender');
+        const name = getVal('regFullName');
+        const groupRaw = getVal('regGroup').toUpperCase();
 
-        const emailPattern  = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-        const isEmailValid  = emailPattern.test(email);
-        const isEmailMatch  = (email === emailConfirm && isEmailValid);
-        const emailConfEl   = getEl('regEmailConfirm');
-        const emailErr      = getEl('emailError');
+        const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        const isEmailValid = emailPattern.test(email);
+        const isEmailMatch = (email === emailConfirm && isEmailValid);
+        const emailConfEl = getEl('regEmailConfirm');
+        const emailErr = getEl('emailError');
         if (emailConfirm !== "") {
             emailConfEl.style.borderColor = isEmailMatch ? "#10b981" : "#ef4444";
             if (emailErr) emailErr.style.display = isEmailMatch ? 'none' : 'block';
         }
 
-        const isPassLen   = pass.length >= 6;
+        const isPassLen = pass.length >= 6;
         const isPassMatch = (pass === passConfirm && isPassLen);
-        const passConfEl  = getEl('regPassConfirm');
-        const passErr     = getEl('passError');
+        const passConfEl = getEl('regPassConfirm');
+        const passErr = getEl('passError');
         if (passConfirm !== "") {
             passConfEl.style.borderColor = isPassMatch ? "#10b981" : "#ef4444";
             if (passErr) passErr.style.display = isPassMatch ? 'none' : 'block';
         }
 
-        const groupPattern     = /^[1-4][GPNCDTBH]\d{1,2}$/;
+        const groupPattern = /^[1-4][GPNCDTBH]\d{1,2}$/;
         const isGroupFormatValid = groupPattern.test(groupRaw);
-        const isGroupLevelMatch  = (level === "" || !isGroupFormatValid) ? true : groupRaw.startsWith(level);
-        const isGroupValid       = isGroupFormatValid && isGroupLevelMatch;
+        const isGroupLevelMatch = (level === "" || !isGroupFormatValid) ? true : groupRaw.startsWith(level);
+        const isGroupValid = isGroupFormatValid && isGroupLevelMatch;
 
         const groupEl = getEl('regGroup');
         if (groupEl && groupRaw.length > 0) {
-            groupEl.style.borderColor     = isGroupValid ? "#10b981" : "#ef4444";
+            groupEl.style.borderColor = isGroupValid ? "#10b981" : "#ef4444";
             groupEl.style.backgroundColor = isGroupValid ? "#f0fdf4" : "#fef2f2";
             if (getEl('regGroup').value !== groupRaw) getEl('regGroup').value = groupRaw;
         } else if (groupEl) { groupEl.style.borderColor = ""; groupEl.style.backgroundColor = ""; }
@@ -1035,10 +1044,10 @@ window.resetSearchSession = function () {
         const btn = getEl('btnDoSignup');
         if (btn) {
             btn.disabled = !isEverythingValid;
-            btn.style.opacity    = isEverythingValid ? "1"            : "0.5";
-            btn.style.filter     = isEverythingValid ? "grayscale(0%)" : "grayscale(100%)";
-            btn.style.cursor     = isEverythingValid ? "pointer"       : "not-allowed";
-            btn.style.boxShadow  = isEverythingValid ? "0 4px 12px rgba(16,185,129,0.2)" : "none";
+            btn.style.opacity = isEverythingValid ? "1" : "0.5";
+            btn.style.filter = isEverythingValid ? "grayscale(0%)" : "grayscale(100%)";
+            btn.style.cursor = isEverythingValid ? "pointer" : "not-allowed";
+            btn.style.boxShadow = isEverythingValid ? "0 4px 12px rgba(16,185,129,0.2)" : "none";
         }
     };
 
@@ -1052,9 +1061,9 @@ window.resetSearchSession = function () {
             pinInput.setAttribute('inputmode', 'numeric');
 
             pinInput.addEventListener('keydown', () => { if (typeof isTyping !== 'undefined') isTyping = true; if (typeof elapsedTime !== 'undefined') elapsedTime = 0; });
-            pinInput.addEventListener('keyup',   () => { if (typeof isTyping !== 'undefined') isTyping = false; });
+            pinInput.addEventListener('keyup', () => { if (typeof isTyping !== 'undefined') isTyping = false; });
             pinInput.addEventListener('input', (e) => {
-                if (typeof isTyping   !== 'undefined') isTyping   = false;
+                if (typeof isTyping !== 'undefined') isTyping = false;
                 if (typeof elapsedTime !== 'undefined') elapsedTime = 0;
                 if (e.target.value.trim().length === 6) {
                     if (typeof window.searchForSession === 'function') window.searchForSession();
@@ -1069,7 +1078,7 @@ window.resetSearchSession = function () {
             });
         }
 
-        const signupFields = ['regStudentID','regFullName','regLevel','regGender','regGroup','regEmail','regEmailConfirm','regPass','regPassConfirm'];
+        const signupFields = ['regStudentID', 'regFullName', 'regLevel', 'regGender', 'regGroup', 'regEmail', 'regEmailConfirm', 'regPass', 'regPassConfirm'];
         signupFields.forEach(id => {
             const el = document.getElementById(id);
             if (el) { el.addEventListener('input', () => { if (typeof validateSignupForm === 'function') validateSignupForm(); }); el.addEventListener('change', () => { if (typeof validateSignupForm === 'function') validateSignupForm(); }); }
@@ -1081,7 +1090,7 @@ window.resetSearchSession = function () {
             document.querySelectorAll('.active-lang-text-pro').forEach(s => { s.innerText = (savedLang === 'ar') ? 'EN' : 'عربي'; });
         }
 
-        const groupInput  = document.getElementById('regGroup');
+        const groupInput = document.getElementById('regGroup');
         const levelSelect = document.getElementById('regLevel');
         if (groupInput) {
             groupInput.addEventListener('input', function () {
@@ -1092,7 +1101,7 @@ window.resetSearchSession = function () {
         if (levelSelect) levelSelect.addEventListener('change', () => { if (typeof window.validateSignupForm === 'function') window.validateSignupForm(); });
     });
 
-    ['regEmail','regEmailConfirm','regPass','regPassConfirm','regGender','regLevel','regGroup'].forEach(id => {
+    ['regEmail', 'regEmailConfirm', 'regPass', 'regPassConfirm', 'regGender', 'regLevel', 'regGroup'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('input', validateSignupForm);
     });
@@ -1106,9 +1115,9 @@ window.resetSearchSession = function () {
     }
 
     document.addEventListener('contextmenu', (e) => { e.preventDefault(); showToast('إجراء محظور لأسباب أمنية.', 2000, '#ef4444'); });
-    document.addEventListener('copy',        (e) => { e.preventDefault(); showToast('النسخ محظور لأسباب أمنية.', 2000, '#ef4444'); });
-    document.addEventListener('cut',         (e) => { e.preventDefault(); showToast('القص محظور لأسباب أمنية.', 2000, '#ef4444'); });
-    document.addEventListener('paste',       (e) => { e.preventDefault(); showToast('اللصق محظور لأسباب أمنية.', 2000, '#ef4444'); });
+    document.addEventListener('copy', (e) => { e.preventDefault(); showToast('النسخ محظور لأسباب أمنية.', 2000, '#ef4444'); });
+    document.addEventListener('cut', (e) => { e.preventDefault(); showToast('القص محظور لأسباب أمنية.', 2000, '#ef4444'); });
+    document.addEventListener('paste', (e) => { e.preventDefault(); showToast('اللصق محظور لأسباب أمنية.', 2000, '#ef4444'); });
 
     function safeClick(btn) { if (btn) { btn.style.opacity = "0.7"; btn.style.pointerEvents = "none"; } }
 
@@ -1122,11 +1131,11 @@ window.resetSearchSession = function () {
     }
 
     window.getDistanceFromLatLonInKm = function (lat1, lon1, lat2, lon2) {
-        const R    = 6371;
+        const R = 6371;
         const dLat = (lat2 - lat1) * (Math.PI / 180);
         const dLon = (lon2 - lon1) * (Math.PI / 180);
-        const a    = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(lat1*(Math.PI/180))*Math.cos(lat2*(Math.PI/180))*Math.sin(dLon/2)*Math.sin(dLon/2);
-        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     };
 
     window.toggleDropdown = function (listId) {
@@ -1148,13 +1157,13 @@ window.resetSearchSession = function () {
     };
 
     const AVATAR_ASSETS = {
-        "Male":   ['fa-user-tie','fa-user-graduate','fa-user-doctor','fa-user-astronaut','fa-user-ninja','fa-user-secret','fa-user-crown','fa-person-biking','fa-person-skating','fa-person-snowboarding','fa-person-swimming','fa-robot','fa-ghost','fa-dragon','fa-gamepad','fa-headset','fa-guitar','fa-rocket','fa-bolt','fa-fire'],
-        "Female": ['fa-user-nurse','fa-user-graduate','fa-user-doctor','fa-person-dress','fa-person-praying','fa-person-hiking','fa-person-skiing','fa-cat','fa-dove','fa-gem','fa-wand-magic-sparkles','fa-camera-retro','fa-palette','fa-mug-hot','fa-leaf','fa-heart','fa-star','fa-crown']
+        "Male": ['fa-user-tie', 'fa-user-graduate', 'fa-user-doctor', 'fa-user-astronaut', 'fa-user-ninja', 'fa-user-secret', 'fa-user-crown', 'fa-person-biking', 'fa-person-skating', 'fa-person-snowboarding', 'fa-person-swimming', 'fa-robot', 'fa-ghost', 'fa-dragon', 'fa-gamepad', 'fa-headset', 'fa-guitar', 'fa-rocket', 'fa-bolt', 'fa-fire'],
+        "Female": ['fa-user-nurse', 'fa-user-graduate', 'fa-user-doctor', 'fa-person-dress', 'fa-person-praying', 'fa-person-hiking', 'fa-person-skiing', 'fa-cat', 'fa-dove', 'fa-gem', 'fa-wand-magic-sparkles', 'fa-camera-retro', 'fa-palette', 'fa-mug-hot', 'fa-leaf', 'fa-heart', 'fa-star', 'fa-crown']
     };
-    const AVATAR_COLORS = ['#ef4444','#f97316','#f59e0b','#84cc16','#10b981','#06b6d4','#3b82f6','#6366f1','#8b5cf6','#d946ef','#f43f5e'];
+    const AVATAR_COLORS = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef', '#f43f5e'];
 
     window.openStudentProfile = async function (forceRefresh = false) {
-        const user    = auth.currentUser;
+        const user = auth.currentUser;
         const infoBtn = document.getElementById('infoBtn');
         if (infoBtn) infoBtn.style.display = 'none';
 
@@ -1168,45 +1177,45 @@ window.resetSearchSession = function () {
             try {
                 const cData = JSON.parse(cachedProfileData);
                 if (cData.uid === user.uid) {
-                    document.getElementById('profFullName').innerText  = cData.fullName  || "--";
+                    document.getElementById('profFullName').innerText = cData.fullName || "--";
                     document.getElementById('profStudentID').innerText = cData.studentID || "--";
 
-                    const COLLEGE_NAME_MAP = { 'N':'Nursing','P':'Physical Therapy','C':'Pharmacy','D':'Dentistry','T':'Computer Science','B':'Business Admin','H':'Health Sciences' };
-                    const COLLEGE_CODE_MAP = { 'NURS':'N','PT':'P','PHARM':'C','DENT':'D','CS':'T','BA':'B','HS':'H' };
-                    const grp    = cData.group || "";
+                    const COLLEGE_NAME_MAP = { 'N': 'Nursing', 'P': 'Physical Therapy', 'C': 'Pharmacy', 'D': 'Dentistry', 'T': 'Computer Science', 'B': 'Business Admin', 'H': 'Health Sciences' };
+                    const COLLEGE_CODE_MAP = { 'NURS': 'N', 'PT': 'P', 'PHARM': 'C', 'DENT': 'D', 'CS': 'T', 'BA': 'B', 'HS': 'H' };
+                    const grp = cData.group || "";
                     const letter = (cData.college ? (COLLEGE_CODE_MAP[cData.college] || grp[1]?.toUpperCase() || 'N') : (grp.length >= 2 ? grp[1].toUpperCase() : 'N'));
                     const roleEl = document.querySelector('.pro-role');
-                    if (roleEl) roleEl.innerHTML = `<span style="font-size:13px;font-weight:800;">${COLLEGE_NAME_MAP[letter]||'Nursing'} Student</span><br><span style="font-size:13px;color:#0ea5e9;font-weight:900;background:#e0f2fe;padding:2px 10px;border-radius:20px;display:inline-block;margin-top:4px;">${grp||"--"}</span>`;
+                    if (roleEl) roleEl.innerHTML = `<span style="font-size:13px;font-weight:800;">${COLLEGE_NAME_MAP[letter] || 'Nursing'} Student</span><br><span style="font-size:13px;color:#0ea5e9;font-weight:900;background:#e0f2fe;padding:2px 10px;border-radius:20px;display:inline-block;margin-top:4px;">${grp || "--"}</span>`;
 
-                    document.getElementById('profLevel').innerText  = `الفرقة ${cData.level || '?'}`;
+                    document.getElementById('profLevel').innerText = `الفرقة ${cData.level || '?'}`;
                     document.getElementById('profGender').innerText = cData.gender || "--";
-                    document.getElementById('profEmail').innerText  = cData.email  || user.email;
+                    document.getElementById('profEmail').innerText = cData.email || user.email;
 
                     const cAvatarEl = document.getElementById('currentAvatar');
                     if (cAvatarEl) { cAvatarEl.innerHTML = `<i class="fa-solid ${cData.avatarClass || 'fa-user-graduate'}"></i>`; cAvatarEl.style.color = "var(--primary-dark)"; }
                 }
-            } catch (e) {}
+            } catch (e) { }
         }
 
-        const statsCacheKey  = `stats_cache_${user.uid}`;
+        const statsCacheKey = `stats_cache_${user.uid}`;
         const cachedStatsStr = localStorage.getItem(statsCacheKey);
         if (cachedStatsStr && !forceRefresh) {
             try {
                 const cachedStats = JSON.parse(cachedStatsStr);
                 if ((Date.now() - cachedStats.timestamp) < 900000) {
                     document.getElementById('profAttendanceVal').innerText = cachedStats.attendance;
-                    document.getElementById('profAbsenceVal').innerText    = cachedStats.absence;
+                    document.getElementById('profAbsenceVal').innerText = cachedStats.absence;
                     const discEl = document.getElementById('profDisciplineVal');
-                    if (cachedStats.discipline === "bad")     { discEl.innerText = "مشاغب"; discEl.style.color = "#ef4444"; }
+                    if (cachedStats.discipline === "bad") { discEl.innerText = "مشاغب"; discEl.style.color = "#ef4444"; }
                     else if (cachedStats.discipline === "warning") { discEl.innerText = "تنبيه"; discEl.style.color = "#f59e0b"; }
-                    else                                        { discEl.innerText = "ملتزم"; discEl.style.color = "#10b981"; }
+                    else { discEl.innerText = "ملتزم"; discEl.style.color = "#10b981"; }
                     return;
                 }
-            } catch (e) {}
+            } catch (e) { }
         }
 
         document.getElementById('profAttendanceVal').innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" style="font-size:14px"></i>';
-        document.getElementById('profAbsenceVal').innerHTML    = '-';
+        document.getElementById('profAbsenceVal').innerHTML = '-';
         document.getElementById('profDisciplineVal').innerHTML = '-';
 
         try {
@@ -1215,30 +1224,30 @@ window.resetSearchSession = function () {
             const data = docSnap.data();
             const info = data.registrationInfo || data;
 
-            document.getElementById('profFullName').innerText  = info.fullName  || "--";
+            document.getElementById('profFullName').innerText = info.fullName || "--";
             document.getElementById('profStudentID').innerText = info.studentID || "--";
 
-            const COLLEGE_NAME_MAP = { 'N':'Nursing','P':'Physical Therapy','C':'Pharmacy','D':'Dentistry','T':'Computer Science','B':'Business Admin','H':'Health Sciences' };
-            const COLLEGE_CODE_MAP = { 'NURS':'N','PT':'P','PHARM':'C','DENT':'D','CS':'T','BA':'B','HS':'H' };
+            const COLLEGE_NAME_MAP = { 'N': 'Nursing', 'P': 'Physical Therapy', 'C': 'Pharmacy', 'D': 'Dentistry', 'T': 'Computer Science', 'B': 'Business Admin', 'H': 'Health Sciences' };
+            const COLLEGE_CODE_MAP = { 'NURS': 'N', 'PT': 'P', 'PHARM': 'C', 'DENT': 'D', 'CS': 'T', 'BA': 'B', 'HS': 'H' };
             const studentGroup = info.group || "";
-            const collegeCode  = data.college || info.college || "";
-            const letter       = collegeCode ? (COLLEGE_CODE_MAP[collegeCode] || studentGroup[1]?.toUpperCase() || 'N') : (studentGroup.length >= 2 ? studentGroup[1].toUpperCase() : 'N');
-            const roleEl       = document.querySelector('.pro-role');
-            if (roleEl) roleEl.innerHTML = `<span style="font-size:13px;font-weight:800;">${COLLEGE_NAME_MAP[letter]||'Nursing'} Student</span><br><span style="font-size:13px;color:#0ea5e9;font-weight:900;background:#e0f2fe;padding:2px 10px;border-radius:20px;display:inline-block;margin-top:4px;">${studentGroup||"--"}</span>`;
+            const collegeCode = data.college || info.college || "";
+            const letter = collegeCode ? (COLLEGE_CODE_MAP[collegeCode] || studentGroup[1]?.toUpperCase() || 'N') : (studentGroup.length >= 2 ? studentGroup[1].toUpperCase() : 'N');
+            const roleEl = document.querySelector('.pro-role');
+            if (roleEl) roleEl.innerHTML = `<span style="font-size:13px;font-weight:800;">${COLLEGE_NAME_MAP[letter] || 'Nursing'} Student</span><br><span style="font-size:13px;color:#0ea5e9;font-weight:900;background:#e0f2fe;padding:2px 10px;border-radius:20px;display:inline-block;margin-top:4px;">${studentGroup || "--"}</span>`;
 
-            document.getElementById('profLevel').innerText  = `الفرقة ${info.level || '?'}`;
+            document.getElementById('profLevel').innerText = `الفرقة ${info.level || '?'}`;
             document.getElementById('profGender').innerText = info.gender || "--";
-            document.getElementById('profEmail').innerText  = info.email  || user.email || "--";
+            document.getElementById('profEmail').innerText = info.email || user.email || "--";
 
             const currentAvatarEl = document.getElementById('currentAvatar');
             if (currentAvatarEl) { currentAvatarEl.innerHTML = `<i class="fa-solid ${data.avatarClass || info.avatarClass || 'fa-user-graduate'}"></i>`; currentAvatarEl.style.color = "var(--primary-dark)"; }
 
-            const myGroup      = (info.group && info.group.trim() !== "") ? info.group.trim() : "General";
+            const myGroup = (info.group && info.group.trim() !== "") ? info.group.trim() : "General";
             const countersQuery = query(collection(db, "course_counters"), where("targetGroups", "array-contains", myGroup));
             const [myStatsSnap, countersSnap] = await Promise.all([getDoc(doc(db, "student_stats", user.uid)), getDocs(countersQuery)]);
 
             let myAttendedSubjects = {};
-            let disciplineStatus   = "good";
+            let disciplineStatus = "good";
             if (myStatsSnap.exists()) {
                 const sData = myStatsSnap.data();
                 myAttendedSubjects = sData.attended || {};
@@ -1254,7 +1263,7 @@ window.resetSearchSession = function () {
 
             const normalizeStr = (str) => str.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '').toLowerCase();
             let totalAttendanceDays = 0;
-            let totalAbsenceDays    = 0;
+            let totalAbsenceDays = 0;
 
             for (const [subjectHeld, totalHeldCount] of Object.entries(totalSessionsHeldMap)) {
                 let studentCount = 0;
@@ -1263,21 +1272,21 @@ window.resetSearchSession = function () {
                     if (normalizeStr(studentSubject) === targetNorm) { studentCount = studentVal; break; }
                 }
                 totalAttendanceDays += studentCount;
-                totalAbsenceDays    += Math.max(0, totalHeldCount - studentCount);
+                totalAbsenceDays += Math.max(0, totalHeldCount - studentCount);
             }
 
             document.getElementById('profAttendanceVal').innerText = totalAttendanceDays;
-            document.getElementById('profAbsenceVal').innerText    = totalAbsenceDays;
+            document.getElementById('profAbsenceVal').innerText = totalAbsenceDays;
             const discEl = document.getElementById('profDisciplineVal');
-            if (disciplineStatus === "bad")     { discEl.innerText = "مشاغب"; discEl.style.color = "#ef4444"; }
+            if (disciplineStatus === "bad") { discEl.innerText = "مشاغب"; discEl.style.color = "#ef4444"; }
             else if (disciplineStatus === "warning") { discEl.innerText = "تنبيه"; discEl.style.color = "#f59e0b"; }
-            else                                { discEl.innerText = "ملتزم"; discEl.style.color = "#10b981"; }
+            else { discEl.innerText = "ملتزم"; discEl.style.color = "#10b981"; }
 
             localStorage.setItem(statsCacheKey, JSON.stringify({ attendance: totalAttendanceDays, absence: totalAbsenceDays, discipline: disciplineStatus, timestamp: Date.now() }));
         } catch (calcError) {
             console.error("Profile Calculation Error:", calcError);
             document.getElementById('profAttendanceVal').innerText = "?";
-            document.getElementById('profAbsenceVal').innerText    = "?";
+            document.getElementById('profAbsenceVal').innerText = "?";
         }
     };
 
@@ -1291,17 +1300,17 @@ window.resetSearchSession = function () {
         try {
             const docSnap = await getDoc(doc(db, "user_registrations", user.uid));
             if (docSnap.exists()) { const info = docSnap.data().registrationInfo || docSnap.data(); if (info.gender) gender = info.gender; }
-        } catch (e) {}
+        } catch (e) { }
 
         grid.innerHTML = '';
         const icons = AVATAR_ASSETS[gender] || AVATAR_ASSETS["Male"];
         icons.forEach((iconClass, index) => {
             const color = AVATAR_COLORS[index % AVATAR_COLORS.length];
-            const item  = document.createElement('div');
+            const item = document.createElement('div');
             item.className = 'avatar-option-modern';
             item.innerHTML = `<i class="fa-solid ${iconClass}"></i>`;
-            item.style.color           = color;
-            item.style.borderColor     = color + '40';
+            item.style.color = color;
+            item.style.borderColor = color + '40';
             item.style.backgroundColor = color + '10';
             item.onclick = () => saveNewAvatar(iconClass, color);
             grid.appendChild(item);
@@ -1317,7 +1326,7 @@ window.resetSearchSession = function () {
 
         const studentAvatar = document.getElementById('currentAvatar');
         if (studentAvatar) {
-            studentAvatar.innerHTML          = `<i class="fa-solid ${iconClass}"></i>`;
+            studentAvatar.innerHTML = `<i class="fa-solid ${iconClass}"></i>`;
             if (color) { studentAvatar.style.color = color; studentAvatar.style.borderColor = color; studentAvatar.style.backgroundColor = color + '10'; }
         }
         document.getElementById('avatarSelectorModal').style.display = 'none';
@@ -1346,15 +1355,15 @@ window.resetSearchSession = function () {
             }
             if (!studentCode) return;
 
-            const q             = query(collection(db, "attendance"), where("id", "==", studentCode), where("feedback_status", "==", "pending"), limit(1));
+            const q = query(collection(db, "attendance"), where("id", "==", studentCode), where("feedback_status", "==", "pending"), limit(1));
             const querySnapshot = await getDocs(q);
 
             if (!querySnapshot.empty) {
                 const pendingDoc = querySnapshot.docs[0];
-                const data       = pendingDoc.data();
-                document.getElementById('feedbackSubjectName').innerText    = data.subject    || "محاضرة";
-                document.getElementById('feedbackDocName').innerText        = data.doctorName || "الكلية";
-                document.getElementById('targetAttendanceDocId').value      = pendingDoc.id;
+                const data = pendingDoc.data();
+                document.getElementById('feedbackSubjectName').innerText = data.subject || "محاضرة";
+                document.getElementById('feedbackDocName').innerText = data.doctorName || "الكلية";
+                document.getElementById('targetAttendanceDocId').value = pendingDoc.id;
                 window.selectStar(0);
                 document.getElementById('feedbackModal').style.display = 'flex';
             }
@@ -1362,13 +1371,13 @@ window.resetSearchSession = function () {
     };
 
     window.selectStar = function (val) {
-        const stars     = document.querySelectorAll('.star-btn');
+        const stars = document.querySelectorAll('.star-btn');
         const textField = document.getElementById('ratingText');
-        const input     = document.getElementById('selectedRating');
-        input.value     = val;
+        const input = document.getElementById('selectedRating');
+        input.value = val;
 
-        const lang  = localStorage.getItem('sys_lang') || 'ar';
-        const dict  = i18n[lang];
+        const lang = localStorage.getItem('sys_lang') || 'ar';
+        const dict = i18n[lang];
         const texts = ["", dict.rate_bad, dict.rate_poor, dict.rate_fair, dict.rate_good, dict.rate_excellent];
 
         stars.forEach(star => {
@@ -1383,8 +1392,8 @@ window.resetSearchSession = function () {
 
     window.submitFeedback = async function () {
         const rating = document.getElementById('selectedRating').value;
-        const docId  = document.getElementById('targetAttendanceDocId').value;
-        const btn    = document.querySelector('#feedbackModal .btn-main');
+        const docId = document.getElementById('targetAttendanceDocId').value;
+        const btn = document.querySelector('#feedbackModal .btn-main');
 
         if (rating == "0") { showToast("⚠️ من فضلك قيم بعدد النجوم", 2000, "#f59e0b"); return; }
 
@@ -1392,12 +1401,12 @@ window.resetSearchSession = function () {
         btn.style.pointerEvents = 'none';
 
         try {
-            const attRef  = doc(db, "attendance", docId);
+            const attRef = doc(db, "attendance", docId);
             const attSnap = await getDoc(attRef);
             if (!attSnap.exists()) throw new Error("بيانات الحضور غير موجودة");
 
-            const roomData  = attSnap.data();
-            const batch     = writeBatch(db);
+            const roomData = attSnap.data();
+            const batch = writeBatch(db);
             batch.update(attRef, { feedback_status: "submitted", feedback_timestamp: serverTimestamp() });
             batch.set(doc(collection(db, "feedback_reports")), {
                 rating: parseInt(rating), comment: "", timestamp: serverTimestamp(),
@@ -1415,13 +1424,13 @@ window.resetSearchSession = function () {
     window.showSmartWelcome = function (name) {
         const today = new Date().toLocaleDateString('en-GB');
         if (localStorage.getItem('last_welcome_date') !== today) {
-            const modal    = document.getElementById('dailyWelcomeModal');
+            const modal = document.getElementById('dailyWelcomeModal');
             const nameSpan = document.getElementById('welcomeUserName');
             if (modal && nameSpan) {
                 let englishName = (typeof arabToEng === 'function') ? arabToEng(name.split(' ')[0]) : name.split(' ')[0];
-                nameSpan.innerText      = englishName;
-                modal.style.display    = 'flex';
-                modal.style.opacity    = '1';
+                nameSpan.innerText = englishName;
+                modal.style.display = 'flex';
+                modal.style.opacity = '1';
                 localStorage.setItem('last_welcome_date', today);
             }
         }
@@ -1435,16 +1444,16 @@ window.resetSearchSession = function () {
     window.changeLanguage = function (lang) {
         const dict = i18n[lang];
         if (!dict) return;
-        document.documentElement.dir  = dict.dir || "rtl";
+        document.documentElement.dir = dict.dir || "rtl";
         document.documentElement.lang = lang;
 
         document.querySelectorAll('[data-i18n]').forEach(el => {
-            const key     = el.getAttribute('data-i18n');
+            const key = el.getAttribute('data-i18n');
             const newText = dict[key];
             if (newText && newText !== "") {
                 const icon = el.querySelector('i');
                 if (icon) el.innerHTML = `${icon.outerHTML} <span class="btn-text-content">${newText}</span>`;
-                else       el.innerText = newText;
+                else el.innerText = newText;
             }
         });
 
@@ -1456,9 +1465,9 @@ window.resetSearchSession = function () {
     };
 
     window.toggleSystemLanguage = async function () {
-        const user       = auth.currentUser;
+        const user = auth.currentUser;
         const currentLang = localStorage.getItem('sys_lang') || 'ar';
-        const newLang     = (currentLang === 'ar') ? 'en' : 'ar';
+        const newLang = (currentLang === 'ar') ? 'en' : 'ar';
         changeLanguage(newLang);
         document.querySelectorAll('.active-lang-text-pro').forEach(s => { s.innerText = (newLang === 'ar') ? 'EN' : 'عربي'; });
         if (user) {
@@ -1477,54 +1486,54 @@ window.resetSearchSession = function () {
         document.querySelectorAll('.section').forEach(sec => { sec.style.display = 'none'; sec.classList.remove('active'); });
         const parentScreen = document.getElementById('screenDataEntry');
         if (parentScreen) { parentScreen.style.cssText = "display: block !important; opacity: 1 !important;"; parentScreen.classList.add('active'); }
-        const step1  = document.getElementById('step1_search');
-        const step2  = document.getElementById('step2_auth');
+        const step1 = document.getElementById('step1_search');
+        const step2 = document.getElementById('step2_auth');
         const errMsg = document.getElementById('screenError');
-        if (step2)  step2.style.setProperty('display', 'none', 'important');
+        if (step2) step2.style.setProperty('display', 'none', 'important');
         if (errMsg) errMsg.style.display = 'none';
-        if (step1)  step1.style.cssText = "display: block !important; opacity: 1 !important; visibility: visible !important; width: 100%;";
+        if (step1) step1.style.cssText = "display: block !important; opacity: 1 !important; visibility: visible !important; width: 100%;";
         setTimeout(() => { const input = document.getElementById('attendanceCode'); if (input) input.focus(); }, 150);
     };
 
     window.resetMainButtonUI = function () {
-        const btn  = document.getElementById('mainActionBtn');
+        const btn = document.getElementById('mainActionBtn');
         const lang = localStorage.getItem('sys_lang') || 'ar';
         const isAr = (lang === 'ar');
         if (!btn) return;
 
         const targetDoctorUID = sessionStorage.getItem('TARGET_DOCTOR_UID');
         if (targetDoctorUID) {
-            btn.innerHTML       = `${isAr ? "دخول المحاضرة" : "Enter Lecture"} <i class="fa-solid fa-door-open fa-beat-fade"></i>`;
+            btn.innerHTML = `${isAr ? "دخول المحاضرة" : "Enter Lecture"} <i class="fa-solid fa-door-open fa-beat-fade"></i>`;
             btn.style.background = "linear-gradient(135deg, #10b981, #059669)";
-            btn.style.boxShadow  = "0 8px 25px -5px rgba(16, 185, 129, 0.5)";
-            btn.style.border     = "1px solid #10b981";
+            btn.style.boxShadow = "0 8px 25px -5px rgba(16, 185, 129, 0.5)";
+            btn.style.border = "1px solid #10b981";
             btn.onclick = function () {
                 if (typeof playClick === 'function') playClick();
                 switchScreen('screenLiveSession');
                 if (typeof startLiveSnapshotListener === 'function') startLiveSnapshotListener();
             };
         } else {
-            const dict    = (typeof i18n !== 'undefined') ? i18n[lang] : null;
+            const dict = (typeof i18n !== 'undefined') ? i18n[lang] : null;
             const regText = dict ? dict.main_reg_btn : (isAr ? "تسجيل الحضور" : "Register Attendance");
-            btn.innerHTML       = `${regText} <i class="fa-solid fa-fingerprint"></i>`;
+            btn.innerHTML = `${regText} <i class="fa-solid fa-fingerprint"></i>`;
             btn.style.background = "";
-            btn.style.boxShadow  = "";
-            btn.style.border     = "";
+            btn.style.boxShadow = "";
+            btn.style.border = "";
             btn.onclick = function () {
                 if (typeof window.forceOpenPinScreen === 'function') window.forceOpenPinScreen();
                 else window.startProcess(false);
             };
         }
         btn.style.pointerEvents = 'auto';
-        btn.style.opacity       = "1";
+        btn.style.opacity = "1";
         btn.classList.remove('locked');
         btn.disabled = false;
     };
 
     window.goHome = function () {
-        const liveScreen    = document.getElementById('screenLiveSession');
+        const liveScreen = document.getElementById('screenLiveSession');
         const welcomeScreen = document.getElementById('screenWelcome');
-        if (liveScreen)    liveScreen.style.display = 'none';
+        if (liveScreen) liveScreen.style.display = 'none';
         if (welcomeScreen) { welcomeScreen.style.display = 'block'; welcomeScreen.classList.add('active'); }
         const infoBtn = document.getElementById('infoBtn');
         if (infoBtn) infoBtn.style.display = 'flex';
@@ -1535,10 +1544,10 @@ window.resetSearchSession = function () {
 
     window.startSmartSearch = async function () {
         const rawInput = document.getElementById('makaniInput').value.trim();
-        const content  = document.getElementById('makaniContent');
-        const modal    = document.getElementById('makaniResultsModal');
-        const btn      = document.getElementById('btnMakani');
-        const _t       = window.t || ((k, def) => def);
+        const content = document.getElementById('makaniContent');
+        const modal = document.getElementById('makaniResultsModal');
+        const btn = document.getElementById('btnMakani');
+        const _t = window.t || ((k, def) => def);
 
         const smartNormalize = (text) => {
             if (!text) return "";
@@ -1552,55 +1561,55 @@ window.resetSearchSession = function () {
 
         const queryNormal = smartNormalize(rawInput);
         btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
-        content.innerHTML = `<div style="padding:30px;text-align:center;"><i class="fa-solid fa-wand-magic-sparkles fa-bounce" style="font-size:40px;color:#0ea5e9;"></i><p>${_t('processing_text','جاري البحث في الكلية...')}</p></div>`;
+        content.innerHTML = `<div style="padding:30px;text-align:center;"><i class="fa-solid fa-wand-magic-sparkles fa-bounce" style="font-size:40px;color:#0ea5e9;"></i><p>${_t('processing_text', 'جاري البحث في الكلية...')}</p></div>`;
         modal.style.display = 'flex';
 
         try {
             let resultsFound = [];
-            const sessionQ   = query(collection(db, "active_sessions"), where("isActive", "==", true));
+            const sessionQ = query(collection(db, "active_sessions"), where("isActive", "==", true));
             const sessionSnap = await getDocs(sessionQ);
 
             for (const sessionDoc of sessionSnap.docs) {
-                const data     = { ...sessionDoc.data() };
+                const data = { ...sessionDoc.data() };
                 const doctorId = sessionDoc.id;
-                const dbSubject  = smartNormalize(data.allowedSubject || "");
-                const dbGroups   = Array.isArray(data.targetGroups) ? data.targetGroups : [];
+                const dbSubject = smartNormalize(data.allowedSubject || "");
+                const dbGroups = Array.isArray(data.targetGroups) ? data.targetGroups : [];
                 const isGroupMatch = dbGroups.some(g => smartNormalize(g).includes(queryNormal));
 
-                let isMatch   = false;
+                let isMatch = false;
                 let matchType = "session";
 
                 if (dbSubject.includes(queryNormal) || isGroupMatch) {
                     isMatch = true;
                 } else if (!isNaN(rawInput) && rawInput.length >= 3) {
                     const participantsRef = collection(db, "active_sessions", doctorId, "participants");
-                    const q               = query(participantsRef, where("id", "==", rawInput), where("status", "==", "active"));
-                    const querySnap       = await getDocs(q);
+                    const q = query(participantsRef, where("id", "==", rawInput), where("status", "==", "active"));
+                    const querySnap = await getDocs(q);
                     if (!querySnap.empty) { isMatch = true; matchType = "student"; data.friendName = querySnap.docs[0].data().name; }
                 }
 
                 if (isMatch) {
                     try {
-                        const countQ    = query(collection(db, "active_sessions", doctorId, "participants"), where("status", "==", "active"));
+                        const countQ = query(collection(db, "active_sessions", doctorId, "participants"), where("status", "==", "active"));
                         const countSnap = await getCountFromServer(countQ);
-                        data.liveCount  = countSnap.data().count;
+                        data.liveCount = countSnap.data().count;
                     } catch { data.liveCount = "?"; }
                     data.matchType = matchType;
-                    data.doctorId  = doctorId;
+                    data.doctorId = doctorId;
                     resultsFound.push(data);
                 }
             }
 
             if (resultsFound.length === 0) {
-                content.innerHTML = `<div class="empty-state-modern"><div class="empty-icon-bg"><i class="fa-solid fa-magnifying-glass-minus" style="font-size:30px;color:#94a3b8;"></i></div><h3 style="margin-top:10px;font-size:14px;color:#64748b;">${_t('search_no_results_custom','لم يتم العثور على نتائج')}</h3><p style="font-size:11px;color:#cbd5e1;">"${rawInput}"</p></div>`;
+                content.innerHTML = `<div class="empty-state-modern"><div class="empty-icon-bg"><i class="fa-solid fa-magnifying-glass-minus" style="font-size:30px;color:#94a3b8;"></i></div><h3 style="margin-top:10px;font-size:14px;color:#64748b;">${_t('search_no_results_custom', 'لم يتم العثور على نتائج')}</h3><p style="font-size:11px;color:#cbd5e1;">"${rawInput}"</p></div>`;
             } else {
                 content.innerHTML = '';
                 resultsFound.forEach(res => {
-                    const card      = document.createElement('div');
-                    const docName   = res.doctorName || "";
+                    const card = document.createElement('div');
+                    const docName = res.doctorName || "";
                     const isEngName = /^[A-Za-z]/.test(docName);
-                    const prefix    = isEngName ? "Dr." : "د.";
-                    const dirStyle  = isEngName ? "ltr" : "rtl";
+                    const prefix = isEngName ? "Dr." : "د.";
+                    const dirStyle = isEngName ? "ltr" : "rtl";
                     const alignStyle = isEngName ? "left" : "right";
 
                     if (res.matchType === 'session') {
@@ -1616,16 +1625,16 @@ window.resetSearchSession = function () {
                                 </div>
                             </div>
                             <div class="hall-badge-formal">
-                                <div style="font-size:10px;color:#94a3b8;">${_t('formal_direction','المكان الحالي')}</div>
+                                <div style="font-size:10px;color:#94a3b8;">${_t('formal_direction', 'المكان الحالي')}</div>
                                 <div style="font-size:20px;font-weight:900;color:#fff;">HALL: ${res.hall}</div>
                             </div>`;
                     } else if (res.matchType === 'student') {
-                        const stdName   = res.friendName || "";
-                        const isEngStd  = /^[A-Za-z]/.test(stdName);
-                        const dirAttr   = isEngStd ? "ltr" : "rtl";
+                        const stdName = res.friendName || "";
+                        const isEngStd = /^[A-Za-z]/.test(stdName);
+                        const dirAttr = isEngStd ? "ltr" : "rtl";
                         const alignAttr = isEngStd ? "left" : "right";
-                        card.className  = 'makani-card no-hover';
-                        card.innerHTML  = `
+                        card.className = 'makani-card no-hover';
+                        card.innerHTML = `
                             <div style="width:100%;direction:${dirAttr};">
                                 <div style="display:flex;align-items:center;gap:15px;margin-bottom:20px;">
                                     <div style="background:#f0f9ff;min-width:55px;height:55px;border-radius:50%;color:#0ea5e9;display:flex;align-items:center;justify-content:center;border:2px solid #bae6fd;flex-shrink:0;">
@@ -1637,7 +1646,7 @@ window.resetSearchSession = function () {
                                     </div>
                                 </div>
                                 <div class="hall-badge-formal" style="background:linear-gradient(135deg,#6366f1,#4f46e5);border-radius:16px;padding:15px;text-align:center;direction:ltr;">
-                                    <div style="font-size:12px;color:#e0e7ff;margin-bottom:2px;font-weight:bold;opacity:0.9;">${_t('radar_current_location','الموقع الحالي')}</div>
+                                    <div style="font-size:12px;color:#e0e7ff;margin-bottom:2px;font-weight:bold;opacity:0.9;">${_t('radar_current_location', 'الموقع الحالي')}</div>
                                     <div style="font-size:28px;font-weight:900;color:#fff;font-family:'Outfit',sans-serif;letter-spacing:1px;">HALL: ${res.hall}</div>
                                 </div>
                             </div>`;
@@ -1654,18 +1663,18 @@ window.resetSearchSession = function () {
     };
 
     window.handleProfileIconClick = function () {
-        const user       = auth.currentUser;
+        const user = auth.currentUser;
         const adminToken = sessionStorage.getItem("secure_admin_session_token_v99");
         if (!user) { if (typeof openAuthDrawer === 'function') openAuthDrawer(); }
         else { if (typeof openStudentProfile === 'function') openStudentProfile(); }
     };
 
     window.autoFetchName = async function (studentId) {
-        const nameInput  = document.getElementById('regFullName');
-        const signupBtn  = document.getElementById('btnDoSignup');
+        const nameInput = document.getElementById('regFullName');
+        const signupBtn = document.getElementById('btnDoSignup');
         if (!nameInput) return;
 
-        nameInput.value       = "";
+        nameInput.value = "";
         nameInput.placeholder = "جاري التحقق أمنياً...";
         const cleanId = studentId.toString().trim();
         if (!cleanId || cleanId.length < 4) { nameInput.placeholder = "Full Name"; return; }
@@ -1684,9 +1693,9 @@ window.resetSearchSession = function () {
     };
 
     window.expandAvatar = function () {
-        const avatarEl  = document.getElementById('publicAvatar');
+        const avatarEl = document.getElementById('publicAvatar');
         const iconClass = avatarEl.getAttribute('data-icon');
-        const color     = avatarEl.getAttribute('data-color');
+        const color = avatarEl.getAttribute('data-color');
         if (!iconClass) return;
         const container = document.getElementById('zoomedAvatarContainer');
         container.innerHTML = `<i class="fa-solid ${iconClass}"></i>`;
@@ -1706,8 +1715,8 @@ window.resetSearchSession = function () {
     };
 
     window.stopCameraSafely = async function () { if (typeof releaseWakeLock === 'function') releaseWakeLock(); return true; };
-    window.startQrScanner  = function () { showToast("تم إلغاء خاصية الباركود.", 3000, "#f59e0b"); };
-    window.html5QrCode     = null;
+    window.startQrScanner = function () { showToast("تم إلغاء خاصية الباركود.", 3000, "#f59e0b"); };
+    window.html5QrCode = null;
 
     async function goBackToWelcome() {
         await window.stopCameraSafely();
@@ -1721,14 +1730,14 @@ window.resetSearchSession = function () {
 
     window.goBackToWelcome = goBackToWelcome;
     window.hideConnectionLostModal = hideConnectionLostModal;
-    window.triggerAppInstall       = triggerAppInstall;
-    window.safeClick               = safeClick;
-    window.openMapsToRefreshGPS    = openMapsToRefreshGPS;
+    window.triggerAppInstall = triggerAppInstall;
+    window.safeClick = safeClick;
+    window.openMapsToRefreshGPS = openMapsToRefreshGPS;
 
-    window.playClick = function () {};
+    window.playClick = function () { };
 
     window.filterModalSubjects = function () {
-        const input  = document.getElementById('subjectSearchInput');
+        const input = document.getElementById('subjectSearchInput');
         const select = document.getElementById('modalSubjectSelect');
         if (!input || !select) return;
         const query = (typeof normalizeArabic === 'function') ? normalizeArabic(input.value) : input.value;
@@ -1740,17 +1749,17 @@ window.resetSearchSession = function () {
             if (matchedSubjects.length > 0) {
                 hasResults = true;
                 const group = document.createElement('optgroup');
-                const labelMap = { first_year:"First Year","1":"First Year", second_year:"Second Year","2":"Second Year", third_year:"Third Year","3":"Third Year", fourth_year:"Fourth Year","4":"Fourth Year" };
+                const labelMap = { first_year: "First Year", "1": "First Year", second_year: "Second Year", "2": "Second Year", third_year: "Third Year", "3": "Third Year", fourth_year: "Fourth Year", "4": "Fourth Year" };
                 group.label = labelMap[year] || year;
                 matchedSubjects.forEach(sub => { const opt = document.createElement('option'); opt.value = sub; opt.text = sub; group.appendChild(opt); });
                 select.appendChild(group);
             }
         }
-        if (!hasResults) { const opt = document.createElement('option'); opt.text = (localStorage.getItem('sys_lang')==='ar') ? "لا توجد نتائج" : "No results found"; opt.disabled = true; select.appendChild(opt); }
+        if (!hasResults) { const opt = document.createElement('option'); opt.text = (localStorage.getItem('sys_lang') === 'ar') ? "لا توجد نتائج" : "No results found"; opt.disabled = true; select.appendChild(opt); }
     };
 
     window.portalClicks = 0;
-    window.portalTimer  = null;
+    window.portalTimer = null;
 
     window.handleAdminTripleClick = function (btn) {
         if (typeof playClick === 'function') playClick();
@@ -1781,15 +1790,15 @@ window.addEventListener('pageshow', () => {
     if (pinInput) pinInput.value = '';
 });
 
-var idleTimer   = null;
+var idleTimer = null;
 var elapsedTime = 0;
-var isTyping    = false;
+var isTyping = false;
 var tickInterval = null;
 
 window.startCodeEntryIdleTimer = function () {
     window.stopCodeEntryIdleTimer();
     elapsedTime = 0;
-    isTyping    = false;
+    isTyping = false;
 
     tickInterval = setInterval(() => {
         if (!isTyping) {
@@ -1806,26 +1815,26 @@ window.startCodeEntryIdleTimer = function () {
 window.stopCodeEntryIdleTimer = function () {
     clearInterval(tickInterval);
     tickInterval = null;
-    elapsedTime  = 0;
-    isTyping     = false;
+    elapsedTime = 0;
+    isTyping = false;
     const input = document.getElementById('attendanceCode');
     if (input) input.value = '';
 };
 
-window.cachedGPSData    = null;
-window.gpsPreFetchDone  = false;
-window.gpsPreFetchTime  = 0;
+window.cachedGPSData = null;
+window.gpsPreFetchDone = false;
+window.gpsPreFetchTime = 0;
 
 (function () {
-    const indicator  = document.getElementById('superWifiIndicator');
+    const indicator = document.getElementById('superWifiIndicator');
     if (!indicator) return;
     const statusText = indicator.querySelector('.wifi-text');
     let pingInterval = null;
 
-    const PING_URL        = 'https://cp.cloudflare.com/generate_204';
+    const PING_URL = 'https://cp.cloudflare.com/generate_204';
     const PING_INTERVAL_MS = 60000;
-    const TIMEOUT_MS      = 3000;
-    const STATE           = { ONLINE:'ONLINE', OFFLINE:'OFFLINE', WEAK:'WEAK', LOADING:'LOADING' };
+    const TIMEOUT_MS = 3000;
+    const STATE = { ONLINE: 'ONLINE', OFFLINE: 'OFFLINE', WEAK: 'WEAK', LOADING: 'LOADING' };
 
     function updateUI(state) {
         indicator.classList.remove('state-loading', 'state-weak', 'wifi-status-hidden');
@@ -1850,7 +1859,7 @@ window.gpsPreFetchTime  = 0;
             case STATE.LOADING:
                 indicator.classList.add('state-loading');
                 statusText.innerText = "CONNECTING...";
-                iconBox.innerHTML    = '<i class="fa-solid fa-circle-notch fa-spin" style="font-size:16px;"></i>';
+                iconBox.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" style="font-size:16px;"></i>';
                 break;
         }
     }
@@ -1860,7 +1869,7 @@ window.gpsPreFetchTime  = 0;
         if (!navigator.onLine) { updateUI(STATE.OFFLINE); return; }
         try {
             const controller = new AbortController();
-            const timeoutId  = setTimeout(() => controller.abort(), TIMEOUT_MS);
+            const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
             await fetch(PING_URL + '?' + Date.now(), { mode: 'no-cors', signal: controller.signal });
             clearTimeout(timeoutId);
             const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
@@ -1869,7 +1878,7 @@ window.gpsPreFetchTime  = 0;
         } catch (error) { updateUI(STATE.OFFLINE); }
     }
 
-    window.addEventListener('online',  performNetworkDiagnostic);
+    window.addEventListener('online', performNetworkDiagnostic);
     window.addEventListener('offline', () => updateUI(STATE.OFFLINE));
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') { clearInterval(pingInterval); pingInterval = null; }
