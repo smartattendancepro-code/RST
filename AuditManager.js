@@ -1,147 +1,176 @@
 import {
-    doc, setDoc, collection, serverTimestamp
+    doc, setDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+
+
+const _sanitize = (value, maxLen = 120) => {
+    if (typeof value !== "string") return "INVALID";
+    return value.replace(/[<>"'`\\\/\x00-\x1F]/g, "").trim().slice(0, maxLen) || "EMPTY";
+};
+
+
+const _safeNumber = (value, min = -Infinity, max = Infinity, fallback = 0) => {
+    const n = Number(value);
+    if (!isFinite(n) || n < min || n > max) return fallback;
+    return n;
+};
+
+
+const _safeBool = (value, fallback = false) => {
+    if (typeof value === "boolean") return value;
+    return fallback;
+};
+
+const _validateAuthUser = (user) => {
+    if (!user || typeof user !== "object") return false;
+    if (typeof user.uid !== "string" || user.uid.trim() === "") return false;
+    if (typeof user.email !== "string" || !user.email.includes("@")) return false;
+    return true;
+};
+
+const _getVerifiedProfile = (authUser) => {
+    try {
+        const raw = localStorage.getItem('cached_profile_data');
+        if (!raw) return {};
+        const profile = JSON.parse(raw);
+
+        if (profile.uid && profile.uid !== authUser.uid) {
+            console.warn("🚨 [Security] Cache UID mismatch — cache ignored.");
+            return {};
+        }
+
+        return profile;
+    } catch {
+        return {};
+    }
+};
 
 
 export const AuditManager = {
 
     sendSecretLog: async function (db, user, sessionData, techData) {
         try {
+
+
+            if (!_validateAuthUser(user)) {
+                console.error("🚨 [Audit] Invalid or missing Auth user — log aborted.");
+                return;
+            }
+
+            const TRUSTED_UID   = user.uid;
+            const TRUSTED_EMAIL = user.email;
+
             const now = new Date();
 
-            // ============================
-            // 1️⃣  تحديد التواريخ والمعرفات
-            // ============================
             const dateKey = now.toLocaleDateString('en-GB')
-                .split('/')
-                .reverse()
-                .join('-');   // YYYY-MM-DD
+                .split('/').reverse().join('-');  
 
             const timeStr = now.toLocaleTimeString('en-US', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: true
+                hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
             });
 
-            const doctorUID = sessionData.doctorUID || Object.keys(sessionData)[0] || "unknown_doctor";
-            const doctorName = sessionData.doctorName || "Unknown Doctor";
-            const subjectName = sessionData.allowedSubject || "Unknown Subject";
-            const hallName = sessionData.hall || "Unknown Hall";
+            const doctorUID   = _sanitize(sessionData?.doctorUID   || "unknown_doctor", 64);
+            const doctorName  = _sanitize(sessionData?.doctorName  || "Unknown Doctor");
+            const subjectName = _sanitize(sessionData?.allowedSubject || "Unknown Subject");
+            const hallName    = _sanitize(sessionData?.hall        || "Unknown Hall");
+            const sessionCode = _sanitize(sessionData?.sessionCode || "----", 32);
+            const isActive    = _safeBool(sessionData?.isActive, true);
 
-            // ============================
-            // 2️⃣  بيانات الطالب من الكاش
-            // ============================
-            let cachedProfile = {};
-            try {
-                cachedProfile = JSON.parse(localStorage.getItem('cached_profile_data') || '{}');
-            } catch (e) { /* ignore */ }
+            const cachedProfile = _getVerifiedProfile(user);
 
-            const studentName = cachedProfile.fullName || user.displayName || "Unknown Student";
-            const studentID = cachedProfile.studentID || "---";
-            const studentGroup = cachedProfile.group || cachedProfile.level || "غير محدد";
+            const studentName  = _sanitize(cachedProfile.fullName  || user.displayName || "Unknown Student");
+            const studentID    = _sanitize(cachedProfile.studentID || "---", 32);
+            const studentGroup = _sanitize(cachedProfile.group     || cachedProfile.level || "غير محدد");
 
-            // ============================
-            // 3️⃣  بيانات الأمان والبصمة
-            // ============================
+
             const deviceInfo = {
-                fingerprint: techData.deviceFingerprint || "no_fingerprint",
-                isDeviceMatch: techData.isDeviceMatch ?? true,
-                ipAddress: techData.userIP || "Hidden",
-                userAgent: navigator.userAgent || "Unknown",
-                platform: navigator.platform || "Unknown",
-                language: navigator.language || "Unknown",
-                screenSize: `${screen.width}x${screen.height}`,
-                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Unknown"
+                fingerprint  : _sanitize(techData?.deviceFingerprint || "no_fingerprint", 128),
+                isDeviceMatch: _safeBool(techData?.isDeviceMatch, false), 
+                ipAddress    : _sanitize(techData?.userIP || "Hidden", 64),
+                userAgent    : _sanitize(navigator.userAgent  || "Unknown", 200),
+                platform     : _sanitize(navigator.platform   || "Unknown", 64),
+                language     : _sanitize(navigator.language   || "Unknown", 16),
+                screenSize   : `${_safeNumber(screen.width,200,7680,0)}x${_safeNumber(screen.height,200,4320,0)}`,
+                timezone     : _sanitize(Intl.DateTimeFormat().resolvedOptions().timeZone || "Unknown", 64)
             };
 
             const gpsInfo = {
-                lat: techData.gpsData?.lat || 0,
-                lng: techData.gpsData?.lng || 0,
-                accuracy: techData.gpsData?.accuracy || 0,
-                distance: techData.gpsData?.distance || "Unknown",
-                in_range: techData.gpsData?.in_range ?? false,
-                status: techData.gpsData?.status || "no_gps",
-                is_suspicious: techData.gpsData?.is_suspicious || false,
-                cheat_reason: techData.gpsData?.cheat_reason || ""
+                lat         : _safeNumber(techData?.gpsData?.lat,      -90,  90,  0),
+                lng         : _safeNumber(techData?.gpsData?.lng,     -180, 180,  0),
+                accuracy    : _safeNumber(techData?.gpsData?.accuracy,    0, 1e5,  0),
+                distance    : _sanitize(String(techData?.gpsData?.distance ?? "Unknown"), 32),
+                in_range    : _safeBool(techData?.gpsData?.in_range,    false),
+                status      : _sanitize(techData?.gpsData?.status      || "no_gps", 32),
+                is_suspicious: _safeBool(techData?.gpsData?.is_suspicious, false),
+                cheat_reason: _sanitize(techData?.gpsData?.cheat_reason || "", 200)
             };
 
-            // ============================
-            // 4️⃣  المسارات في Firestore
-            // ============================
-            //  audit_logs → {date} → sessions → {doctorUID} → students → {studentUID}
+            const isClean = deviceInfo.isDeviceMatch
+                         && gpsInfo.in_range
+                         && !gpsInfo.is_suspicious;
 
-            const sessionInfoRef = doc(
-                db,
+            const securityResult = {
+                device_trusted  : deviceInfo.isDeviceMatch,
+                gps_in_range    : gpsInfo.in_range,
+                gps_suspicious  : gpsInfo.is_suspicious,
+                overall_status  : isClean ? "CLEAN" : "FLAGGED"
+            };
+
+            const sessionInfoRef = doc(db,
                 "audit_logs", dateKey,
-                "sessions", doctorUID
+                "sessions",   doctorUID
             );
 
-            const studentLogRef = doc(
-                db,
+            const studentLogRef = doc(db,
                 "audit_logs", dateKey,
-                "sessions", doctorUID,
-                "students", user.uid
+                "sessions",   doctorUID,
+                "students",   TRUSTED_UID   
             );
 
-            // ============================
-            // 5️⃣  كتابة بيانات الجلسة (مرة واحدة، merge)
-            // ============================
             await setDoc(sessionInfoRef, {
-                doctorUID: doctorUID,
-                doctorName: doctorName,
-                subject: subjectName,
-                hall: hallName,
-                date: dateKey,
-                sessionCode: sessionData.sessionCode || "----",
-                isActive: sessionData.isActive ?? true,
+                doctorUID   : doctorUID,
+                doctorName  : doctorName,
+                subject     : subjectName,
+                hall        : hallName,
+                date        : dateKey,
+                sessionCode : sessionCode,
+                isActive    : isActive,
                 last_updated: serverTimestamp()
             }, { merge: true });
 
-            // ============================
-            // 6️⃣  كتابة سجل الطالب الكامل
-            // ============================
             await setDoc(studentLogRef, {
 
-                // --- هوية الطالب ---
-                studentUID: user.uid,
-                studentName: studentName,
-                studentID: studentID,
-                studentEmail: user.email || "---",
-                group: studentGroup,
+                studentUID  : TRUSTED_UID,
+                studentEmail: TRUSTED_EMAIL,
 
-                // --- بيانات الدخول ---
-                entry_time: timeStr,
-                entry_date: dateKey,
-                timestamp: serverTimestamp(),
+                studentName : studentName,
+                studentID   : studentID,
+                group       : studentGroup,
 
-                // --- بيانات الجلسة ---
-                doctorUID: doctorUID,
-                doctorName: doctorName,
-                subject: subjectName,
-                hall: hallName,
+                entry_time  : timeStr,
+                entry_date  : dateKey,
+                timestamp   : serverTimestamp(),
 
-                // --- البصمة والأمان ---
-                device: deviceInfo,
+                doctorUID   : doctorUID,
+                doctorName  : doctorName,
+                subject     : subjectName,
+                hall        : hallName,
 
-                // --- الموقع الجغرافي ---
-                gps: gpsInfo,
+                device          : deviceInfo,
 
-                // --- نتيجة الفحص الأمني ---
-                security_result: {
-                    device_trusted: techData.isDeviceMatch ?? true,
-                    gps_in_range: gpsInfo.in_range,
-                    gps_suspicious: gpsInfo.is_suspicious,
-                    overall_status: (techData.isDeviceMatch && gpsInfo.in_range && !gpsInfo.is_suspicious)
-                        ? "CLEAN" : "FLAGGED"
-                }
+                gps             : gpsInfo,
 
-            }, { merge: true });  // merge عشان لو دخل أكتر من مرة يتحدث مش يتكرر
+                security_result : securityResult
 
-            console.log(`✅ Audit V4: Logged [${studentName}] → [${dateKey}] → [${doctorName}] → [${subjectName}]`);
+            }, { merge: true });
+
+            console.log(
+                `✅ Audit V5-Secure: [${studentName}] → [${dateKey}] → [${doctorName}] → [${subjectName}]`,
+                `| Status: ${securityResult.overall_status}`
+            );
 
         } catch (error) {
-            // فشل الأرشفة لا يعطل دخول الطالب
             console.error("⚠️ [Critical Audit Error]:", error);
         }
     }
