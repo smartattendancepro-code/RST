@@ -30,6 +30,10 @@ window.startLiveSnapshotListener = function () {
     const targetRoomUID = sessionStorage.getItem('TARGET_DOCTOR_UID');
     if (!targetRoomUID) return;
 
+    const adminFab = document.getElementById('adminFabControls');
+    if (adminFab) adminFab.style.setProperty('display', 'none', 'important');
+    document.body.classList.remove('admin-mode');
+
     let maxLimit    = 9999;
     let currentCount = 0;
 
