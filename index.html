@@ -590,48 +590,66 @@
                                 </button>
                             </div>
                         </div>
-                        <!-- التعديل: خليناه block بدل none -->
-                        <div id="offlineActionsWrapper" style="display: block; width: 90%; margin: 10px auto;">
+                        <!-- 1. حاوية زر الأوفلاين (مخفية افتراضياً ويتحكم بها الـ JS) -->
+                        <div id="offlineActionsWrapper" style="display: none; width: 90%; margin: 15px auto;">
                             <button onclick="openOfflineRegistrationModal()" class="btn-main"
                                 style="background: linear-gradient(135deg, #475569, #1e293b); border: 1px solid #94a3b8; box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-size: 13px; height: 45px;">
                                 <i class="fa-solid fa-cloud-slash"></i>
                                 <span data-i18n="offline_reg_btn">تسجيل حضور (بدون إنترنت)</span>
                             </button>
                         </div>
-                        <!-- مودال التسجيل الأوفلاين -->
+
+                        <!-- 2. مودال التسجيل الأوفلاين المطور -->
                         <div id="offlineRegModal" class="modal-overlay" style="z-index: 2147483647; display: none;">
                             <div class="modal-box"
                                 style="max-width: 340px; padding: 25px; border-top: 5px solid #475569;">
-                                <div class="icon-glow"
-                                    style="background: #f1f5f9; color: #475569; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
-                                    <i class="fa-solid fa-wifi-slash" style="font-size: 25px;"></i>
-                                </div>
-                                <h3 style="font-weight: 900; color: #1e293b; margin-bottom: 5px;">Offline Registration
-                                </h3>
-                                <p style="font-size: 11px; color: #64748b; margin-bottom: 20px;">سيتم حفظ البيانات
-                                    محلياً وإرسالها فور توفر الإنترنت</p>
 
-                                <div class="input-group" style="margin-bottom: 12px;">
-                                    <input type="number" id="offStudentID" class="modern-input"
-                                        placeholder="Student ID (الكود الجامعي)"
-                                        style="text-align: center; border-color: #cbd5e1 !important; color: #0f172a !important;">
-                                </div>
-                                <div class="input-group" style="margin-bottom: 20px;">
-                                    <input type="number" id="offSessionPin" class="modern-input"
-                                        placeholder="6-Digit PIN (كود المحاضرة)"
-                                        style="text-align: center; border-color: #cbd5e1 !important; color: #0f172a !important;"
-                                        maxlength="6">
+                                <!-- أ. واجهة إدخال الكود (تظهر أولاً) -->
+                                <div id="offlineInputView">
+                                    <div class="icon-glow"
+                                        style="background: #f1f5f9; color: #475569; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
+                                        <i class="fa-solid fa-wifi-slash" style="font-size: 25px;"></i>
+                                    </div>
+                                    <h3 style="font-weight: 900; color: #1e293b; margin-bottom: 5px;"
+                                        data-i18n="offline_modal_title">Offline Registration</h3>
+                                    <p style="font-size: 11px; color: #64748b; margin-bottom: 20px;"
+                                        data-i18n="offline_modal_subtitle">أدخل كود المحاضرة المكون من 6 أرقام</p>
+
+                                    <div class="input-group" style="margin-bottom: 20px;">
+                                        <!-- تم إضافة oninput لضمان عدم تجاوز 6 أرقام برمجياً -->
+                                        <input type="number" id="offSessionPin" class="modern-input"
+                                            data-i18n-placeholder="offline_pin_placeholder" placeholder="6-Digit PIN"
+                                            style="text-align: center; border-color: #cbd5e1 !important; color: #0f172a !important; font-size: 22px; font-weight: bold; letter-spacing: 4px;"
+                                            oninput="if(this.value.length > 6) this.value = this.value.slice(0, 6);">
+                                    </div>
+
+                                    <button onclick="processOfflineQueue()" class="btn-main"
+                                        style="background: #1e293b; width: 100%; margin-bottom: 10px;">
+                                        <span data-i18n="offline_confirm_btn">تأكيد الانضمام</span>
+                                        <i class="fa-solid fa-paper-plane"></i>
+                                    </button>
                                 </div>
 
-                                <button onclick="processOfflineQueue()" class="btn-main"
-                                    style="background: #1e293b; width: 100%; margin-bottom: 10px;">
-                                    حفظ في قائمة الانتظار <i class="fa-solid fa-download"></i>
-                                </button>
-                                <button onclick="document.getElementById('offlineRegModal').style.display='none'"
-                                    class="btn-cancel-modern" style="width: 100%;">إلغاء</button>
+                                <!-- ب. واجهة العداد التنازلي (تظهر عند الحفظ) -->
+                                <div id="offlineProcessView"
+                                    style="display: none; text-align: center; padding: 20px 0;">
+                                    <i class="fa-solid fa-circle-notch fa-spin"
+                                        style="font-size: 40px; color: #0ea5e9; margin-bottom: 15px;"></i>
+                                    <h4 style="margin: 0; color: #1e293b;" data-i18n="offline_securing_msg">جاري تأمين
+                                        الطلب...</h4>
+                                    <p style="font-size: 13px; color: #64748b; margin-top: 10px;">
+                                        <span data-i18n="offline_timer_text">سيتم الحفظ خلال</span>
+                                        <span id="offTimer" style="font-weight: bold; color: #0ea5e9;">3</span>
+                                        <span data-i18n="offline_seconds">ثواني</span>
+                                    </p>
+                                </div>
+
+                                <!-- ج. زر الإلغاء -->
+                                <button id="btnCancelOffline"
+                                    onclick="document.getElementById('offlineRegModal').style.display='none'"
+                                    class="btn-cancel-modern" style="width: 100%;" data-i18n="cancel_btn">إلغاء</button>
                             </div>
                         </div>
-
                         <div id="makaniResultsModal" class="modal-overlay" style="z-index: 2147483647; display: none;"
                             onclick="this.style.display='none'">
                             <div class="modal-box makani-result-box" onclick="event.stopPropagation()">
