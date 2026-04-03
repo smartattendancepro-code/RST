@@ -2,10 +2,39 @@
 const OFFLINE_STORAGE_KEY = "nursing_offline_queue_v1";
 
 
+function controlOfflineButtonVisibility() {
+    const offlineWrapper = document.getElementById('offlineActionsWrapper');
+    if (!offlineWrapper) return;
+
+    if (navigator.onLine) {
+        offlineWrapper.style.setProperty('display', 'none', 'important');
+    } else {
+        offlineWrapper.style.setProperty('display', 'block', 'important');
+    }
+}
+
+window.addEventListener('online', () => {
+    controlOfflineButtonVisibility();
+    console.log("🌐 الإنترنت عاد.. جاري إخفاء زر الأوفلاين وبدء المزامنة");
+    syncOfflineData();
+});
+
+window.addEventListener('offline', () => {
+    controlOfflineButtonVisibility();
+    if (window.showToast) window.showToast("⚠️ انقطع الاتصال.. تم تفعيل وضع التسجيل الأوفلاين", 4000, "#475569");
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    controlOfflineButtonVisibility();
+    setTimeout(syncOfflineData, 5000);
+});
+
+
 window.openOfflineRegistrationModal = function () {
     const modal = document.getElementById('offlineRegModal');
     const idInput = document.getElementById('offStudentID');
 
+    // محاولة تعبئة الـ ID من الكاش الشخصي
     const cachedProfile = localStorage.getItem('cached_profile_data');
     if (cachedProfile) {
         try {
@@ -37,8 +66,8 @@ window.processOfflineQueue = async function () {
     const offlineEntry = {
         studentID: studentID,
         sessionPin: sessionPin,
-        submissionTime: Date.now(),
-        deviceId: window.HARDWARE_ID || "UNKNOWN_DEVICE",
+        submissionTime: Date.now(), 
+        deviceId: window.HARDWARE_ID || window.getUniqueDeviceId?.() || "UNKNOWN_DEVICE",
     };
 
     queue.push(offlineEntry);
@@ -67,7 +96,7 @@ async function syncOfflineData() {
         const db = window.db; 
         if (!db) return;
 
-        console.log(`📡 جاري مزامنة ${queue.length} سجلات حضور ذكية...`);
+        console.log(`📡 جاري مزامنة ${queue.length} سجلات حضور...`);
         const remainingQueue = [];
 
         for (const entry of queue) {
@@ -82,7 +111,7 @@ async function syncOfflineData() {
                 const sessionSnap = await getDocs(sessionQuery);
 
                 if (sessionSnap.empty) {
-                    console.warn(`PIN ${entry.sessionPin} غير صالح أو انتهى.`);
+                    console.warn(`PIN ${entry.sessionPin} غير صالح.`);
                     continue; 
                 }
 
@@ -128,7 +157,7 @@ async function syncOfflineData() {
                 }
 
             } catch (error) {
-                console.error("فشل مزامنة سجل معين:", error);
+                console.error("فشل مزامنة سجل:", error);
                 remainingQueue.push(entry); 
             }
         }
@@ -136,11 +165,6 @@ async function syncOfflineData() {
         localStorage.setItem(OFFLINE_STORAGE_KEY, JSON.stringify(remainingQueue));
 
     } catch (criticalError) {
-        console.error("خطأ حرج في تحميل مكتبات المزامنة:", criticalError);
+        console.error("خطأ في مكتبات المزامنة:", criticalError);
     }
 }
-
-window.addEventListener('online', syncOfflineData);
-document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(syncOfflineData, 5000);
-});
