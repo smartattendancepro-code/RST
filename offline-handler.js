@@ -1,6 +1,7 @@
 
 const OFFLINE_STORAGE_KEY = "nursing_offline_queue_v1";
 
+
 function controlOfflineButtonVisibility() {
     const offlineWrapper = document.getElementById('offlineActionsWrapper');
     if (!offlineWrapper) return;
@@ -20,14 +21,17 @@ window.addEventListener('online', () => {
 window.addEventListener('offline', () => {
     controlOfflineButtonVisibility();
     const lang = localStorage.getItem('sys_lang') || 'ar';
-    const msg = lang === 'ar' ? "⚠️ انقطع الاتصال.. تم تفعيل وضع الأوفلاين" : "⚠️ Disconnected.. Offline Mode Active";
-    if (window.showToast) window.showToast(msg, 4000, "#475569");
+    if (window.showToast) {
+        const msg = lang === 'ar' ? "⚠️ انقطع الاتصال.. وضع الأوفلاين متاح" : "⚠️ Disconnected.. Offline Mode Active";
+        window.showToast(msg, 4000, "#475569");
+    }
 });
 
 document.addEventListener('DOMContentLoaded', () => {
     controlOfflineButtonVisibility();
     setTimeout(syncOfflineData, 5000);
 });
+
 
 window.openOfflineRegistrationModal = function () {
     const modal = document.getElementById('offlineRegModal');
@@ -45,7 +49,6 @@ window.openOfflineRegistrationModal = function () {
     if (modal) modal.style.display = 'flex';
 };
 
-
 window.processOfflineQueue = async function () {
     const pinElement = document.getElementById('offSessionPin');
     if (!pinElement) return;
@@ -53,19 +56,24 @@ window.processOfflineQueue = async function () {
     const sessionPin = pinElement.value.trim();
     const lang = localStorage.getItem('sys_lang') || 'ar';
 
-    let studentID = "";
+    let studentData = { id: "", name: "", avatar: "fa-user-graduate" };
     const cachedProfile = localStorage.getItem('cached_profile_data');
     if (cachedProfile) {
-        try { studentID = JSON.parse(cachedProfile).studentID; } catch (e) { }
+        try {
+            const p = JSON.parse(cachedProfile);
+            studentData.id = p.studentID;
+            studentData.name = p.fullName;
+            studentData.avatar = p.avatarClass || "fa-user-graduate";
+        } catch (e) { console.error("Profile cache reading error"); }
     }
 
-    if (!studentID) {
+    if (!studentData.id) {
         alert(lang === 'ar' ? "⚠️ يجب تسجيل الدخول أولاً أثناء وجود إنترنت" : "⚠️ Please Login First while online");
         return;
     }
 
     if (sessionPin.length !== 6) {
-        alert(lang === 'ar' ? "⚠️ كود الجلسة يجب أن يكون 6 أرقام" : "⚠️ PIN must be 6 digits");
+        alert(lang === 'ar' ? "⚠️ الكود يجب أن يكون 6 أرقام" : "⚠️ PIN must be 6 digits");
         return;
     }
 
@@ -89,26 +97,27 @@ window.processOfflineQueue = async function () {
             clearInterval(countdown);
             
             const offlineEntry = {
-                studentID: studentID,
+                studentID: studentData.id,
+                studentName: studentData.name,
+                avatarClass: studentData.avatar,
                 sessionPin: sessionPin,
                 submissionTime: Date.now(), 
-                deviceId: window.HARDWARE_ID || window.getUniqueDeviceId?.() || "UNKNOWN"
+                deviceId: window.HARDWARE_ID || "DEVICE_OFFLINE"
             };
 
             let queue = JSON.parse(localStorage.getItem(OFFLINE_STORAGE_KEY) || "[]");
-            if (!queue.some(item => item.sessionPin === sessionPin && item.studentID === studentID)) {
+            if (!queue.some(item => item.sessionPin === sessionPin)) {
                 queue.push(offlineEntry);
                 localStorage.setItem(OFFLINE_STORAGE_KEY, JSON.stringify(queue));
             }
 
             if (window.showToast) {
-                const successMsg = lang === 'ar' ? "✅ تم الحفظ أوفلاين بنجاح" : "✅ Saved Offline Successfully";
-                window.showToast(successMsg, 5000, "#10b981");
+                const msg = lang === 'ar' ? "✅ تم الحفظ أوفلاين.. سيتم التأكيد فور عودة النت" : "✅ Saved Offline.. Syncing on reconnect";
+                window.showToast(msg, 5000, "#1e293b");
             }
             if (window.playSuccess) window.playSuccess();
 
             document.getElementById('offlineRegModal').style.display = 'none';
-            
             if (navigator.onLine) syncOfflineData();
         }
     }, 1000);
@@ -125,7 +134,7 @@ async function syncOfflineData() {
 
     try {
         const firestore = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
-        const { doc, getDoc, getDocs, query, collection, where, setDoc, serverTimestamp } = firestore;
+        const { doc, getDoc, setDoc, serverTimestamp } = firestore;
 
         const db = window.db; 
         if (!db) return;
@@ -133,15 +142,12 @@ async function syncOfflineData() {
         const remainingQueue = [];
 
         for (const entry of queue) {
-            try {                let studentName = "Student (" + entry.studentID + ")";
-                const studentDoc = await getDoc(doc(db, "students", entry.studentID));
-                if (studentDoc.exists()) studentName = studentDoc.data().name;
-
+            try {
                 const codeLogRef = doc(db, "issued_codes_logs", entry.sessionPin);
                 const codeLogSnap = await getDoc(codeLogRef);
 
                 if (!codeLogSnap.exists()) {
-                    console.warn(`PIN ${entry.sessionPin} is not a valid system code.`);
+                    console.warn(`PIN ${entry.sessionPin} is invalid.`);
                     continue; 
                 }
 
@@ -154,20 +160,16 @@ async function syncOfflineData() {
                     const uniqueDocId = `${entry.studentID}_${entry.sessionPin}`;
 
                     await setDoc(doc(db, "offline_attendance_log", uniqueDocId), {
-                        studentID: entry.studentID,
-                        studentName: studentName,
+                        ...entry,
                         subject: codeData.subject,
-                        sessionPin: entry.sessionPin,
                         doctorName: codeData.doctorName,
-                        offlineTimestamp: new Date(entry.submissionTime),
                         syncTimestamp: serverTimestamp(),
-                        deviceId: entry.deviceId,
-                        method: "Smart Offline History-Verified"
+                        method: "Verified Smart Offline"
                     });
 
                     await setDoc(doc(db, "attendance", uniqueDocId), {
                         id: entry.studentID,
-                        name: studentName,
+                        name: entry.studentName,
                         subject: codeData.subject,
                         date: new Date(entry.submissionTime).toLocaleDateString('en-GB'),
                         timestamp: serverTimestamp(),
@@ -177,22 +179,31 @@ async function syncOfflineData() {
 
                     await setDoc(doc(db, "active_sessions", codeData.doctorId, "participants", entry.studentID), {
                         id: entry.studentID,
-                        name: studentName,
+                        name: entry.studentName,
+                        avatarClass: entry.avatarClass,
                         uid: user.uid,
                         status: "active",
                         timestamp: serverTimestamp(),
-                        isOfflineSync: true,
-                        submissionTime: entry.submissionTime
+                        isOfflineSync: true
                     });
+
+                    localStorage.setItem('TARGET_DOCTOR_UID', codeData.doctorId);
+                    sessionStorage.setItem('TARGET_DOCTOR_UID', codeData.doctorId);
 
                     if (window.showToast) {
                         const lang = localStorage.getItem('sys_lang') || 'ar';
-                        window.showToast(lang === 'ar' ? `✅ تم تأكيد حضورك: ${codeData.subject}` : `✅ Confirmed: ${codeData.subject}`, 5000, "#10b981");
+                        window.showToast(lang === 'ar' ? `✅ تم تأكيد حضورك في ${codeData.subject}` : `✅ Confirmed: ${codeData.subject}`, 5000, "#10b981");
                     }
+                    if (window.playSuccess) window.playSuccess();
+
+                    if (typeof window.switchScreen === 'function') window.switchScreen('screenLiveSession');
+                    if (typeof window.startLiveSnapshotListener === 'function') window.startLiveSnapshotListener();
+
                 } else {
-                    console.warn(`Code ${entry.sessionPin} expired before submission.`);
                     const lang = localStorage.getItem('sys_lang') || 'ar';
-                    if (window.showToast) window.showToast(lang === 'ar' ? `❌ انتهى وقت الكود (${entry.sessionPin})` : `❌ Code Expired (${entry.sessionPin})`, 5000, "#ef4444");
+                    if (window.showToast) {
+                        window.showToast(lang === 'ar' ? `❌ كود ${codeData.subject} انتهت صلاحيته` : `❌ Code for ${codeData.subject} Expired`, 5000, "#ef4444");
+                    }
                 }
 
             } catch (error) {
@@ -202,6 +213,6 @@ async function syncOfflineData() {
         }
         localStorage.setItem(OFFLINE_STORAGE_KEY, JSON.stringify(remainingQueue));
     } catch (criticalError) {
-        console.error("Firebase Sync Library error:", criticalError);
+        console.error("Critical Sync Library error:", criticalError);
     }
 }
