@@ -5,7 +5,6 @@ import {
 const CONFIG = {
     COLLECTIONS: ["attendance_NURS", "attendance_PT", "attendance"],
     CACHE_KEY: 'academic_master_cache',
-    CACHE_DURATION: 30 * 60 * 1000,
     RECORDS_LIMIT: 200,                // ✅ رُفع من 40 → 200
     SEMESTER_START_DATE: "01/02/2026"
 };
@@ -31,7 +30,7 @@ async function getStudentData(studentID) {
     const cached = localStorage.getItem(CONFIG.CACHE_KEY);
     if (cached) {
         const { data, expiry, sid } = JSON.parse(cached);
-        if (Date.now() < expiry && sid === studentID) return data;
+        if (sid === studentID && cacheDate === new Date().toDateString()) return data;
     }
 
     const finalData = { attended: [], absent: [] };
@@ -69,7 +68,7 @@ async function getStudentData(studentID) {
 
     localStorage.setItem(CONFIG.CACHE_KEY, JSON.stringify({
         data: finalData,
-        expiry: Date.now() + CONFIG.CACHE_DURATION,
+        cacheDate: new Date().toDateString(),
         sid: studentID
     }));
 
