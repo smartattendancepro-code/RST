@@ -1,5 +1,3 @@
-
-
 import {
     collection, query, where, getDocs, doc, getDoc, orderBy, limit
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
@@ -8,15 +6,15 @@ const CONFIG = {
     COLLECTIONS: ["attendance_NURS", "attendance_PT", "attendance"],
     CACHE_KEY: 'academic_master_cache',
     CACHE_DURATION: 30 * 60 * 1000,
-    RECORDS_LIMIT: 40,               
-    SEMESTER_START_DATE: "01/02/2026" 
+    RECORDS_LIMIT: 200,                // ✅ رُفع من 40 → 200
+    SEMESTER_START_DATE: "01/02/2026"
 };
 
 let state = {
     rawAttendance: [],
     rawAbsence: [],
     currentTab: 'attendance',
-    displayCount: 2, 
+    displayCount: 2,
     lang: localStorage.getItem('sys_lang') || 'ar'
 };
 
@@ -26,7 +24,7 @@ const parseDate = (str) => {
     return new Date(y, m - 1, d);
 };
 
-const getUniqueKey = (item) => 
+const getUniqueKey = (item) =>
     `${item.id}_${item.subject}_${item.date}`.toLowerCase().replace(/\s+/g, '');
 
 async function getStudentData(studentID) {
@@ -49,20 +47,25 @@ async function getStudentData(studentID) {
                 orderBy("date", "desc"),
                 limit(CONFIG.RECORDS_LIMIT)
             );
-            
+
             const snap = await getDocs(q);
             snap.forEach(d => {
                 const item = d.data();
                 const key = getUniqueKey(item);
                 if (!seen.has(key)) {
                     seen.add(key);
-                    status === "ATTENDED" ? finalData.attended.push(item) : finalData.absent.push(item);
+                    status === "ATTENDED"
+                        ? finalData.attended.push(item)
+                        : finalData.absent.push(item);
                 }
             });
         }
     });
 
     await Promise.all(fetchTask);
+
+    finalData.attended.sort((a, b) => parseDate(b.date) - parseDate(a.date));
+    finalData.absent.sort((a, b) => parseDate(b.date) - parseDate(a.date));
 
     localStorage.setItem(CONFIG.CACHE_KEY, JSON.stringify({
         data: finalData,
@@ -81,7 +84,7 @@ function renderAnalytics() {
     const stats = {};
 
     const allRecords = [...state.rawAttendance, ...state.rawAbsence];
-    
+
     allRecords.forEach(item => {
         if (parseDate(item.date) >= startDate) {
             const sub = item.subject || 'General';
@@ -91,7 +94,7 @@ function renderAnalytics() {
     });
 
     let html = `<div style="display:flex; overflow-x:auto; gap:12px; padding:10px 5px; scrollbar-width:none;">`;
-    
+
     Object.keys(stats).forEach(sub => {
         const total = stats[sub].attended + stats[sub].absent;
         const ratio = ((stats[sub].absent / total) * 100).toFixed(0);
@@ -117,7 +120,7 @@ function renderAnalytics() {
 function renderList() {
     const container = document.getElementById('academicRecordContent');
     const data = state.currentTab === 'attendance' ? state.rawAttendance : state.rawAbsence;
-    
+
     if (data.length === 0) {
         container.innerHTML = `<div style="text-align:center; padding:40px; color:#cbd5e1;"><i class="fa-solid fa-ghost" style="font-size:30px;"></i><p>No Records</p></div>`;
         return;
@@ -133,7 +136,7 @@ function renderList() {
 
     const ui = {
         attendance: { color: '#10b981', bg: '#dcfce7', icon: 'fa-check-double' },
-        absence: { color: '#ef4444', bg: '#fee2e2', icon: 'fa-xmark' }
+        absence:    { color: '#ef4444', bg: '#fee2e2', icon: 'fa-xmark' }
     }[state.currentTab];
 
     let html = '';
@@ -142,7 +145,7 @@ function renderList() {
             <div style="font-size:11px; font-weight:bold; color:#64748b; margin-bottom:8px; padding-left:5px;">
                 <i class="fa-regular fa-calendar"></i> ${date}
             </div>`;
-        
+
         groups[date].forEach(item => {
             html += `
                 <div style="background:white; border:1px solid #f1f5f9; border-left:4px solid ${ui.color}; border-radius:12px; padding:12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
@@ -174,16 +177,16 @@ window.academicLoadMore = () => {
 window.switchAcademicTab = (tab) => {
     state.currentTab = tab;
     state.displayCount = 2;
-    
+
     document.getElementById('tabAttendance').className = tab === 'attendance' ? 'tab-active-att' : 'tab-inactive';
-    document.getElementById('tabAbsence').className = tab === 'absence' ? 'tab-active-abs' : 'tab-inactive';
-    
+    document.getElementById('tabAbsence').className    = tab === 'absence'    ? 'tab-active-abs' : 'tab-inactive';
+
     renderList();
 };
 
-window.openAcademicRecord = async function() {
+window.openAcademicRecord = async function () {
     const user = window.auth.currentUser;
-    if (!user) return;
+    if (!user) return;  
 
     document.getElementById('academicRecordModal').style.display = 'flex';
     document.getElementById('academicRecordContent').innerHTML = `<div style="text-align:center; padding:50px;"><i class="fa-solid fa-circle-notch fa-spin" style="color:#3b82f6; font-size:30px;"></i></div>`;
@@ -196,12 +199,12 @@ window.openAcademicRecord = async function() {
         if (!studentID) throw new Error("ID Not Found");
 
         const data = await getStudentData(studentID);
-        
+
         state.rawAttendance = data.attended;
-        state.rawAbsence = data.absent;
+        state.rawAbsence    = data.absent;
 
         document.getElementById('attendanceTabCount').innerText = data.attended.length;
-        document.getElementById('absenceTabCount').innerText = data.absent.length;
+        document.getElementById('absenceTabCount').innerText    = data.absent.length;
 
         renderAnalytics();
         switchAcademicTab('attendance');
