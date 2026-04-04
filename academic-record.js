@@ -29,7 +29,7 @@ const getUniqueKey = (item) =>
 async function getStudentData(studentID) {
     const cached = localStorage.getItem(CONFIG.CACHE_KEY);
     if (cached) {
-        const { data, expiry, sid } = JSON.parse(cached);
+        const { data, cacheDate, sid } = JSON.parse(cached);
         if (sid === studentID && cacheDate === new Date().toDateString()) return data;
     }
 
