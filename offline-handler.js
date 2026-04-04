@@ -95,13 +95,13 @@ window.processOfflineQueue = async function () {
 
         if (timeLeft <= 0) {
             clearInterval(countdown);
-            
+
             const offlineEntry = {
                 studentID: studentData.id,
                 studentName: studentData.name,
                 avatarClass: studentData.avatar,
                 sessionPin: sessionPin,
-                submissionTime: Date.now(), 
+                submissionTime: Date.now(),
                 deviceId: window.HARDWARE_ID || "DEVICE_OFFLINE"
             };
 
@@ -136,7 +136,7 @@ async function syncOfflineData() {
         const firestore = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
         const { doc, getDoc, setDoc, serverTimestamp } = firestore;
 
-        const db = window.db; 
+        const db = window.db;
         if (!db) return;
 
         const remainingQueue = [];
@@ -148,13 +148,13 @@ async function syncOfflineData() {
 
                 if (!codeLogSnap.exists()) {
                     console.warn(`PIN ${entry.sessionPin} is invalid.`);
-                    continue; 
+                    continue;
                 }
 
                 const codeData = codeLogSnap.data();
-                
-                const isTimeValid = (entry.submissionTime >= codeData.openedAt && 
-                                    (codeData.expiresAt === -1 || entry.submissionTime <= codeData.expiresAt));
+
+                const isTimeValid = (entry.submissionTime >= codeData.openedAt &&
+                    (codeData.expiresAt === -1 || entry.submissionTime <= codeData.expiresAt));
 
                 if (isTimeValid) {
                     const uniqueDocId = `${entry.studentID}_${entry.sessionPin}`;
@@ -177,14 +177,15 @@ async function syncOfflineData() {
                         doctorUID: codeData.doctorId
                     });
 
-                    await setDoc(doc(db, "active_sessions", codeData.doctorId, "participants", entry.studentID), {
-                        id: entry.studentID,
+                    await setDoc(doc(db, "active_sessions", codeData.doctorId, "participants", user.uid), {
+                        id: entry.studentID,          
+                        uid: user.uid,              
                         name: entry.studentName,
                         avatarClass: entry.avatarClass,
-                        uid: user.uid,
                         status: "active",
                         timestamp: serverTimestamp(),
-                        isOfflineSync: true
+                        isOfflineSync: true,
+                        submissionTime: entry.submissionTime
                     });
 
                     localStorage.setItem('TARGET_DOCTOR_UID', codeData.doctorId);
@@ -208,7 +209,7 @@ async function syncOfflineData() {
 
             } catch (error) {
                 console.error("Entry sync error:", error);
-                remainingQueue.push(entry); 
+                remainingQueue.push(entry);
             }
         }
         localStorage.setItem(OFFLINE_STORAGE_KEY, JSON.stringify(remainingQueue));
