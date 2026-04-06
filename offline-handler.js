@@ -1,21 +1,3 @@
-/**
- * ╔══════════════════════════════════════════════════════════════╗
- * ║       NURSING OFFLINE ATTENDANCE ENGINE  v2.0               ║
- * ║       Production-Grade · Surgical Precision · Battle-Tested ║
- * ╚══════════════════════════════════════════════════════════════╝
- *
- * WHAT'S NEW vs v1:
- *  ✅ Mutex lock → no double-sync race conditions
- *  ✅ Atomic Batch writes → all-or-nothing (no partial saves)
- *  ✅ Server-time drift correction via Firestore FieldValue
- *  ✅ Retry with exponential backoff (3 attempts)
- *  ✅ PIN stored with hashed duplicate guard (per-student+PIN)
- *  ✅ Live pending-count badge on UI
- *  ✅ Corrupt-entry quarantine (never blocks healthy queue)
- *  ✅ Lazy-loaded Firestore (cached, not re-imported each sync)
- *  ✅ setInterval → setTimeout chain (no overlap possible)
- *  ✅ Full Arabic/English error reporting to user
- */
 
 'use strict';
 
@@ -394,22 +376,39 @@ function _sleep(ms) {
 function _getStudentFromCache() {
     try {
         const raw = localStorage.getItem('cached_profile_data');
-        if (!raw) return null;
-        const p = JSON.parse(raw);
-        
-        const currentUser = window.auth?.currentUser;
-        if (!currentUser || p.uid !== currentUser.uid) {
-            log('warn', 'Cache mismatch or expired, ignoring.');
+        if (!raw) {
+            log('info', 'No profile data found in storage.');
             return null;
         }
 
-        if (!p.studentID) return null;
+        const p = JSON.parse(raw);
+        
+        const currentUser = window.auth?.currentUser;
+
+
+        if (navigator.onLine && currentUser) {
+            if (p.uid !== currentUser.uid) {
+                log('warn', 'Security alert: Logged-in user UID does not match cache. Sync blocked.');
+                return null;
+            }
+        }
+
+        if (!p.studentID) {
+            log('warn', 'Cache corrupted: studentID missing.');
+            return null;
+        }
+
         return {
-            id: p.studentID,
-            name: p.fullName || "Unknown",
+            id:     String(p.studentID).trim(),
+            name:   p.fullName || "Student",
             avatar: p.avatarClass || "fa-user-graduate",
+            uid:    p.uid 
         };
-    } catch { return null; }
+
+    } catch (e) { 
+        log('error', 'Failed to parse student cache:', e.message);
+        return null; 
+    }
 }
 
 function _setView(view) {
