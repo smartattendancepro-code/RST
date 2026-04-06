@@ -26,54 +26,7 @@ const parseDate = (str) => {
 const getUniqueKey = (item) =>
     `${item.id}_${item.subject}_${item.date}`.toLowerCase().replace(/\s+/g, '');
 
-async function getStudentData(studentID) {
-    const cached = localStorage.getItem(CONFIG.CACHE_KEY);
-    if (cached) {
-        const { data, cacheDate, sid } = JSON.parse(cached);
-        if (sid === studentID && cacheDate === new Date().toDateString()) return data;
-    }
 
-    const finalData = { attended: [], absent: [] };
-    const seen = new Set();
-
-    const fetchTask = CONFIG.COLLECTIONS.map(async (col) => {
-        const statuses = ["ATTENDED", "ABSENT"];
-        for (const status of statuses) {
-            const q = query(
-                collection(window.db, col),
-                where("id", "==", String(studentID)),
-                where("status", "==", status),
-                orderBy("date", "desc"),
-                limit(CONFIG.RECORDS_LIMIT)
-            );
-
-            const snap = await getDocs(q);
-            snap.forEach(d => {
-                const item = d.data();
-                const key = getUniqueKey(item);
-                if (!seen.has(key)) {
-                    seen.add(key);
-                    status === "ATTENDED"
-                        ? finalData.attended.push(item)
-                        : finalData.absent.push(item);
-                }
-            });
-        }
-    });
-
-    await Promise.all(fetchTask);
-
-    finalData.attended.sort((a, b) => parseDate(b.date) - parseDate(a.date));
-    finalData.absent.sort((a, b) => parseDate(b.date) - parseDate(a.date));
-
-    localStorage.setItem(CONFIG.CACHE_KEY, JSON.stringify({
-        data: finalData,
-        cacheDate: new Date().toDateString(),
-        sid: studentID
-    }));
-
-    return finalData;
-}
 
 function renderAnalytics() {
     const container = document.getElementById('academicStatsContainer');
