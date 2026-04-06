@@ -254,7 +254,7 @@ async function syncOfflineData() {
     }
 }
 
-async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db, user }) {
+async function _syncEntry(entry, { doc, getDoc, setDoc, deleteDoc, writeBatch, serverTimestamp, db, user, increment }) {
 
     for (let attempt = 1; attempt <= OA.MAX_RETRIES; attempt++) {
         try {
@@ -273,11 +273,27 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
             const college = codeData.college || "NURS";
             const rawSubject = codeData.subject;
 
+            const openedAtMs  = _toMs(codeData.openedAt);
+            const expiresAtMs = codeData.expiresAt === -1 ? Infinity : _toMs(codeData.expiresAt);
+            const submitted   = entry.submissionTime; // وقت ضغط الطالب للزر (أوفلاين)
+
+            const DRIFT_MS    = 5000; 
+
+            if (submitted < (openedAtMs - DRIFT_MS) || submitted > (expiresAtMs + DRIFT_MS)) {
+                log('warn', `Strict Reject: PIN recorded out of time window.`);
+                toast(
+                    t(`❌ فشل: انتهت صلاحية الكود (سجلت خارج الوقت المسموح)`,
+                      `❌ Failed: Code expired (Outside allowed time)`),
+                    6000, "#ef4444"
+                );
+                return false; 
+            }
+
             const sessionRef = doc(db, "active_sessions", doctorUID);
             const sessionSnap = await getDoc(sessionRef);
 
             if (!sessionSnap.exists() || sessionSnap.data().isActive === false) {
-                log('info', `Sync Rejected: Instructor already ended session ${doctorUID}.`);
+                log('info', `Sync Rejected: Instructor already ended session.`);
                 toast(
                     t(`❌ فشل التسجيل: المحاضر قد أنهى الجلسة وحفظ الكشوف بالفعل`,
                       `❌ Registration Failed: Instructor has already closed this session`),
@@ -293,16 +309,13 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
             
             const dateKey = `${d}-${m}-${y}`;      
             const fixedDateStr = `${d}/${m}/${y}`; 
-            
-            const cleanSubKey = rawSubject.trim()
-                .replace(/\s+/g, '_')
-                .replace(/[^\w\u0600-\u06FF]/g, '');
+            const cleanSubKey = rawSubject.trim().replace(/\s+/g, '_').replace(/[^\w\u0600-\u06FF]/g, '');
 
             const recID = `${entry.studentID}_${dateKey}_${cleanSubKey}`;
 
             const batch = writeBatch(db);
 
-            const collegePayload = {
+            const payload = {
                 id: entry.studentID,
                 name: entry.studentName,
                 subject: rawSubject,
@@ -319,9 +332,8 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
                 isOfflineSync: true
             };
 
-            batch.set(doc(db, `attendance_${college}`, recID), collegePayload);
-
-            batch.set(doc(db, "attendance", recID), collegePayload);
+            batch.set(doc(db, `attendance_${college}`, recID), payload);
+            batch.set(doc(db, "attendance", recID), payload);
 
             batch.set(doc(db, "active_sessions", doctorUID, "participants", user.uid), {
                 id: entry.studentID,
@@ -337,7 +349,7 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
             batch.set(doc(db, "offline_attendance_log", recID), {
                 ...entry,
                 syncTimestamp: serverTimestamp(),
-                syncStatus: "SUCCESS_ON_LIVE"
+                syncStatus: "SUCCESS_STRICT"
             });
 
             await batch.commit();
@@ -345,29 +357,19 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
             localStorage.setItem('TARGET_DOCTOR_UID', doctorUID);
             sessionStorage.setItem('TARGET_DOCTOR_UID', doctorUID);
 
-            toast(
-                t(`✅ تم تأكيد حضورك بنجاح في ${rawSubject}`,
-                  `✅ Attendance confirmed for ${rawSubject}`),
-                5000, "#10b981"
-            );
+            toast(t(`✅ تم تأكيد حضورك بنجاح`, `✅ Attendance confirmed`), 5000, "#10b981");
             beep();
 
-            if (typeof window.switchScreen === 'function')
-                window.switchScreen('screenLiveSession');
+            if (typeof window.switchScreen === 'function') window.switchScreen('screenLiveSession');
+            if (typeof window.startLiveSnapshotListener === 'function') window.startLiveSnapshotListener();
 
-            if (typeof window.startLiveSnapshotListener === 'function')
-                window.startLiveSnapshotListener();
-
-            log('info', `✅ Atomic Sync Complete: ${recID}`);
+            log('info', `✅ Strict Atomic Sync Complete: ${recID}`);
             return true; 
 
         } catch (err) {
             log('warn', `Attempt ${attempt} failed:`, err.message);
-            if (attempt < OA.MAX_RETRIES) {
-                await _sleep(OA.RETRY_BASE_MS * Math.pow(2, attempt - 1));
-            } else {
-                return 'retry'; 
-            }
+            if (attempt < OA.MAX_RETRIES) await _sleep(OA.RETRY_BASE_MS * Math.pow(2, attempt - 1));
+            else return 'retry'; 
         }
     }
     return 'retry';
