@@ -183,13 +183,75 @@ window.switchAcademicTab = (tab) => {
     renderList();
 };
 
-window.openAcademicRecord = async function () {
+// دالة لجلب البيانات مع خاصية الكاش
+async function getStudentData(studentID) {
+    // 1. التحقق من وجود كاش
+    const cached = localStorage.getItem(CONFIG.CACHE_KEY);
+    if (cached) {
+        const { data, cacheDate, sid } = JSON.parse(cached);
+        // إذا كان نفس الطالب وفي نفس اليوم، ارجع بالبيانات المحفوظة
+        if (sid === studentID && cacheDate === new Date().toDateString()) {
+            console.log("تم تحميل البيانات من الكاش");
+            return data;
+        }
+    }
+
+    console.log("جلب بيانات جديدة من Firebase...");
+    const finalData = { attended: [], absent: [] };
+    const seen = new Set();
+
+    const fetchTask = CONFIG.COLLECTIONS.map(async (col) => {
+        const statuses = ["ATTENDED", "ABSENT"];
+        for (const status of statuses) {
+            const q = query(
+                collection(window.db, col),
+                where("id", "==", String(studentID)),
+                where("status", "==", status),
+                orderBy("date", "desc"),
+                limit(CONFIG.RECORDS_LIMIT)
+            );
+
+            const snap = await getDocs(q);
+            snap.forEach(d => {
+                const item = d.data();
+                const key = getUniqueKey(item);
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    status === "ATTENDED"
+                        ? finalData.attended.push(item)
+                        : finalData.absent.push(item);
+                }
+            });
+        }
+    });
+
+    await Promise.all(fetchTask);
+
+    finalData.attended.sort((a, b) => parseDate(b.date) - parseDate(a.date));
+    finalData.absent.sort((a, b) => parseDate(b.date) - parseDate(a.date));
+
+    // حفظ البيانات الجديدة في الكاش
+    localStorage.setItem(CONFIG.CACHE_KEY, JSON.stringify({
+        data: finalData,
+        cacheDate: new Date().toDateString(),
+        sid: studentID
+    }));
+
+    return finalData;
+}
+
+window.openAcademicRecord = async function (forceRefresh = false) {
     const user = window.auth.currentUser;
     if (!user) return;  
 
     document.getElementById('academicRecordModal').style.display = 'flex';
+    
     document.getElementById('academicRecordContent').innerHTML = `<div style="text-align:center; padding:50px;"><i class="fa-solid fa-circle-notch fa-spin" style="color:#3b82f6; font-size:30px;"></i></div>`;
     document.getElementById('academicStatsContainer').innerHTML = '';
+
+    if (forceRefresh === true) {
+        localStorage.removeItem(CONFIG.CACHE_KEY);
+    }
 
     try {
         const userSnap = await getDoc(doc(window.db, "user_registrations", user.uid));
@@ -212,4 +274,13 @@ window.openAcademicRecord = async function () {
         console.error(e);
         document.getElementById('academicRecordContent').innerHTML = `<div style="text-align:center; color:#ef4444; padding:20px;">Error Loading Records</div>`;
     }
+};
+
+window.refreshAcademicData = function() {
+    const refreshBtn = document.getElementById('refreshBtnIcon');
+    if(refreshBtn) refreshBtn.classList.add('fa-spin'); 
+    
+    window.openAcademicRecord(true).then(() => {
+        if(refreshBtn) refreshBtn.classList.remove('fa-spin');
+    });
 };
