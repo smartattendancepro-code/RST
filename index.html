@@ -3478,10 +3478,18 @@
                 <p style="margin: 4px 0 0 0; font-size: 11px; opacity: 0.8;" data-i18n="academic_record_sub">Theory
                     subjects only</p>
             </div>
-            <button onclick="document.getElementById('academicRecordModal').style.display='none'"
-                style="background: rgba(255,255,255,0.2); border: none; color: white; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;">
-                ✕
-            </button>
+            
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <button onclick="window.refreshAcademicData()"
+                    style="background: rgba(255,255,255,0.2); border: none; color: white; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center;">
+                    <i id="refreshBtnIcon" class="fa-solid fa-rotate-right"></i>
+                </button>
+
+                <button onclick="document.getElementById('academicRecordModal').style.display='none'"
+                    style="background: rgba(255,255,255,0.2); border: none; color: white; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;">
+                    ✕
+                </button>
+            </div>
         </div>
 
         <div id="academicStatsContainer"
@@ -3511,7 +3519,6 @@
         </div>
     </div>
 </div>
-
 <style>
     .tab-active-att {
         color: #10b981 !important;
