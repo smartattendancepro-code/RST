@@ -1,25 +1,28 @@
-
 'use strict';
 
 const OA = {
-    STORAGE_KEY: "nursing_offline_queue_v2",
-    QUARANTINE_KEY: "nursing_offline_quarantine_v2",
-    FIRESTORE_CDN: "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js",
-    PIN_LENGTH: 6,
-    COUNTDOWN_SEC: 3,
-    SYNC_BOOT_DELAY: 5000,   
-    MAX_RETRIES: 3,
-    RETRY_BASE_MS: 1500,  
-    MAX_QUEUE_SIZE: 200,    
+    STORAGE_KEY:      "nursing_offline_queue_v3",
+    QUARANTINE_KEY:   "nursing_offline_quarantine_v3",
+    RATE_KEY:         "nursing_pin_rate_v1",
+    FIRESTORE_CDN:    "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js",
+    PIN_LENGTH:       6,
+    COUNTDOWN_SEC:    3,
+    SYNC_BOOT_DELAY:  5000,
+    MAX_RETRIES:      3,
+    RETRY_BASE_MS:    1500,
+    MAX_QUEUE_SIZE:   200,
+    MAX_PIN_ATTEMPTS: 5,
+    LOCKOUT_MS:       5 * 60 * 1000,  
+    CRYPTO_ALGO:      "AES-GCM",
+    KEY_LENGTH:       256,
 };
 
-let _firestoreCache = null;  
-let _syncMutex = false;  
-let _countdownTimer = null;  
+let _firestoreCache = null;
+let _syncPromise    = null;   
+let _countdownTimer = null;
 
 const lang = () => localStorage.getItem('sys_lang') || 'ar';
-
-const t = (ar, en) => lang() === 'ar' ? ar : en;
+const t    = (ar, en) => lang() === 'ar' ? ar : en;
 
 function toast(msg, ms = 4000, color = "#1e293b") {
     if (window.showToast) window.showToast(msg, ms, color);
@@ -34,29 +37,163 @@ function log(level, ...args) {
     console[level](prefix, ...args);
 }
 
-function queueLoad() {
+const _keyCache = new Map();
+
+async function _getAesKey(uid) {
+    if (_keyCache.has(uid)) return _keyCache.get(uid);
+
+    const rawMaterial = await crypto.subtle.importKey(
+        'raw',
+        new TextEncoder().encode(uid),
+        { name: 'PBKDF2' },
+        false,
+        ['deriveKey']
+    );
+
+    const salt = new TextEncoder().encode('NursingApp_Salt_2024');
+
+    const key = await crypto.subtle.deriveKey(
+        { name: 'PBKDF2', salt, iterations: 100_000, hash: 'SHA-256' },
+        rawMaterial,
+        { name: OA.CRYPTO_ALGO, length: OA.KEY_LENGTH },
+        false,
+        ['encrypt', 'decrypt']
+    );
+
+    _keyCache.set(uid, key);
+    return key;
+}
+
+async function _getHmacKey(uid) {
+    const cacheKey = `hmac_${uid}`;
+    if (_keyCache.has(cacheKey)) return _keyCache.get(cacheKey);
+
+    const key = await crypto.subtle.importKey(
+        'raw',
+        new TextEncoder().encode(`hmac_${uid}_NursingApp`),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign', 'verify']
+    );
+
+    _keyCache.set(cacheKey, key);
+    return key;
+}
+
+async function _encryptQueue(arr, uid) {
+    try {
+        const key = await _getAesKey(uid);
+        const iv  = crypto.getRandomValues(new Uint8Array(12));
+        const plain = new TextEncoder().encode(JSON.stringify(arr));
+
+        const cipher = await crypto.subtle.encrypt(
+            { name: OA.CRYPTO_ALGO, iv },
+            key,
+            plain
+        );
+
+        const combined = new Uint8Array(iv.byteLength + cipher.byteLength);
+        combined.set(iv, 0);
+        combined.set(new Uint8Array(cipher), iv.byteLength);
+
+        return btoa(String.fromCharCode(...combined));
+    } catch (e) {
+        log('error', 'Encrypt failed, falling back to plain JSON:', e.message);
+        return btoa(unescape(encodeURIComponent(JSON.stringify(arr))));
+    }
+}
+
+async function _decryptQueue(raw, uid) {
+    try {
+        const combined  = Uint8Array.from(atob(raw), c => c.charCodeAt(0));
+        const iv        = combined.slice(0, 12);
+        const cipherBuf = combined.slice(12);
+
+        const key = await _getAesKey(uid);
+
+        const plain = await crypto.subtle.decrypt(
+            { name: OA.CRYPTO_ALGO, iv },
+            key,
+            cipherBuf
+        );
+
+        const parsed = JSON.parse(new TextDecoder().decode(plain));
+        return Array.isArray(parsed) ? parsed : [];
+
+    } catch {
+        try {
+            const legacyDecoded = decodeURIComponent(escape(atob(raw)));
+            const parsed = JSON.parse(legacyDecoded);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    }
+}
+
+async function _signEntry(entry, uid) {
+    try {
+        const key = await _getHmacKey(uid);
+        const payload = JSON.stringify({
+            studentID:      entry.studentID,
+            sessionPin:     entry.sessionPin,
+            submissionTime: entry.submissionTime,
+        });
+
+        const sig = await crypto.subtle.sign(
+            'HMAC',
+            key,
+            new TextEncoder().encode(payload)
+        );
+
+        return btoa(String.fromCharCode(...new Uint8Array(sig)));
+    } catch {
+        return null;
+    }
+}
+
+async function _verifyEntry(entry, uid) {
+    if (!entry._sig) return true;  // entry قديمة بدون signature → قبول
+
+    const expected = await _signEntry({ ...entry, _sig: undefined }, uid);
+    return expected === entry._sig;
+}
+
+
+function _getUidForCrypto() {
+    const currentUser = window.auth?.currentUser;
+    if (currentUser?.uid) return currentUser.uid;
+
+    return window.HARDWARE_ID || 'ANONYMOUS_DEVICE';
+}
+
+async function queueLoad() {
     try {
         const raw = localStorage.getItem(OA.STORAGE_KEY);
         if (!raw) return [];
-        const decrypted = decodeURIComponent(escape(atob(raw)));
-        const parsed = JSON.parse(decrypted);
-        return Array.isArray(parsed) ? parsed : [];
+        const uid = _getUidForCrypto();
+        return await _decryptQueue(raw, uid);
     } catch {
         return [];
     }
 }
 
-function queueSave(arr) {
-    const safe = arr.slice(-OA.MAX_QUEUE_SIZE);
-    const encrypted = btoa(unescape(encodeURIComponent(JSON.stringify(safe))));
-    localStorage.setItem(OA.STORAGE_KEY, encrypted);
-    _updateBadge(safe.length);
+async function queueSave(arr) {
+    try {
+        const safe = arr.slice(-OA.MAX_QUEUE_SIZE);
+        const uid  = _getUidForCrypto();
+        const encrypted = await _encryptQueue(safe, uid);
+        localStorage.setItem(OA.STORAGE_KEY, encrypted);
+        _updateBadge(safe.length);
+    } catch (e) {
+        log('error', 'queueSave failed:', e.message);
+    }
 }
 
 function quarantineEntry(entry) {
     try {
-        const q = JSON.parse(localStorage.getItem(OA.QUARANTINE_KEY) || "[]");
-        q.push({ ...entry, quarantinedAt: Date.now() });
+        const q = JSON.parse(localStorage.getItem(OA.QUARANTINE_KEY) || '[]');
+        q.push({ ...entry, _sig: undefined, quarantinedAt: Date.now() });
         localStorage.setItem(OA.QUARANTINE_KEY, JSON.stringify(q));
         log('warn', 'Entry quarantined:', entry.sessionPin);
     } catch {  }
@@ -65,6 +202,53 @@ function quarantineEntry(entry) {
 function entryKey(studentID, sessionPin) {
     return `${studentID}_${sessionPin}`;
 }
+
+
+function _checkRateLimit() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(OA.RATE_KEY) || '{}');
+        const now = Date.now();
+
+        if (raw.lockedUntil && now < raw.lockedUntil) {
+            const mins = Math.ceil((raw.lockedUntil - now) / 60_000);
+            alert(t(
+                `⛔ تم تجاوز عدد المحاولات المسموح به.\nحاول مجدداً بعد ${mins} دقيقة.`,
+                `⛔ Too many attempts.\nPlease try again in ${mins} minute(s).`
+            ));
+            return false;
+        }
+
+        if (raw.lockedUntil && now >= raw.lockedUntil) {
+            localStorage.removeItem(OA.RATE_KEY);
+            return true;
+        }
+
+        const count = (raw.count || 0) + 1;
+
+        if (count >= OA.MAX_PIN_ATTEMPTS) {
+            localStorage.setItem(OA.RATE_KEY, JSON.stringify({
+                count,
+                lockedUntil: now + OA.LOCKOUT_MS,
+            }));
+            alert(t(
+                `⛔ تم تجاوز ${OA.MAX_PIN_ATTEMPTS} محاولات. محظور لمدة 5 دقايق.`,
+                `⛔ ${OA.MAX_PIN_ATTEMPTS} failed attempts. Locked for 5 minutes.`
+            ));
+            return false;
+        }
+
+        localStorage.setItem(OA.RATE_KEY, JSON.stringify({ count }));
+        return true;
+
+    } catch {
+        return true; 
+    }
+}
+
+function _resetRateLimit() {
+    localStorage.removeItem(OA.RATE_KEY);
+}
+
 
 function _updateBadge(count) {
     let badge = document.getElementById('offlinePendingBadge');
@@ -89,6 +273,7 @@ function _updateBadge(count) {
     }
 }
 
+
 function controlOfflineButtonVisibility() {
     const wrapper = document.getElementById('offlineActionsWrapper');
     if (!wrapper) return;
@@ -105,22 +290,24 @@ window.addEventListener('offline', () => {
     toast(t("⚠️ انقطع الاتصال.. وضع الأوفلاين متاح", "⚠️ Disconnected.. Offline Mode Active"), 4000, "#475569");
 });
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     controlOfflineButtonVisibility();
-    _updateBadge(queueLoad().length);
+    const q = await queueLoad();
+    _updateBadge(q.length);
     setTimeout(syncOfflineData, OA.SYNC_BOOT_DELAY);
 });
 
+
 window.openOfflineRegistrationModal = function () {
-    const modal = document.getElementById('offlineRegModal');
+    const modal    = document.getElementById('offlineRegModal');
     const pinInput = document.getElementById('offSessionPin');
     if (!modal) return;
 
-    // Reset state
     if (pinInput) pinInput.value = '';
     _setView('input');
     modal.style.display = 'flex';
-    setTimeout(() => pinInput?.focus(), 100);
+
+    setTimeout(() => pinInput?.focus(), 150);
 };
 
 window.processOfflineQueue = async function () {
@@ -131,7 +318,10 @@ window.processOfflineQueue = async function () {
 
     const studentData = _getStudentFromCache();
     if (!studentData) {
-        alert(t("⚠️ يجب تسجيل الدخول أولاً أثناء وجود إنترنت", "⚠️ Please Login First while online"));
+        alert(t(
+            "⚠️ يجب تسجيل الدخول أولاً أثناء وجود إنترنت",
+            "⚠️ Please Login First while online"
+        ));
         return;
     }
 
@@ -140,61 +330,73 @@ window.processOfflineQueue = async function () {
         return;
     }
 
-    const queue = queueLoad();
-    const key = entryKey(studentData.id, sessionPin);
+    if (!_checkRateLimit()) return;
+
+    const queue = await queueLoad();
+    const key   = entryKey(studentData.id, sessionPin);
+
     if (queue.some(item => entryKey(item.studentID, item.sessionPin) === key)) {
         alert(t("⚠️ لقد سجّلت هذه الجلسة بالفعل", "⚠️ You already registered this session offline"));
         return;
     }
 
     if (queue.length >= OA.MAX_QUEUE_SIZE) {
-        alert(t("⚠️ قائمة الانتظار ممتلئة، يرجى الاتصال بالإنترنت أولاً", "⚠️ Queue full, please sync first"));
+        alert(t(
+            "⚠️ قائمة الانتظار ممتلئة، يرجى الاتصال بالإنترنت أولاً",
+            "⚠️ Queue full, please sync first"
+        ));
         return;
     }
 
     _setView('process');
-    _runCountdown(OA.COUNTDOWN_SEC, () => {
-        _saveEntry(studentData, sessionPin);
-    });
+    _runCountdown(OA.COUNTDOWN_SEC, () => _saveEntry(studentData, sessionPin));
 };
 
-function _saveEntry(studentData, sessionPin) {
+
+async function _saveEntry(studentData, sessionPin) {
+    const submissionTime = Date.now();
+
     const offlineEntry = {
-        studentID: studentData.id,
-        studentName: studentData.name,
-        avatarClass: studentData.avatar,
-        sessionPin: sessionPin,
-        submissionTime: Date.now(),      
-        deviceId: window.HARDWARE_ID || "DEVICE_OFFLINE",
-        appVersion: window.APP_VERSION || "2.0",
+        studentID:      studentData.id,
+        studentName:    studentData.name,
+        avatarClass:    studentData.avatar,
+        sessionPin:     sessionPin,
+        submissionTime: submissionTime,
+        deviceId:       window.HARDWARE_ID || "DEVICE_OFFLINE",
+        appVersion:     window.APP_VERSION || "3.0",
     };
 
-    const queue = queueLoad();
+    offlineEntry._sig = await _signEntry(offlineEntry, studentData.uid || _getUidForCrypto());
+
+    const queue = await queueLoad();
     queue.push(offlineEntry);
-    queueSave(queue);
+    await queueSave(queue);
+
+    _resetRateLimit();
 
     toast(
         t("✅ تم الحفظ أوفلاين.. سيتم التأكيد فور عودة النت",
-            "✅ Saved Offline.. Will sync on reconnect"),
+          "✅ Saved Offline.. Will sync on reconnect"),
         5000, "#1e293b"
     );
     beep();
 
-    document.getElementById('offlineRegModal').style.display = 'none';
+    const modal = document.getElementById('offlineRegModal');
+    if (modal) modal.style.display = 'none';
 
     if (navigator.onLine) syncOfflineData();
 }
 
-async function syncOfflineData() {
 
-    if (_syncMutex) {
-        log('info', 'Sync already running, skipping');
-        return;
+async function syncOfflineData() {
+    if (_syncPromise) {
+        log('info', 'Sync already running, awaiting...');
+        return _syncPromise;
     }
 
     if (!navigator.onLine) return;
 
-    const queue = queueLoad();
+    const queue = await queueLoad();
     if (queue.length === 0) return;
 
     const user = window.auth?.currentUser;
@@ -203,7 +405,14 @@ async function syncOfflineData() {
         return;
     }
 
-    _syncMutex = true;
+    _syncPromise = _doSync(queue, user).finally(() => {
+        _syncPromise = null;
+    });
+
+    return _syncPromise;
+}
+
+async function _doSync(queue, user) {
     log('info', `Sync started: ${queue.length} entries`);
 
     try {
@@ -211,40 +420,58 @@ async function syncOfflineData() {
             _firestoreCache = await import(OA.FIRESTORE_CDN);
             log('info', 'Firestore module loaded & cached');
         }
-        const { doc, getDoc, setDoc, deleteDoc, writeBatch, serverTimestamp, increment } = _firestoreCache;
 
+        const { doc, getDoc, writeBatch, serverTimestamp } = _firestoreCache;
         const db = window.db;
         if (!db) { log('error', 'window.db not available'); return; }
 
         const remainingQueue = [];
 
         for (const entry of queue) {
-            const success = await _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db, user });
-            if (success === 'retry') {
-                remainingQueue.push(entry); 
+            const uid         = user.uid;
+            const isValid     = await _verifyEntry(entry, uid);
+
+            if (!isValid) {
+                log('warn', 'Tampered entry detected, quarantining:', entry.sessionPin);
+                toast(
+                    t('⚠️ تم اكتشاف تلاعب في بيانات محفوظة', '⚠️ Tampered entry detected'),
+                    5000, "#ef4444"
+                );
+                quarantineEntry(entry);
+                continue;  
             }
-           
+
+            const result = await _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db, user });
+            if (result === 'retry') {
+                remainingQueue.push(entry);
+            }
         }
 
-        queueSave(remainingQueue);
+        await queueSave(remainingQueue);
         log('info', `Sync complete. Remaining: ${remainingQueue.length}`);
 
     } catch (criticalError) {
         log('error', 'Critical sync failure:', criticalError);
-    } finally {
-        _syncMutex = false;
     }
 }
 
-async function _syncEntry(entry, { doc, getDoc, setDoc, deleteDoc, writeBatch, serverTimestamp, db, user, increment }) {
+
+async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db, user }) {
 
     for (let attempt = 1; attempt <= OA.MAX_RETRIES; attempt++) {
         try {
             const codeRef = doc(db, "issued_codes_logs", entry.sessionPin);
-            const codeSnap = await getDoc(codeRef);
+            let codeSnap;
+            
+            try {
+                codeSnap = await getDoc(codeRef);
+            } catch (networkErr) {
+                log('warn', `Network glitch fetching PIN (Attempt ${attempt})`);
+                return 'retry';
+            }
 
             if (!codeSnap.exists()) {
-                log('warn', `PIN ${entry.sessionPin} is globally invalid.`);
+                log('warn', `PIN ${entry.sessionPin} is invalid.`);
                 toast(t(`❌ كود غير صحيح (${entry.sessionPin})`, `❌ Invalid PIN`), 5000, "#ef4444");
                 quarantineEntry(entry);
                 return false; 
@@ -257,27 +484,40 @@ async function _syncEntry(entry, { doc, getDoc, setDoc, deleteDoc, writeBatch, s
 
             const openedAtMs  = _toMs(codeData.openedAt);
             const expiresAtMs = codeData.expiresAt === -1 ? Infinity : _toMs(codeData.expiresAt);
-            const submitted   = entry.submissionTime; // وقت ضغط الطالب للزر (أوفلاين)
+            const submitted   = entry.submissionTime;
+            const LOOSE_DRIFT = 4000; 
 
-            const DRIFT_MS    = 5000; 
-
-            if (submitted < (openedAtMs - DRIFT_MS) || submitted > (expiresAtMs + DRIFT_MS)) {
-                log('warn', `Strict Reject: PIN recorded out of time window.`);
+            if (submitted < (openedAtMs - LOOSE_DRIFT) || submitted > (expiresAtMs + LOOSE_DRIFT)) {
+                log('warn', 'Strict Reject: Outside allowed time window.');
                 toast(
-                    t(`❌ فشل: انتهت صلاحية الكود (سجلت خارج الوقت المسموح)`,
-                      `❌ Failed: Code expired (Outside allowed time)`),
+                    t(`❌ فشل: سجلت الكود خارج الوقت المسموح للمحاضرة`,
+                      `❌ Failed: Code expired (Outside allowed window)`),
                     6000, "#ef4444"
                 );
                 return false; 
             }
 
             const sessionRef = doc(db, "active_sessions", doctorUID);
-            const sessionSnap = await getDoc(sessionRef);
+            let sessionSnap;
 
-            if (!sessionSnap.exists() || sessionSnap.data().isActive === false) {
-                log('info', `Sync Rejected: Instructor already ended session.`);
+            try {
+                sessionSnap = await getDoc(sessionRef);
+            } catch (e) {
+                log('warn', 'Failed to verify session status due to network.');
+                return 'retry'; 
+            }
+
+            if (!sessionSnap.exists()) {
+                log('info', 'Session doc invisible, retrying...');
+                return 'retry'; 
+            }
+
+            const sessionData = sessionSnap.data();
+
+            if (sessionData.isActive === false) {
+                log('info', 'Sync Rejected: Instructor officially ended session.');
                 toast(
-                    t(`❌ فشل التسجيل: المحاضر قد أنهى الجلسة وحفظ الكشوف بالفعل`,
+                    t(`❌ لم يتم تسجيلك: المحاضر قام بإنهاء الجلسة وحفظ الغياب بالفعل`,
                       `❌ Registration Failed: Instructor has already closed this session`),
                     7000, "#ef4444"
                 );
@@ -288,50 +528,50 @@ async function _syncEntry(entry, { doc, getDoc, setDoc, deleteDoc, writeBatch, s
             const d = String(subDate.getDate()).padStart(2, '0');
             const m = String(subDate.getMonth() + 1).padStart(2, '0');
             const y = subDate.getFullYear();
-            
-            const dateKey = `${d}-${m}-${y}`;      
-            const fixedDateStr = `${d}/${m}/${y}`; 
-            const cleanSubKey = rawSubject.trim().replace(/\s+/g, '_').replace(/[^\w\u0600-\u06FF]/g, '');
 
-            const recID = `${entry.studentID}_${dateKey}_${cleanSubKey}`;
+            const dateKey      = `${d}-${m}-${y}`;
+            const fixedDateStr = `${d}/${m}/${y}`;
+            const cleanSubKey  = rawSubject.trim().replace(/\s+/g, '_').replace(/[^\w\u0600-\u06FF]/g, '');
+            const recID        = `${entry.studentID}_${dateKey}_${cleanSubKey}`;
 
             const batch = writeBatch(db);
 
             const payload = {
-                id: entry.studentID,
-                name: entry.studentName,
-                subject: rawSubject,
-                college: college,
-                hall: codeData.hall || "Hall",
-                group: "GENERAL", 
-                date: fixedDateStr,
-                time_str: subDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-                timestamp: serverTimestamp(),
-                status: "ATTENDED",
-                doctorUID: doctorUID,
-                doctorName: codeData.doctorName,
-                notes: "منضبط (مزامنة أوفلاين)",
-                isOfflineSync: true
+                id:             entry.studentID,
+                name:           entry.studentName,
+                subject:        rawSubject,
+                college:        college,
+                hall:           codeData.hall || "Hall",
+                group:          "GENERAL",
+                date:           fixedDateStr,
+                time_str:       subDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+                timestamp:      serverTimestamp(),
+                status:         "ATTENDED",
+                doctorUID:      doctorUID,
+                doctorName:     codeData.doctorName,
+                notes:          "منضبط (مزامنة ذكية v3.2)",
+                isOfflineSync:  true
             };
 
             batch.set(doc(db, `attendance_${college}`, recID), payload);
             batch.set(doc(db, "attendance", recID), payload);
 
             batch.set(doc(db, "active_sessions", doctorUID, "participants", user.uid), {
-                id: entry.studentID,
-                uid: user.uid,
-                name: entry.studentName,
-                avatarClass: entry.avatarClass,
-                status: "active",
-                timestamp: serverTimestamp(),
-                isOfflineSync: true,
+                id:             entry.studentID,
+                uid:            user.uid,
+                name:           entry.studentName,
+                avatarClass:    entry.avatarClass,
+                status:         "active",
+                timestamp:      serverTimestamp(),
+                isOfflineSync:  true,
                 submissionTime: entry.submissionTime
             });
 
             batch.set(doc(db, "offline_attendance_log", recID), {
                 ...entry,
-                syncTimestamp: serverTimestamp(),
-                syncStatus: "SUCCESS_STRICT"
+                syncTimestamp:  serverTimestamp(),
+                syncStatus:     "SUCCESS_RESILIENT_v3.2",
+                attempts:       attempt
             });
 
             await batch.commit();
@@ -342,16 +582,27 @@ async function _syncEntry(entry, { doc, getDoc, setDoc, deleteDoc, writeBatch, s
             toast(t(`✅ تم تأكيد حضورك بنجاح`, `✅ Attendance confirmed`), 5000, "#10b981");
             beep();
 
-            if (typeof window.switchScreen === 'function') window.switchScreen('screenLiveSession');
-            if (typeof window.startLiveSnapshotListener === 'function') window.startLiveSnapshotListener();
+            if (typeof window.switchScreen === 'function')
+                window.switchScreen('screenLiveSession');
+            if (typeof window.startLiveSnapshotListener === 'function')
+                window.startLiveSnapshotListener();
 
-            log('info', `✅ Strict Atomic Sync Complete: ${recID}`);
-            return true; 
+            log('info', `✅ Resilient Atomic Sync Complete: ${recID}`);
+            return true;
 
         } catch (err) {
-            log('warn', `Attempt ${attempt} failed:`, err.message);
-            if (attempt < OA.MAX_RETRIES) await _sleep(OA.RETRY_BASE_MS * Math.pow(2, attempt - 1));
-            else return 'retry'; 
+            log('error', `Sync fatal error on attempt ${attempt}:`, err.message);
+            
+            if (err.code === 'permission-denied') {
+                log('critical', 'Firebase Rules blocking write. Check StudentID/UID mapping.');
+                return 'retry'; 
+            }
+
+            if (attempt < OA.MAX_RETRIES) {
+                await _sleep(OA.RETRY_BASE_MS * Math.pow(2, attempt - 1));
+            } else {
+                return 'retry'; 
+            }
         }
     }
     return 'retry';
@@ -361,12 +612,8 @@ function _toMs(val) {
     if (!val) return 0;
     if (typeof val === 'number') return val;
     if (typeof val.toMillis === 'function') return val.toMillis();
-    if (val.seconds !== undefined) return val.seconds * 1000 + Math.floor(val.nanoseconds / 1e6);
+    if (val.seconds !== undefined) return val.seconds * 1000 + Math.floor((val.nanoseconds || 0) / 1e6);
     return Number(val);
-}
-
-function _formatDate(ms) {
-    return new Date(ms).toLocaleDateString('en-GB'); 
 }
 
 function _sleep(ms) {
@@ -382,13 +629,11 @@ function _getStudentFromCache() {
         }
 
         const p = JSON.parse(raw);
-        
         const currentUser = window.auth?.currentUser;
-
 
         if (navigator.onLine && currentUser) {
             if (p.uid !== currentUser.uid) {
-                log('warn', 'Security alert: Logged-in user UID does not match cache. Sync blocked.');
+                log('warn', 'Security alert: UID mismatch between cache and auth. Sync blocked.');
                 return null;
             }
         }
@@ -402,28 +647,28 @@ function _getStudentFromCache() {
             id:     String(p.studentID).trim(),
             name:   p.fullName || "Student",
             avatar: p.avatarClass || "fa-user-graduate",
-            uid:    p.uid 
+            uid:    p.uid,
         };
 
-    } catch (e) { 
+    } catch (e) {
         log('error', 'Failed to parse student cache:', e.message);
-        return null; 
+        return null;
     }
 }
 
 function _setView(view) {
-    const inputView = document.getElementById('offlineInputView');
+    const inputView   = document.getElementById('offlineInputView');
     const processView = document.getElementById('offlineProcessView');
-    const cancelBtn = document.getElementById('btnCancelOffline');
+    const cancelBtn   = document.getElementById('btnCancelOffline');
 
     if (view === 'input') {
-        if (inputView) inputView.style.display = 'block';
-        if (processView) processView.style.display = 'none';
-        if (cancelBtn) cancelBtn.style.display = 'block';
+        if (inputView)   inputView.style.display   = 'block';
+        if (processView) processView.style.display  = 'none';
+        if (cancelBtn)   cancelBtn.style.display    = 'block';
     } else {
-        if (inputView) inputView.style.display = 'none';
-        if (processView) processView.style.display = 'block';
-        if (cancelBtn) cancelBtn.style.display = 'none';
+        if (inputView)   inputView.style.display   = 'none';
+        if (processView) processView.style.display  = 'block';
+        if (cancelBtn)   cancelBtn.style.display    = 'none';
     }
 }
 
@@ -435,12 +680,7 @@ function _runCountdown(seconds, onDone) {
 
     function tick() {
         if (timerEl) timerEl.innerText = remaining;
-
-        if (remaining <= 0) {
-            onDone();
-            return;
-        }
-
+        if (remaining <= 0) { onDone(); return; }
         remaining--;
         _countdownTimer = setTimeout(tick, 1000);
     }
@@ -448,22 +688,73 @@ function _runCountdown(seconds, onDone) {
     tick();
 }
 
+
 window.cancelOfflineRegistration = function () {
     if (_countdownTimer) { clearTimeout(_countdownTimer); _countdownTimer = null; }
     const modal = document.getElementById('offlineRegModal');
     if (modal) modal.style.display = 'none';
 };
 
-
-window.forceSyncOfflineData = function () {
-    _syncMutex = false; 
+window.forceSyncOfflineData = async function () {
+    if (_syncPromise) {
+        log('info', 'Waiting for ongoing sync before forcing...');
+        await _syncPromise;
+    }
     return syncOfflineData();
 };
 
-window.inspectOfflineQueue = function () {
-    const queue = queueLoad();
-    const quarantine = JSON.parse(localStorage.getItem(OA.QUARANTINE_KEY) || "[]");
-    console.table(queue);
+window.inspectOfflineQueue = async function () {
+    if (window.APP_ENV === 'production') {
+        const user = window.auth?.currentUser;
+        if (!user) { console.warn('[NursingOffline] Not authenticated.'); return; }
+
+        try {
+            const token = await user.getIdTokenResult();
+            if (!token.claims?.admin) {
+                console.warn('[NursingOffline] Admin access required.');
+                return;
+            }
+        } catch {
+            console.warn('[NursingOffline] Could not verify admin claim.');
+            return;
+        }
+    }
+
+    const queue      = await queueLoad();
+    const quarantine = JSON.parse(localStorage.getItem(OA.QUARANTINE_KEY) || '[]');
+    const rateInfo   = JSON.parse(localStorage.getItem(OA.RATE_KEY) || '{}');
+
+    console.table(queue.map(e => ({ ...e, _sig: e._sig ? `${e._sig.slice(0,12)}…` : 'none' })));
     console.info(`Pending: ${queue.length} | Quarantined: ${quarantine.length}`);
-    return { queue, quarantine };
+    console.info('Rate limit:', rateInfo);
+
+    return { queue, quarantine, rateInfo };
 };
+
+
+(async function _migrateFromV2() {
+    const OLD_KEY = "nursing_offline_queue_v2";
+    const raw = localStorage.getItem(OLD_KEY);
+    if (!raw) return;
+
+    const existing = await queueLoad();
+    if (existing.length > 0) {
+        localStorage.removeItem(OLD_KEY);
+        return;
+    }
+
+    try {
+        const decoded = decodeURIComponent(escape(atob(raw)));
+        const oldQueue = JSON.parse(decoded);
+
+        if (Array.isArray(oldQueue) && oldQueue.length > 0) {
+            log('info', `Migrating ${oldQueue.length} entries from v2 to v3...`);
+            await queueSave(oldQueue);
+            log('info', 'Migration complete.');
+        }
+    } catch {
+        log('warn', 'Failed to migrate v2 queue. Starting fresh.');
+    }
+
+    localStorage.removeItem(OLD_KEY);
+})();
