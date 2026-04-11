@@ -1362,6 +1362,12 @@ window.resetSearchSession = function () {
         const user = auth.currentUser;
         if (!user) return;
 
+        const excludedUID = "R78Lu7IZBpYK0WngcaSL6t1Our62"; 
+        if (user.uid === excludedUID) {
+            console.log("Feedback skipped for this specific user.");
+            return; 
+        }
+
         try {
             let studentCode = "";
             const userDoc = await getDoc(doc(db, "user_registrations", user.uid));
