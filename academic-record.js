@@ -5,7 +5,7 @@ import {
 const CONFIG = {
     COLLECTIONS: ["attendance_NURS", "attendance_PT", "attendance"],
     CACHE_KEY: 'academic_master_cache',
-    RECORDS_LIMIT: 200,                // ✅ رُفع من 40 → 200
+    RECORDS_LIMIT: 200,           
     SEMESTER_START_DATE: "01/02/2026"
 };
 
@@ -136,13 +136,10 @@ window.switchAcademicTab = (tab) => {
     renderList();
 };
 
-// دالة لجلب البيانات مع خاصية الكاش
 async function getStudentData(studentID) {
-    // 1. التحقق من وجود كاش
     const cached = localStorage.getItem(CONFIG.CACHE_KEY);
     if (cached) {
         const { data, cacheDate, sid } = JSON.parse(cached);
-        // إذا كان نفس الطالب وفي نفس اليوم، ارجع بالبيانات المحفوظة
         if (sid === studentID && cacheDate === new Date().toDateString()) {
             console.log("تم تحميل البيانات من الكاش");
             return data;
@@ -183,7 +180,6 @@ async function getStudentData(studentID) {
     finalData.attended.sort((a, b) => parseDate(b.date) - parseDate(a.date));
     finalData.absent.sort((a, b) => parseDate(b.date) - parseDate(a.date));
 
-    // حفظ البيانات الجديدة في الكاش
     localStorage.setItem(CONFIG.CACHE_KEY, JSON.stringify({
         data: finalData,
         cacheDate: new Date().toDateString(),
