@@ -609,7 +609,6 @@ window.joinSessionAction = async function () {
         if (currentScreen !== 'screenLiveSession') { btn.innerHTML = originalText; btn.style.pointerEvents = 'auto'; }
     }
 };
-
 window.searchForSession = async function () {
     const codeInput = document.getElementById('attendanceCode').value.trim();
     const btn = document.getElementById('btnSearchSession');
@@ -647,8 +646,19 @@ window.searchForSession = async function () {
         if (subjectNameEl) { subjectNameEl.innerText = sessionData.allowedSubject || "--"; subjectNameEl.style.fontFamily = "'Outfit', sans-serif"; }
         if (foundAvatar && sessionData.doctorAvatar) foundAvatar.innerHTML = `<i class="fa-solid ${sessionData.doctorAvatar}"></i>`;
 
-        if (typeof startAuthScreenTimer === 'function') startAuthScreenTimer(doctorUID);
+        if (!sessionData.sessionPassword || sessionData.sessionPassword.trim() === "") {
+            if (typeof startAuthScreenTimer === 'function') startAuthScreenTimer(doctorUID);
+            const step1 = document.getElementById('step1_search');
+            const step2 = document.getElementById('step2_auth');
+            if (step1) step1.style.display = 'none';
+            if (step2) { step2.style.display = 'block'; step2.classList.add('active'); }
+            setTimeout(() => {
+                if (typeof window.joinSessionAction === 'function') window.joinSessionAction();
+            }, 300);
+            return;
+        }
 
+        if (typeof startAuthScreenTimer === 'function') startAuthScreenTimer(doctorUID);
         const step1 = document.getElementById('step1_search');
         const step2 = document.getElementById('step2_auth');
         if (step1) step1.style.display = 'none';
@@ -657,6 +667,7 @@ window.searchForSession = async function () {
             step2.classList.add('active');
             setTimeout(() => { const p = document.getElementById('sessionPass'); if (p) p.focus(); }, 400);
         }
+
     } catch (e) {
         console.error("Critical Search Error:", e);
         showToast("⚠️ Connection Error", 3000, "#ef4444");
@@ -1362,10 +1373,10 @@ window.resetSearchSession = function () {
         const user = auth.currentUser;
         if (!user) return;
 
-        const excludedUID = "R78Lu7IZBpYK0WngcaSL6t1Our62"; 
+        const excludedUID = "R78Lu7IZBpYK0WngcaSL6t1Our62";
         if (user.uid === excludedUID) {
             console.log("Feedback skipped for this specific user.");
-            return; 
+            return;
         }
 
         try {
