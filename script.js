@@ -1,4 +1,3 @@
-
 import { MASTER_HALLS, MASTER_SUBJECTS } from './config.js';
 import {
     getFirestore, collection, doc, addDoc, setDoc, getDoc,
@@ -616,6 +615,136 @@ const GPSManager = (() => {
 })();
 
 
+// ══════════════════════════════════════════════════════════════════
+//  DataEntryGuard — مراقب لحظي لشاشة إدخال الكود/الباسورد
+//  يطرد الطالب فوراً لو:
+//    • نزّل شريط الإشعارات (visibilitychange → hidden)
+//    • خرج من الصفحة / انتقل لتطبيق ثاني
+//    • حاول الانضمام بينما الشاشة مخفية
+// ══════════════════════════════════════════════════════════════════
+const DataEntryGuard = (() => {
+    let _active = false;
+    let _blocked = false;   // حُجب بسبب مخالفة
+
+    // الشاشات المحمية (قبل الوصول لـ screenLiveSession)
+    const GUARDED_SCREENS = new Set(['screenDataEntry']);
+
+    function _isOnGuardedScreen() {
+        const activeId = document.querySelector('.section.active')?.id;
+        return GUARDED_SCREENS.has(activeId);
+    }
+
+    function _punish() {
+        if (_blocked) return;   // لا تعاقبه مرتين
+        _blocked = true;
+
+        navigator.vibrate?.([300, 100, 300, 100, 300]);
+
+        // أوقف أي عملية انضمام جارية
+        window.isJoiningProcessActive = false;
+
+        // أعد تفعيل زر الانضمام حتى لا يبقى معطلاً
+        const joinBtn = Utils.$('btnJoinFinal');
+        if (joinBtn) {
+            joinBtn.innerHTML = 'Join <i class="fa-solid fa-right-to-bracket"></i>';
+            joinBtn.style.pointerEvents = 'none';   // أبقِه معطلاً عمداً
+        }
+
+        const searchBtn = Utils.$('btnSearchSession');
+        if (searchBtn) searchBtn.style.pointerEvents = 'none';
+
+        // امسح بيانات الجلسة المؤقتة
+        sessionStorage.removeItem('TEMP_DR_UID');
+
+        // أوقف مؤقت الجلسة
+        window.authUnsubscribe?.();
+        window.authUnsubscribe = null;
+        clearInterval(window.localTicker);
+        window.localTicker = null;
+
+        // أوقف مؤقت الخمول
+        IdleTimer.stop();
+
+        // أظهر toast تحذيري
+        UI.showToast('⛔ تم إلغاء الجلسة — لا يُسمح بمغادرة الشاشة أثناء التسجيل', 4000, '#ef4444');
+
+        // بعد لحظة وجيزة — ارجع للـ welcome
+        setTimeout(() => {
+            stop();   // وقف المراقب
+            UI.switchScreen('screenWelcome');
+            window.resetSearchSession?.();
+        }, 800);
+    }
+
+    function _onVisibilityChange() {
+        if (!_active) return;
+        if (!_isOnGuardedScreen()) return;   // مش في الشاشة المحمية → تجاهل
+        if (document.visibilityState === 'hidden') {
+            _punish();
+        }
+    }
+
+    function _onPageHide() {
+        if (!_active) return;
+        if (!_isOnGuardedScreen()) return;
+        _punish();
+    }
+
+    /**
+     * يُستدعى قبل أي محاولة انضمام — يتحقق لو كانت الصفحة مرئية
+     * returns true  → آمن، تابع
+     * returns false → محظور، لا تكمل
+     */
+    function assertVisibleOrBlock() {
+        if (!_active) return true;
+        if (document.visibilityState !== 'visible') {
+            _punish();
+            return false;
+        }
+        if (_blocked) return false;
+        return true;
+    }
+
+    /** ابدأ المراقبة — استدعِه لما تفتح screenDataEntry */
+    function start() {
+        if (_active) return;
+        _active = true;
+        _blocked = false;
+        document.addEventListener('visibilitychange', _onVisibilityChange);
+        window.addEventListener('pagehide', _onPageHide);
+        window.addEventListener('blur', _onWindowBlur);
+    }
+
+    /** أوقف المراقبة — استدعِه لما يصل الطالب لـ screenLiveSession بنجاح */
+    function stop() {
+        _active = false;
+        _blocked = false;
+        document.removeEventListener('visibilitychange', _onVisibilityChange);
+        window.removeEventListener('pagehide', _onPageHide);
+        window.removeEventListener('blur', _onWindowBlur);
+    }
+
+    /**
+     * blur على window يحدث لما:
+     *  - ينزّل شريط الإشعارات في بعض متصفحات الموبايل
+     *  - ينتقل لتطبيق ثاني (بعض الحالات)
+     * نستخدمه كطبقة احتياطية مع visibilitychange
+     */
+    function _onWindowBlur() {
+        if (!_active) return;
+        if (!_isOnGuardedScreen()) return;
+        // تأخير 200ms — لأن بعض التفاعلات الشرعية (مثل لمس input) تطلق blur لحظياً
+        setTimeout(() => {
+            if (!_active) return;
+            if (!_isOnGuardedScreen()) return;
+            if (document.visibilityState === 'hidden') _punish();
+        }, 200);
+    }
+
+    return { start, stop, assertVisibleOrBlock };
+})();
+
+
 const AuthManager = (() => {
     const db = window.db;
     const auth = window.auth;
@@ -1099,6 +1228,9 @@ const SessionManager = (() => {
     }
 
     async function joinSessionAction() {
+        // ── حماية: تحقق من المراقب اللحظي قبل أي شيء ──────────────
+        if (!DataEntryGuard.assertVisibleOrBlock()) return;
+
         const passInput = Utils.$('sessionPass')?.value.trim();
         const btn = Utils.$('btnJoinFinal');
         const doctorUID = sessionStorage.getItem('TEMP_DR_UID');
@@ -1125,6 +1257,9 @@ const SessionManager = (() => {
                 getDoc(doc(db, 'user_registrations', user.uid, 'sensitive_info', 'main')),
             ]);
 
+            // ── تحقق ثانٍ بعد العمليات الطويلة ─────────────────────
+            if (!DataEntryGuard.assertVisibleOrBlock()) return;
+
             if (!sessionSnap.exists()) throw new Error('⛔ الجلسة غير موجودة');
             const sessionData = sessionSnap.data();
             if (!sessionData.isActive || !sessionData.isDoorOpen) throw new Error('🔒 عذراً، الجلسة مغلقة حالياً.');
@@ -1150,6 +1285,9 @@ const SessionManager = (() => {
             });
             const result = await res.json();
             if (!res.ok || !result.success) throw new Error(result.error || 'تم رفض الدخول من قبل النظام الأمني');
+
+            // ── نجح — أوقف المراقب ثم انتقل ────────────────────────
+            DataEntryGuard.stop();
 
             window.stopCodeEntryIdleTimer?.();
             UI.showToast(`✅ ${result.message}`, 3000, '#10b981');
@@ -1987,6 +2125,8 @@ Object.assign(window, {
         await window.stopCameraSafely?.();
         window.scrollTo({ top: 0, behavior: 'smooth' });
         GPSManager.stopWatcher?.();
+        // أوقف المراقب لو الطالب رجع يدوياً
+        DataEntryGuard.stop();
         UI.switchScreen('screenWelcome');
     },
     stopCameraSafely: async () => { WakeLock.release(); return true; },
@@ -2053,6 +2193,8 @@ Object.assign(window, {
         if (step1) step1.style.cssText = 'display:block !important;visibility:visible !important;';
         setTimeout(() => Utils.$('attendanceCode')?.focus(), 150);
         IdleTimer.start();
+        // ── ابدأ المراقب اللحظي ──────────────────────────────────
+        DataEntryGuard.start();
     },
 
     forceOpenPinScreen: () => {
@@ -2066,6 +2208,8 @@ Object.assign(window, {
         if (step1) step1.style.cssText = 'display:block !important;opacity:1 !important;visibility:visible !important;width:100%;';
         setTimeout(() => Utils.$('attendanceCode')?.focus(), 150);
         IdleTimer.start();
+        // ── ابدأ المراقب اللحظي ──────────────────────────────────
+        DataEntryGuard.start();
     },
 
     playClick: () => { },
