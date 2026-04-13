@@ -719,6 +719,7 @@ const DataEntryGuard = (() => {
     function stop() {
         _active = false;
         _blocked = false;
+        window.processIsActive = false;
         document.removeEventListener('visibilitychange', _onVisibilityChange);
         window.removeEventListener('pagehide', _onPageHide);
         window.removeEventListener('blur', _onWindowBlur);
@@ -2195,6 +2196,7 @@ Object.assign(window, {
         IdleTimer.start();
         // ── ابدأ المراقب اللحظي ──────────────────────────────────
         DataEntryGuard.start();
+        window.processIsActive = true;
     },
 
     forceOpenPinScreen: () => {
@@ -2210,6 +2212,7 @@ Object.assign(window, {
         IdleTimer.start();
         // ── ابدأ المراقب اللحظي ──────────────────────────────────
         DataEntryGuard.start();
+        window.processIsActive = true;
     },
 
     playClick: () => { },
