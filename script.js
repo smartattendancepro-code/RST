@@ -614,18 +614,11 @@ const GPSManager = (() => {
     return { startWatcher, stopWatcher, getGPSForJoin, openMapsToCollegeLocation };
 })();
 
-// ══════════════════════════════════════════════════════════════════
-//  DataEntryGuard — مراقب صارم لشاشة إدخال الكود/الباسورد
-//  الوظيفة: طرد الطالب إذا حاول الغش عن طريق:
-//    • سحب شريط الإشعارات (حتى لو لم يخرج من المتصفح)
-//    • تصغير المتصفح أو فتح تطبيق آخر
-//    • محاولة الانضمام والجلسة في الخلفية
-// ══════════════════════════════════════════════════════════════════
 const DataEntryGuard = (() => {
     let _active = false;
-    let _blocked = false;   // حُجب بسبب مخالفة
+    let _blocked = false;
+    let _pulseInterval = null;
 
-    // الشاشات المحمية (قبل الوصول لـ screenLiveSession)
     const GUARDED_SCREENS = new Set(['screenDataEntry']);
 
     function _isOnGuardedScreen() {
@@ -633,133 +626,94 @@ const DataEntryGuard = (() => {
         return GUARDED_SCREENS.has(activeId);
     }
 
-    function _punish() {
-        if (_blocked || !_active) return;   // لا تعاقبه مرتين أو إذا تم إيقاف المراقب
+    function _punish(reason = '') {
+        if (_blocked || !_active) return;
         _blocked = true;
 
-        // تنفيذ الاهتزاز (نمط مكثف للتنبيه)
         if (navigator.vibrate) {
-            navigator.vibrate([400, 200, 400, 200, 400]);
+            navigator.vibrate([100, 50, 100, 50, 300]);
         }
 
-        // إيقاف أي عمليات جارية
         window.isJoiningProcessActive = false;
 
-        // تعطيل أزرار الانضمام والبحث
         const joinBtn = Utils.$('btnJoinFinal');
         if (joinBtn) {
-            joinBtn.innerHTML = 'Join <i class="fa-solid fa-right-to-bracket"></i>';
+            joinBtn.innerHTML = 'Blocked <i class="fa-solid fa-lock"></i>';
             joinBtn.style.pointerEvents = 'none';
-            joinBtn.style.opacity = '0.5';
+            joinBtn.style.opacity = '0.6';
         }
 
-        const searchBtn = Utils.$('btnSearchSession');
-        if (searchBtn) {
-            searchBtn.style.pointerEvents = 'none';
-            searchBtn.style.opacity = '0.5';
-        }
-
-        // مسح بيانات الجلسة المؤقتة فوراً
         sessionStorage.removeItem('TEMP_DR_UID');
-
-        // إيقاف كل المستمعات والمؤقتات
         window.authUnsubscribe?.();
-        window.authUnsubscribe = null;
-        if (window.localTicker) {
-            clearInterval(window.localTicker);
-            window.localTicker = null;
-        }
-
-        // إيقاف مؤقت الخمول
+        if (window.localTicker) clearInterval(window.localTicker);
         IdleTimer.stop();
 
-        // إظهار رسالة الخطأ
-        UI.showToast('⛔ تم إلغاء الجلسة — ممنوع مغادرة الشاشة أو سحب الشريط أثناء التسجيل', 5000, '#ef4444');
+        UI.showToast(`⛔ تم إلغاء المحاولة: ${reason || 'ممنوع مغادرة الشاشة'}`, 5000, '#b91c1c');
 
-        // العودة لشاشة الترحيب بعد ثانية واحدة
         setTimeout(() => {
-            stop(); // إغلاق المراقب تماماً
+            stop();
             UI.switchScreen('screenWelcome');
             window.resetSearchSession?.();
 
-            // إعادة ضبط الأزرار بعد العودة
-            if (joinBtn) { joinBtn.style.pointerEvents = 'auto'; joinBtn.style.opacity = '1'; }
-            if (searchBtn) { searchBtn.style.pointerEvents = 'auto'; searchBtn.style.opacity = '1'; }
-        }, 1000);
-    }
-
-    // يتم استدعاؤه عند الخروج التام من المتصفح (Home Button / App Switcher)
-    function _onVisibilityChange() {
-        if (!_active || !_isOnGuardedScreen()) return;
-        if (document.visibilityState === 'hidden') {
-            _punish();
-        }
-    }
-
-    // يتم استدعاؤه عند إخفاء الصفحة في بعض الأنظمة
-    function _onPageHide() {
-        if (!_active || !_isOnGuardedScreen()) return;
-        _punish();
-    }
-
-    // ── الحدث الأهم: سحب شريط الإشعارات ──
-    function _onWindowBlur() {
-        if (!_active || !_isOnGuardedScreen()) return;
-
-        // عندما يفقد المتصفح التركيز (Blur)، فهذا يعني أن شيئاً ما غطى الشاشة (مثل شريط الإشعارات)
-        // ننتظر 250ms للتأكد أن المستخدم لم يضغط فقط على خانة إدخال، بل فقد التركيز فعلياً
-        setTimeout(() => {
-            if (!_active || !_isOnGuardedScreen()) return;
-
-            // إذا استمر فقدان التركيز (لا يوجد Focus على النافذة)
-            if (!document.hasFocus()) {
-                _punish();
+            if (joinBtn) {
+                joinBtn.style.pointerEvents = 'auto';
+                joinBtn.style.opacity = '1';
+                joinBtn.innerHTML = 'Join <i class="fa-solid fa-right-to-bracket"></i>';
             }
-        }, 250);
+        }, 800);
     }
 
-    /**
-     * التحقق الأمني قبل الضغط على زر Join النهائي
-     */
-    function assertVisibleOrBlock() {
-        if (!_active) return true;
+    function _verifyState() {
+        if (!_active || !_isOnGuardedScreen()) return;
 
-        // إذا حاول الطالب الضغط على الزر والصفحة ليست في كامل تركيزها
-        if (document.visibilityState !== 'visible' || !document.hasFocus()) {
-            _punish();
-            return false;
+        const hasFocus = document.hasFocus();
+        const isVisible = document.visibilityState === 'visible';
+
+        if (!hasFocus || !isVisible) {
+            setTimeout(() => {
+                if (_active && (!document.hasFocus() || document.visibilityState !== 'visible')) {
+                    _punish('لا يُسمح بسحب الشريط أو الخروج');
+                }
+            }, 250);
         }
-
-        if (_blocked) return false;
-        return true;
     }
 
-    /** ابدأ المراقبة — يُستدعى عند فتح شاشة PIN */
     function start() {
         if (_active) return;
         _active = true;
         _blocked = false;
 
-        // تسجيل المستمعات
-        document.addEventListener('visibilitychange', _onVisibilityChange);
-        window.addEventListener('pagehide', _onPageHide);
-        window.addEventListener('blur', _onWindowBlur);
+        window.addEventListener('blur', _verifyState);
+        document.addEventListener('visibilitychange', _verifyState);
+        window.addEventListener('pagehide', () => _punish('تم إغلاق الصفحة'));
 
-        console.log("🛡️ DataEntryGuard: Activated");
+        _pulseInterval = setInterval(_verifyState, 500);
+
+        console.log("🛡️ DataEntryGuard: Secure Mode Enabled");
     }
 
-    /** أوقف المراقبة — يُستدعى عند النجاح في الدخول للمحاضرة */
     function stop() {
         _active = false;
         _blocked = false;
         window.processIsActive = false;
 
-        // إزالة المستمعات لضمان عدم حدوث طرد بالخطأ داخل المحاضرة
-        document.removeEventListener('visibilitychange', _onVisibilityChange);
-        window.removeEventListener('pagehide', _onPageHide);
-        window.removeEventListener('blur', _onWindowBlur);
+        window.removeEventListener('blur', _verifyState);
+        document.removeEventListener('visibilitychange', _verifyState);
+        if (_pulseInterval) {
+            clearInterval(_pulseInterval);
+            _pulseInterval = null;
+        }
 
-        console.log("🛡️ DataEntryGuard: Deactivated");
+        console.log("🛡️ DataEntryGuard: Secure Mode Disabled");
+    }
+
+    function assertVisibleOrBlock() {
+        if (!_active) return true;
+        if (!document.hasFocus() || document.visibilityState !== 'visible') {
+            _punish('المتصفح ليس في وضع التركيز');
+            return false;
+        }
+        return !_blocked;
     }
 
     return { start, stop, assertVisibleOrBlock };
