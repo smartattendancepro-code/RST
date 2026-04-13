@@ -16,7 +16,7 @@ const CFG = Object.freeze({
     device: {
         cacheKey: 'nursing_secure_device_v5',
         verifiedCacheKey: 'nursing_user_verified_v2',
-        verifiedTTL: 7 * 86_400_000,          
+        verifiedTTL: 7 * 86_400_000,
     },
     gps: {
         targetLat: 30.385873919506743,
@@ -36,7 +36,7 @@ const CFG = Object.freeze({
     },
     ui: {
         idleTimeoutSec: 60,
-        statsCacheTTL: 900_000,                
+        statsCacheTTL: 900_000,
     },
     avatars: Object.freeze({
         Male: ['fa-user-tie', 'fa-user-graduate', 'fa-user-doctor', 'fa-user-astronaut',
@@ -614,13 +614,12 @@ const GPSManager = (() => {
     return { startWatcher, stopWatcher, getGPSForJoin, openMapsToCollegeLocation };
 })();
 
-
 // ══════════════════════════════════════════════════════════════════
-//  DataEntryGuard — مراقب لحظي لشاشة إدخال الكود/الباسورد
-//  يطرد الطالب فوراً لو:
-//    • نزّل شريط الإشعارات (visibilitychange → hidden)
-//    • خرج من الصفحة / انتقل لتطبيق ثاني
-//    • حاول الانضمام بينما الشاشة مخفية
+//  DataEntryGuard — مراقب صارم لشاشة إدخال الكود/الباسورد
+//  الوظيفة: طرد الطالب إذا حاول الغش عن طريق:
+//    • سحب شريط الإشعارات (حتى لو لم يخرج من المتصفح)
+//    • تصغير المتصفح أو فتح تطبيق آخر
+//    • محاولة الانضمام والجلسة في الخلفية
 // ══════════════════════════════════════════════════════════════════
 const DataEntryGuard = (() => {
     let _active = false;
@@ -635,111 +634,132 @@ const DataEntryGuard = (() => {
     }
 
     function _punish() {
-        if (_blocked) return;   // لا تعاقبه مرتين
+        if (_blocked || !_active) return;   // لا تعاقبه مرتين أو إذا تم إيقاف المراقب
         _blocked = true;
 
-        navigator.vibrate?.([300, 100, 300, 100, 300]);
+        // تنفيذ الاهتزاز (نمط مكثف للتنبيه)
+        if (navigator.vibrate) {
+            navigator.vibrate([400, 200, 400, 200, 400]);
+        }
 
-        // أوقف أي عملية انضمام جارية
+        // إيقاف أي عمليات جارية
         window.isJoiningProcessActive = false;
 
-        // أعد تفعيل زر الانضمام حتى لا يبقى معطلاً
+        // تعطيل أزرار الانضمام والبحث
         const joinBtn = Utils.$('btnJoinFinal');
         if (joinBtn) {
             joinBtn.innerHTML = 'Join <i class="fa-solid fa-right-to-bracket"></i>';
-            joinBtn.style.pointerEvents = 'none';   // أبقِه معطلاً عمداً
+            joinBtn.style.pointerEvents = 'none';
+            joinBtn.style.opacity = '0.5';
         }
 
         const searchBtn = Utils.$('btnSearchSession');
-        if (searchBtn) searchBtn.style.pointerEvents = 'none';
+        if (searchBtn) {
+            searchBtn.style.pointerEvents = 'none';
+            searchBtn.style.opacity = '0.5';
+        }
 
-        // امسح بيانات الجلسة المؤقتة
+        // مسح بيانات الجلسة المؤقتة فوراً
         sessionStorage.removeItem('TEMP_DR_UID');
 
-        // أوقف مؤقت الجلسة
+        // إيقاف كل المستمعات والمؤقتات
         window.authUnsubscribe?.();
         window.authUnsubscribe = null;
-        clearInterval(window.localTicker);
-        window.localTicker = null;
+        if (window.localTicker) {
+            clearInterval(window.localTicker);
+            window.localTicker = null;
+        }
 
-        // أوقف مؤقت الخمول
+        // إيقاف مؤقت الخمول
         IdleTimer.stop();
 
-        // أظهر toast تحذيري
-        UI.showToast('⛔ تم إلغاء الجلسة — لا يُسمح بمغادرة الشاشة أثناء التسجيل', 4000, '#ef4444');
+        // إظهار رسالة الخطأ
+        UI.showToast('⛔ تم إلغاء الجلسة — ممنوع مغادرة الشاشة أو سحب الشريط أثناء التسجيل', 5000, '#ef4444');
 
-        // بعد لحظة وجيزة — ارجع للـ welcome
+        // العودة لشاشة الترحيب بعد ثانية واحدة
         setTimeout(() => {
-            stop();   // وقف المراقب
+            stop(); // إغلاق المراقب تماماً
             UI.switchScreen('screenWelcome');
             window.resetSearchSession?.();
-        }, 800);
+
+            // إعادة ضبط الأزرار بعد العودة
+            if (joinBtn) { joinBtn.style.pointerEvents = 'auto'; joinBtn.style.opacity = '1'; }
+            if (searchBtn) { searchBtn.style.pointerEvents = 'auto'; searchBtn.style.opacity = '1'; }
+        }, 1000);
     }
 
+    // يتم استدعاؤه عند الخروج التام من المتصفح (Home Button / App Switcher)
     function _onVisibilityChange() {
-        if (!_active) return;
-        if (!_isOnGuardedScreen()) return;   // مش في الشاشة المحمية → تجاهل
+        if (!_active || !_isOnGuardedScreen()) return;
         if (document.visibilityState === 'hidden') {
             _punish();
         }
     }
 
+    // يتم استدعاؤه عند إخفاء الصفحة في بعض الأنظمة
     function _onPageHide() {
-        if (!_active) return;
-        if (!_isOnGuardedScreen()) return;
+        if (!_active || !_isOnGuardedScreen()) return;
         _punish();
     }
 
+    // ── الحدث الأهم: سحب شريط الإشعارات ──
+    function _onWindowBlur() {
+        if (!_active || !_isOnGuardedScreen()) return;
+
+        // عندما يفقد المتصفح التركيز (Blur)، فهذا يعني أن شيئاً ما غطى الشاشة (مثل شريط الإشعارات)
+        // ننتظر 250ms للتأكد أن المستخدم لم يضغط فقط على خانة إدخال، بل فقد التركيز فعلياً
+        setTimeout(() => {
+            if (!_active || !_isOnGuardedScreen()) return;
+
+            // إذا استمر فقدان التركيز (لا يوجد Focus على النافذة)
+            if (!document.hasFocus()) {
+                _punish();
+            }
+        }, 250);
+    }
+
     /**
-     * يُستدعى قبل أي محاولة انضمام — يتحقق لو كانت الصفحة مرئية
-     * returns true  → آمن، تابع
-     * returns false → محظور، لا تكمل
+     * التحقق الأمني قبل الضغط على زر Join النهائي
      */
     function assertVisibleOrBlock() {
         if (!_active) return true;
-        if (document.visibilityState !== 'visible') {
+
+        // إذا حاول الطالب الضغط على الزر والصفحة ليست في كامل تركيزها
+        if (document.visibilityState !== 'visible' || !document.hasFocus()) {
             _punish();
             return false;
         }
+
         if (_blocked) return false;
         return true;
     }
 
-    /** ابدأ المراقبة — استدعِه لما تفتح screenDataEntry */
+    /** ابدأ المراقبة — يُستدعى عند فتح شاشة PIN */
     function start() {
         if (_active) return;
         _active = true;
         _blocked = false;
+
+        // تسجيل المستمعات
         document.addEventListener('visibilitychange', _onVisibilityChange);
         window.addEventListener('pagehide', _onPageHide);
         window.addEventListener('blur', _onWindowBlur);
+
+        console.log("🛡️ DataEntryGuard: Activated");
     }
 
-    /** أوقف المراقبة — استدعِه لما يصل الطالب لـ screenLiveSession بنجاح */
+    /** أوقف المراقبة — يُستدعى عند النجاح في الدخول للمحاضرة */
     function stop() {
         _active = false;
         _blocked = false;
         window.processIsActive = false;
+
+        // إزالة المستمعات لضمان عدم حدوث طرد بالخطأ داخل المحاضرة
         document.removeEventListener('visibilitychange', _onVisibilityChange);
         window.removeEventListener('pagehide', _onPageHide);
         window.removeEventListener('blur', _onWindowBlur);
-    }
 
-    /**
-     * blur على window يحدث لما:
-     *  - ينزّل شريط الإشعارات في بعض متصفحات الموبايل
-     *  - ينتقل لتطبيق ثاني (بعض الحالات)
-     * نستخدمه كطبقة احتياطية مع visibilitychange
-     */
-    function _onWindowBlur() {
-        if (!_active) return;
-        if (!_isOnGuardedScreen()) return;
-        // تأخير 200ms — لأن بعض التفاعلات الشرعية (مثل لمس input) تطلق blur لحظياً
-        setTimeout(() => {
-            if (!_active) return;
-            if (!_isOnGuardedScreen()) return;
-            if (document.visibilityState === 'hidden') _punish();
-        }, 200);
+        console.log("🛡️ DataEntryGuard: Deactivated");
     }
 
     return { start, stop, assertVisibleOrBlock };
