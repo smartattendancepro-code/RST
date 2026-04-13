@@ -1,3 +1,4 @@
+
 import { MASTER_HALLS, MASTER_SUBJECTS } from './config.js';
 import {
     getFirestore, collection, doc, addDoc, setDoc, getDoc,
@@ -16,7 +17,7 @@ const CFG = Object.freeze({
     device: {
         cacheKey: 'nursing_secure_device_v5',
         verifiedCacheKey: 'nursing_user_verified_v2',
-        verifiedTTL: 7 * 86_400_000,
+        verifiedTTL: 7 * 86_400_000,          
     },
     gps: {
         targetLat: 30.385873919506743,
@@ -36,7 +37,7 @@ const CFG = Object.freeze({
     },
     ui: {
         idleTimeoutSec: 60,
-        statsCacheTTL: 900_000,
+        statsCacheTTL: 900_000,                
     },
     avatars: Object.freeze({
         Male: ['fa-user-tie', 'fa-user-graduate', 'fa-user-doctor', 'fa-user-astronaut',
@@ -614,136 +615,6 @@ const GPSManager = (() => {
     return { startWatcher, stopWatcher, getGPSForJoin, openMapsToCollegeLocation };
 })();
 
-const DataEntryGuard = (() => {
-    let _active = false;
-    let _blocked = false;
-    let _pulseInterval = null;
-    let _touchStartedAtTop = false;
-
-    const GUARDED_SCREENS = new Set(['screenDataEntry']);
-
-    function _isOnGuardedScreen() {
-        const activeId = document.querySelector('.section.active')?.id;
-        return GUARDED_SCREENS.has(activeId);
-    }
-
-    function _punish(reason = '') {
-        if (_blocked || !_active) return;
-        _blocked = true;
-
-        if (navigator.vibrate) {
-            navigator.vibrate([200, 100, 200, 100, 400]);
-        }
-
-        window.isJoiningProcessActive = false;
-        
-        const joinBtn = Utils.$('btnJoinFinal');
-        if (joinBtn) {
-            joinBtn.innerHTML = 'Security Block <i class="fa-solid fa-shield-halved"></i>';
-            joinBtn.style.pointerEvents = 'none';
-            joinBtn.style.opacity = '0.6';
-            joinBtn.style.background = '#450a0a';
-        }
-
-        sessionStorage.removeItem('TEMP_DR_UID');
-        window.authUnsubscribe?.();
-        if (window.localTicker) clearInterval(window.localTicker);
-        IdleTimer.stop();
-
-        UI.showToast(`⛔ تم إلغاء الجلسة: ${reason || 'مخالفة أمنية'}`, 5000, '#b91c1c');
-
-        setTimeout(() => {
-            stop(); 
-            UI.switchScreen('screenWelcome');
-            window.resetSearchSession?.();
-            
-            if (joinBtn) {
-                joinBtn.style.pointerEvents = 'auto';
-                joinBtn.style.opacity = '1';
-                joinBtn.style.background = '';
-                joinBtn.innerHTML = 'Join <i class="fa-solid fa-right-to-bracket"></i>';
-            }
-        }, 1000);
-    }
-
-    
-    const _handleTouchStart = (e) => {
-        if (!_active) return;
-        const touchY = e.touches[0].clientY;
-        _touchStartedAtTop = (touchY <= 50);
-    };
-
-    const _handlePointerCancel = () => {
-        if (_active && _isOnGuardedScreen() && _touchStartedAtTop) {
-            _punish('تم رصد سحب شريط الإشعارات');
-        }
-    };
-
-    function _verifyState() {
-        if (!_active || !_isOnGuardedScreen()) return;
-
-        const hasFocus = document.hasFocus();
-        const isVisible = document.visibilityState === 'visible';
-
-        if (!hasFocus || !isVisible) {
-            setTimeout(() => {
-                if (_active && (!document.hasFocus() || document.visibilityState !== 'visible')) {
-                    _punish('ممنوع مغادرة المتصفح أو سحب الشريط');
-                }
-            }, 200);
-        }
-    }
-
-    function start() {
-        if (_active) return;
-        _active = true;
-        _blocked = false;
-        _touchStartedAtTop = false;
-
-        window.addEventListener('touchstart', _handleTouchStart, { passive: true });
-        window.addEventListener('pointercancel', _handlePointerCancel);
-        
-        window.addEventListener('blur', _verifyState);
-        document.addEventListener('visibilitychange', _verifyState);
-        window.addEventListener('pagehide', () => _punish('تم إغلاق الصفحة'));
-
-        _pulseInterval = setInterval(_verifyState, 400);
-
-        console.log("🛡️ DataEntryGuard Ultra PRO: Active");
-    }
-
-    function stop() {
-        if (!_active) return;
-        _active = false;
-        _blocked = false;
-        window.processIsActive = false;
-
-        window.removeEventListener('touchstart', _handleTouchStart);
-        window.removeEventListener('pointercancel', _handlePointerCancel);
-        window.removeEventListener('blur', _verifyState);
-        document.removeEventListener('visibilitychange', _verifyState);
-        
-        if (_pulseInterval) {
-            clearInterval(_pulseInterval);
-            _pulseInterval = null;
-        }
-
-        console.log("🛡️ DataEntryGuard Ultra PRO: Disabled");
-    }
-
-    function assertVisibleOrBlock() {
-        if (!_active) return true;
-        const isOk = document.hasFocus() && document.visibilityState === 'visible';
-        if (!isOk) {
-            _punish('فشل الفحص الأمني النهائي');
-            return false;
-        }
-        return !_blocked;
-    }
-
-    return { start, stop, assertVisibleOrBlock };
-})();
-
 
 const AuthManager = (() => {
     const db = window.db;
@@ -1228,9 +1099,6 @@ const SessionManager = (() => {
     }
 
     async function joinSessionAction() {
-        // ── حماية: تحقق من المراقب اللحظي قبل أي شيء ──────────────
-        if (!DataEntryGuard.assertVisibleOrBlock()) return;
-
         const passInput = Utils.$('sessionPass')?.value.trim();
         const btn = Utils.$('btnJoinFinal');
         const doctorUID = sessionStorage.getItem('TEMP_DR_UID');
@@ -1257,9 +1125,6 @@ const SessionManager = (() => {
                 getDoc(doc(db, 'user_registrations', user.uid, 'sensitive_info', 'main')),
             ]);
 
-            // ── تحقق ثانٍ بعد العمليات الطويلة ─────────────────────
-            if (!DataEntryGuard.assertVisibleOrBlock()) return;
-
             if (!sessionSnap.exists()) throw new Error('⛔ الجلسة غير موجودة');
             const sessionData = sessionSnap.data();
             if (!sessionData.isActive || !sessionData.isDoorOpen) throw new Error('🔒 عذراً، الجلسة مغلقة حالياً.');
@@ -1285,9 +1150,6 @@ const SessionManager = (() => {
             });
             const result = await res.json();
             if (!res.ok || !result.success) throw new Error(result.error || 'تم رفض الدخول من قبل النظام الأمني');
-
-            // ── نجح — أوقف المراقب ثم انتقل ────────────────────────
-            DataEntryGuard.stop();
 
             window.stopCodeEntryIdleTimer?.();
             UI.showToast(`✅ ${result.message}`, 3000, '#10b981');
@@ -2125,8 +1987,6 @@ Object.assign(window, {
         await window.stopCameraSafely?.();
         window.scrollTo({ top: 0, behavior: 'smooth' });
         GPSManager.stopWatcher?.();
-        // أوقف المراقب لو الطالب رجع يدوياً
-        DataEntryGuard.stop();
         UI.switchScreen('screenWelcome');
     },
     stopCameraSafely: async () => { WakeLock.release(); return true; },
@@ -2193,9 +2053,6 @@ Object.assign(window, {
         if (step1) step1.style.cssText = 'display:block !important;visibility:visible !important;';
         setTimeout(() => Utils.$('attendanceCode')?.focus(), 150);
         IdleTimer.start();
-        // ── ابدأ المراقب اللحظي ──────────────────────────────────
-        DataEntryGuard.start();
-        window.processIsActive = true;
     },
 
     forceOpenPinScreen: () => {
@@ -2209,9 +2066,6 @@ Object.assign(window, {
         if (step1) step1.style.cssText = 'display:block !important;opacity:1 !important;visibility:visible !important;width:100%;';
         setTimeout(() => Utils.$('attendanceCode')?.focus(), 150);
         IdleTimer.start();
-        // ── ابدأ المراقب اللحظي ──────────────────────────────────
-        DataEntryGuard.start();
-        window.processIsActive = true;
     },
 
     playClick: () => { },
