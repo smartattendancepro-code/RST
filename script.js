@@ -17,7 +17,7 @@ const CFG = Object.freeze({
     device: {
         cacheKey: 'nursing_secure_device_v5',
         verifiedCacheKey: 'nursing_user_verified_v2',
-        verifiedTTL: 7 * 86_400_000,          
+        verifiedTTL: 7 * 86_400_000,
     },
     gps: {
         targetLat: 30.385873919506743,
@@ -37,7 +37,7 @@ const CFG = Object.freeze({
     },
     ui: {
         idleTimeoutSec: 60,
-        statsCacheTTL: 900_000,                
+        statsCacheTTL: 900_000,
     },
     avatars: Object.freeze({
         Male: ['fa-user-tie', 'fa-user-graduate', 'fa-user-doctor', 'fa-user-astronaut',
@@ -627,7 +627,7 @@ const AuthManager = (() => {
         const statusDot = Utils.$('userStatusDot');
 
         if (!user) {
-            _handleSignedOut({ drawerEl, profileWrap, profileIcon, statusDot });
+            await _handleSignedOut({ drawerEl, profileWrap, profileIcon, statusDot });
             return;
         }
 
@@ -666,7 +666,9 @@ const AuthManager = (() => {
         try {
             const snap = await getDoc(doc(db, 'user_registrations', user.uid));
             if (!snap.exists()) return;
+
             const data = snap.data();
+
             const name = data.registrationInfo?.fullName || data.fullName || 'Student';
 
             window.listenToSessionState?.();
@@ -702,7 +704,23 @@ const AuthManager = (() => {
         if (statusDot) statusDot.style.background = '#f59e0b';
     }
 
-    function _handleSignedOut({ drawerEl, profileWrap, profileIcon, statusDot }) {
+    async function _handleSignedOut({ drawerEl, profileWrap, profileIcon, statusDot }) {
+        const uid = auth.currentUser?.uid;
+        const sessionId = localStorage.getItem('CURRENT_SESSION_ID');
+
+        if (uid && sessionId) {
+            try {
+                await setDoc(
+                    doc(db, 'active_users', uid, 'sessions', sessionId),
+                    { isLoggedIn: false, logoutAt: serverTimestamp() },
+                    { merge: true }
+                );
+            } catch (e) { console.warn('Session clear warning:', e); }
+        }
+
+        localStorage.removeItem('CURRENT_SESSION_ID');
+        localStorage.removeItem('LOGGED_IN_UID');
+
         sessionStorage.clear();
         DeviceManager.clearVerifiedCache();
         if (window.studentStatusListener) { window.studentStatusListener(); window.studentStatusListener = null; }
@@ -836,12 +854,48 @@ const AuthManager = (() => {
                 return;
             }
 
+            const sessionsSnap = await getDocs(
+                query(
+                    collection(db, 'active_users', user.uid, 'sessions'),
+                    where('isLoggedIn', '==', true),
+                    limit(1)
+                )
+            );
+            if (!sessionsSnap.empty) {
+                await signOut(auth);
+                UI.showToast('⛔ إجراء محظور', 4000, '#ef4444');
+                navigator.vibrate?.([200, 100, 200]);
+                if (btn) { btn.innerHTML = originalHtml; btn.disabled = false; }
+                return;
+            }
+
+            const sessionId = user.uid;
+            localStorage.setItem('CURRENT_SESSION_ID', sessionId);
+            localStorage.setItem('LOGGED_IN_UID', user.uid);
+
+            const deviceId = await DeviceManager.getUniqueDeviceId();
+            await setDoc(doc(db, 'active_users', user.uid, 'sessions', sessionId), {
+                isLoggedIn: true,
+                loginAt: serverTimestamp(),
+                deviceFingerprint: deviceId,
+                ipAddress: NetworkManager.getIP(),
+                deviceInfo: {
+                    userAgent: navigator.userAgent,
+                    platform: navigator.platform || 'Unknown',
+                    screenSize: `${screen.width}x${screen.height}`,
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    brand: navigator.userAgentData?.brands?.[0]?.brand || 'Unknown',
+                }
+            }, { merge: true });
+
             if (snap.exists()) {
                 const data = snap.data();
                 const info = data.registrationInfo || data;
                 _cacheProfile(user.uid, info, data);
                 await _syncDeviceBinding(user.uid);
             }
+
+            AuthManager.startSessionWatcher(user.uid, sessionId);
 
             UI.showToast(_t('msg_login_success', '🔓 تم تسجيل الدخول.. أهلاً بك'), 3000, '#10b981');
             UI.closeAuthDrawer();
@@ -889,7 +943,58 @@ const AuthManager = (() => {
         return map[code] || `${_t('error_unknown', '❌ خطأ غير معروف')}: ${code}`;
     }
 
-    return { onAuthChange, performStudentSignup, performStudentLogin };
+    function startSessionWatcher(uid, sessionId) {
+        window.sessionWatcherUnsubscribe?.();
+
+        window.sessionWatcherUnsubscribe = onSnapshot(
+            doc(db, 'active_users', uid, 'sessions', sessionId),
+            async (snap) => {
+                if (!snap.exists()) return;
+                const data = snap.data();
+
+                if (data.isLoggedIn === false || data.forceLogout === true) {
+                    window.sessionWatcherUnsubscribe?.();
+                    window.sessionWatcherUnsubscribe = null;
+
+                    await signOut(auth);
+                    sessionStorage.clear();
+                    localStorage.removeItem('CURRENT_SESSION_ID');
+                    localStorage.removeItem('LOGGED_IN_UID');
+                    localStorage.removeItem('TARGET_DOCTOR_UID');
+                    DeviceManager.clearVerifiedCache();
+
+                    UI.showToast('⛔تم تسجيل خروجك ', 5000, '#ef4444');
+                    navigator.vibrate?.([300, 100, 300]);
+                    setTimeout(() => location.reload(), 2000);
+                }
+            },
+            err => console.warn('Session watcher error:', err)
+        );
+    }
+
+    async function performStudentLogout() {
+        const uid = auth.currentUser?.uid;
+        const sessionId = localStorage.getItem('CURRENT_SESSION_ID');
+
+        if (uid && sessionId) {
+            try {
+                await setDoc(
+                    doc(db, 'active_users', uid, 'sessions', sessionId),
+                    { isLoggedIn: false, logoutAt: serverTimestamp() },
+                    { merge: true }
+                );
+            } catch (e) { console.warn('Logout write failed:', e); }
+        }
+
+        window.sessionWatcherUnsubscribe?.();
+        window.sessionWatcherUnsubscribe = null;
+        localStorage.removeItem('CURRENT_SESSION_ID');
+        localStorage.removeItem('LOGGED_IN_UID');
+        localStorage.removeItem('TARGET_DOCTOR_UID');
+        await signOut(auth);
+    }
+
+    return { onAuthChange, performStudentSignup, performStudentLogin, startSessionWatcher, performStudentLogout };
 })();
 
 
@@ -1905,6 +2010,8 @@ Object.assign(window, {
 
     performStudentSignup: AuthManager.performStudentSignup,
     performStudentLogin: AuthManager.performStudentLogin,
+    performStudentLogout: AuthManager.performStudentLogout,
+
 
     monitorMyParticipation: SessionManager.monitorMyParticipation,
     searchForSession: SessionManager.searchForSession,
@@ -2117,6 +2224,12 @@ window.onload = () => {
     if (savedUID) {
         sessionStorage.setItem('TARGET_DOCTOR_UID', savedUID);
         window.resetMainButtonUI();
+    }
+
+    const savedSessionId = localStorage.getItem('CURRENT_SESSION_ID');
+    const savedLoggedUID = localStorage.getItem('LOGGED_IN_UID');
+    if (savedSessionId && savedLoggedUID) {
+        AuthManager.startSessionWatcher(savedLoggedUID, savedSessionId);
     }
 
     NetworkManager.initGlobalGuard();
