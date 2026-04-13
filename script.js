@@ -618,6 +618,7 @@ const DataEntryGuard = (() => {
     let _active = false;
     let _blocked = false;
     let _pulseInterval = null;
+    let _touchStartedAtTop = false;
 
     const GUARDED_SCREENS = new Set(['screenDataEntry']);
 
@@ -631,16 +632,17 @@ const DataEntryGuard = (() => {
         _blocked = true;
 
         if (navigator.vibrate) {
-            navigator.vibrate([100, 50, 100, 50, 300]);
+            navigator.vibrate([200, 100, 200, 100, 400]);
         }
 
         window.isJoiningProcessActive = false;
-
+        
         const joinBtn = Utils.$('btnJoinFinal');
         if (joinBtn) {
-            joinBtn.innerHTML = 'Blocked <i class="fa-solid fa-lock"></i>';
+            joinBtn.innerHTML = 'Security Block <i class="fa-solid fa-shield-halved"></i>';
             joinBtn.style.pointerEvents = 'none';
             joinBtn.style.opacity = '0.6';
+            joinBtn.style.background = '#450a0a';
         }
 
         sessionStorage.removeItem('TEMP_DR_UID');
@@ -648,20 +650,34 @@ const DataEntryGuard = (() => {
         if (window.localTicker) clearInterval(window.localTicker);
         IdleTimer.stop();
 
-        UI.showToast(`⛔ تم إلغاء المحاولة: ${reason || 'ممنوع مغادرة الشاشة'}`, 5000, '#b91c1c');
+        UI.showToast(`⛔ تم إلغاء الجلسة: ${reason || 'مخالفة أمنية'}`, 5000, '#b91c1c');
 
         setTimeout(() => {
-            stop();
+            stop(); 
             UI.switchScreen('screenWelcome');
             window.resetSearchSession?.();
-
+            
             if (joinBtn) {
                 joinBtn.style.pointerEvents = 'auto';
                 joinBtn.style.opacity = '1';
+                joinBtn.style.background = '';
                 joinBtn.innerHTML = 'Join <i class="fa-solid fa-right-to-bracket"></i>';
             }
-        }, 800);
+        }, 1000);
     }
+
+    
+    const _handleTouchStart = (e) => {
+        if (!_active) return;
+        const touchY = e.touches[0].clientY;
+        _touchStartedAtTop = (touchY <= 50);
+    };
+
+    const _handlePointerCancel = () => {
+        if (_active && _isOnGuardedScreen() && _touchStartedAtTop) {
+            _punish('تم رصد سحب شريط الإشعارات');
+        }
+    };
 
     function _verifyState() {
         if (!_active || !_isOnGuardedScreen()) return;
@@ -672,9 +688,9 @@ const DataEntryGuard = (() => {
         if (!hasFocus || !isVisible) {
             setTimeout(() => {
                 if (_active && (!document.hasFocus() || document.visibilityState !== 'visible')) {
-                    _punish('لا يُسمح بسحب الشريط أو الخروج');
+                    _punish('ممنوع مغادرة المتصفح أو سحب الشريط');
                 }
-            }, 250);
+            }, 200);
         }
     }
 
@@ -682,35 +698,44 @@ const DataEntryGuard = (() => {
         if (_active) return;
         _active = true;
         _blocked = false;
+        _touchStartedAtTop = false;
 
+        window.addEventListener('touchstart', _handleTouchStart, { passive: true });
+        window.addEventListener('pointercancel', _handlePointerCancel);
+        
         window.addEventListener('blur', _verifyState);
         document.addEventListener('visibilitychange', _verifyState);
         window.addEventListener('pagehide', () => _punish('تم إغلاق الصفحة'));
 
-        _pulseInterval = setInterval(_verifyState, 500);
+        _pulseInterval = setInterval(_verifyState, 400);
 
-        console.log("🛡️ DataEntryGuard: Secure Mode Enabled");
+        console.log("🛡️ DataEntryGuard Ultra PRO: Active");
     }
 
     function stop() {
+        if (!_active) return;
         _active = false;
         _blocked = false;
         window.processIsActive = false;
 
+        window.removeEventListener('touchstart', _handleTouchStart);
+        window.removeEventListener('pointercancel', _handlePointerCancel);
         window.removeEventListener('blur', _verifyState);
         document.removeEventListener('visibilitychange', _verifyState);
+        
         if (_pulseInterval) {
             clearInterval(_pulseInterval);
             _pulseInterval = null;
         }
 
-        console.log("🛡️ DataEntryGuard: Secure Mode Disabled");
+        console.log("🛡️ DataEntryGuard Ultra PRO: Disabled");
     }
 
     function assertVisibleOrBlock() {
         if (!_active) return true;
-        if (!document.hasFocus() || document.visibilityState !== 'visible') {
-            _punish('المتصفح ليس في وضع التركيز');
+        const isOk = document.hasFocus() && document.visibilityState === 'visible';
+        if (!isOk) {
+            _punish('فشل الفحص الأمني النهائي');
             return false;
         }
         return !_blocked;
