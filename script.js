@@ -671,6 +671,26 @@ const AuthManager = (() => {
 
             const name = data.registrationInfo?.fullName || data.fullName || 'Student';
 
+            const alreadyTracked = localStorage.getItem('CURRENT_SESSION_ID');
+            const sessionId = user.uid;
+            const sessionRef = doc(db, 'active_users', user.uid, 'sessions', sessionId);
+            if (!alreadyTracked) {
+                const existingSession = await getDoc(sessionRef);
+                if (!existingSession.exists() || existingSession.data()?.isLoggedIn !== true) {
+                    const deviceId = await DeviceManager.getUniqueDeviceId();
+                    await setDoc(sessionRef, {
+                        isLoggedIn: true,
+                        loginAt: serverTimestamp(),
+                        deviceFingerprint: deviceId,
+                        studentName: data.registrationInfo?.fullName || data.fullName || '',
+                        studentID: data.registrationInfo?.studentID || data.studentID || '',
+                        ipAddress: NetworkManager.getIP(),
+                    }, { merge: true });
+                    localStorage.setItem('CURRENT_SESSION_ID', sessionId);
+                    localStorage.setItem('LOGGED_IN_UID', user.uid);
+                }
+            }
+
             window.listenToSessionState?.();
 
             const savedUID = localStorage.getItem('TARGET_DOCTOR_UID');
@@ -875,6 +895,8 @@ const AuthManager = (() => {
 
             const deviceId = await DeviceManager.getUniqueDeviceId();
             await setDoc(doc(db, 'active_users', user.uid, 'sessions', sessionId), {
+                studentName: snap.data()?.registrationInfo?.fullName || snap.data()?.fullName || '',
+                studentID: snap.data()?.registrationInfo?.studentID || snap.data()?.studentID || '',
                 isLoggedIn: true,
                 loginAt: serverTimestamp(),
                 deviceFingerprint: deviceId,
