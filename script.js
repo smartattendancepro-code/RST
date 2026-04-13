@@ -1,1922 +1,2174 @@
+
 import { MASTER_HALLS, MASTER_SUBJECTS } from './config.js';
 import {
-    getFirestore,
-    collection,
-    doc,
-    addDoc,
-    setDoc,
-    getDoc,
-    getDocs,
-    updateDoc,
-    onSnapshot,
-    query,
-    where,
-    limit,
-    writeBatch,
-    serverTimestamp,
-    getCountFromServer
+    getFirestore, collection, doc, addDoc, setDoc, getDoc,
+    getDocs, updateDoc, onSnapshot, query, where, limit,
+    writeBatch, serverTimestamp, getCountFromServer
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
 import {
     getAuth, onAuthStateChanged,
     signInWithEmailAndPassword, signOut, sendEmailVerification
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { i18n, t, changeLanguage, toggleSystemLanguage } from './i18n.js';
+import { i18n, t, changeLanguage } from './i18n.js';
 import { AuditManager } from './AuditManager.js';
 
-window.HARDWARE_ID = null;
-const DEVICE_CACHE_KEY = "nursing_secure_device_v5";
 
-
-document.addEventListener('DOMContentLoaded', async () => {
-    try {
-        await window.getUniqueDeviceId();
-    } catch (err) {
-        console.warn("Fingerprint Pre-load warning:", err);
-    }
+const CFG = Object.freeze({
+    device: {
+        cacheKey: 'nursing_secure_device_v5',
+        verifiedCacheKey: 'nursing_user_verified_v2',
+        verifiedTTL: 7 * 86_400_000,          
+    },
+    gps: {
+        targetLat: 30.385873919506743,
+        targetLng: 30.488794680472196,
+        allowedKm: 2.5,
+    },
+    network: {
+        pingUrl: 'https://cp.cloudflare.com/generate_204',
+        pingIntervalMs: 60_000,
+        pingTimeoutMs: 3_000,
+    },
+    api: {
+        base: 'https://nursing-backend-rej8.vercel.app',
+    },
+    firebase: {
+        excludedUID: 'R78Lu7IZBpYK0WngcaSL6t1Our62',
+    },
+    ui: {
+        idleTimeoutSec: 60,
+        statsCacheTTL: 900_000,                
+    },
+    avatars: Object.freeze({
+        Male: ['fa-user-tie', 'fa-user-graduate', 'fa-user-doctor', 'fa-user-astronaut',
+            'fa-user-ninja', 'fa-user-secret', 'fa-user-crown', 'fa-person-biking',
+            'fa-person-skating', 'fa-person-snowboarding', 'fa-person-swimming',
+            'fa-robot', 'fa-ghost', 'fa-dragon', 'fa-gamepad', 'fa-headset',
+            'fa-guitar', 'fa-rocket', 'fa-bolt', 'fa-fire'],
+        Female: ['fa-user-nurse', 'fa-user-graduate', 'fa-user-doctor', 'fa-person-dress',
+            'fa-person-praying', 'fa-person-hiking', 'fa-person-skiing', 'fa-cat',
+            'fa-dove', 'fa-gem', 'fa-wand-magic-sparkles', 'fa-camera-retro',
+            'fa-palette', 'fa-mug-hot', 'fa-leaf', 'fa-heart', 'fa-star', 'fa-crown'],
+    }),
+    avatarColors: Object.freeze([
+        '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981',
+        '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef', '#f43f5e',
+    ]),
+    colleges: Object.freeze({
+        nameMap: {
+            N: 'Nursing', P: 'Physical Therapy', C: 'Pharmacy',
+            D: 'Dentistry', T: 'Computer Science', B: 'Business Admin', H: 'Health Sciences'
+        },
+        codeMap: { NURS: 'N', PT: 'P', PHARM: 'C', DENT: 'D', CS: 'T', BA: 'B', HS: 'H' },
+    }),
 });
 
-async function hashString(str) {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(str);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 32);
-}
 
-window.getUniqueDeviceId = async function () {
-    if (window.HARDWARE_ID) return window.HARDWARE_ID;
+const Utils = (() => {
 
-    let stored = localStorage.getItem(DEVICE_CACHE_KEY);
-    if (stored) { window.HARDWARE_ID = stored; return stored; }
-
-    const extras = [
-        navigator.hardwareConcurrency || 0,
-        navigator.deviceMemory || 0,
-        screen.colorDepth,
-        screen.width + "x" + screen.height,
-        screen.pixelDepth || 0,
-        navigator.platform || "",
-        navigator.maxTouchPoints || 0,
-        Intl.DateTimeFormat().resolvedOptions().timeZone,
-        navigator.languages ? navigator.languages.join(",") : "",
-    ].join("||");
-
-    let fpId = "FALLBACK_" + Date.now().toString(36);
-    try {
-        if (window.FingerprintJS) {
-            const fp = await FingerprintJS.load();
-            const result = await fp.get();
-            fpId = result.visitorId;
-        }
-    } catch (e) {
-        console.warn("FingerprintJS failed:", e);
+    async function hashString(str) {
+        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+        return Array.from(new Uint8Array(buf))
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('')
+            .slice(0, 32);
     }
 
-    const combined = fpId + "|" + extras;
-    const finalId = await hashString(combined);
-
-    window.HARDWARE_ID = finalId;
-    localStorage.setItem(DEVICE_CACHE_KEY, finalId);
-    return finalId;
-};
-
-window.isJoiningProcessActive = false;
-window.isProcessingClick = false;
-
-const db = window.db;
-const auth = window.auth;
-
-document.addEventListener('DOMContentLoaded', () => {
-    const saved = localStorage.getItem('sys_lang') || 'ar';
-    changeLanguage(saved);
-});
-
-onAuthStateChanged(auth, async (user) => {
-    const drawerEl = document.getElementById('studentAuthDrawer');
-    const profileWrap = document.getElementById('profileIconWrapper');
-    const profileIcon = document.getElementById('profileIconImg');
-    const statusDot = document.getElementById('userStatusDot');
-
-    if (user) {
-        await user.reload();
-
-        let isManuallyVerified = false;
-        try {
-            const stRef = doc(db, "user_registrations", user.uid);
-            const stSnap = await getDoc(stRef);
-            if (stSnap.exists()) {
-                const d = stSnap.data();
-                if (d.status === 'verified' || d.manual_verification === true) isManuallyVerified = true;
-            }
-        } catch (err) {
-            console.log("Manual check warning:", err);
-        }
-
-        if (user.emailVerified || isManuallyVerified) {
-            if (drawerEl) {
-                drawerEl.classList.remove('active');
-                setTimeout(() => drawerEl.style.display = 'none', 300);
-            }
-
-            try {
-                const stuDoc = await getDoc(doc(db, "user_registrations", user.uid));
-
-                if (stuDoc.exists()) {
-                    const data = stuDoc.data();
-                    const name = data.registrationInfo?.fullName || data.fullName || "Student";
-
-                    if (typeof listenToSessionState === 'function') listenToSessionState();
-
-                    const savedUID = localStorage.getItem('TARGET_DOCTOR_UID');
-                    if (savedUID) sessionStorage.setItem('TARGET_DOCTOR_UID', savedUID);
-
-                    if (typeof monitorMyParticipation === 'function') monitorMyParticipation();
-                    if (typeof window.showSmartWelcome === 'function') window.showSmartWelcome(name);
-
-                    if (typeof window.checkForPendingSurveys === 'function') {
-                        setTimeout(window.checkForPendingSurveys, 2500);
-                    }
-
-                    const avatarClass = data.avatarClass || data.registrationInfo?.avatarClass || 'fa-user-graduate';
-                    if (profileIcon) profileIcon.className = 'fa-solid ' + avatarClass;
-                    if (profileWrap) profileWrap.style.background = 'linear-gradient(135deg, #10b981, #059669)';
-                    if (statusDot) {
-                        statusDot.style.background = '#22c55e';
-                        statusDot.style.boxShadow = '0 0 10px #22c55e, 0 0 20px rgba(34,197,94,0.5)';
-                    }
-
-                    if (data.preferredLanguage) {
-                        if (typeof changeLanguage === 'function') changeLanguage(data.preferredLanguage);
-                        document.querySelectorAll('.active-lang-text-pro').forEach(s => {
-                            s.innerText = (data.preferredLanguage === 'ar') ? 'EN' : 'عربي';
-                        });
-                    }
-                }
-            } catch (e) {
-                console.error("Auth state error:", e);
-            }
-        } else {
-            sessionStorage.clear();
-            if (profileIcon) profileIcon.className = 'fa-solid fa-envelope-circle-check';
-            if (profileWrap) profileWrap.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
-            if (statusDot) statusDot.style.background = '#f59e0b';
-        }
-    } else {
-        sessionStorage.clear();
-        if (window.studentStatusListener) { window.studentStatusListener(); window.studentStatusListener = null; }
-        if (profileIcon) profileIcon.className = 'fa-solid fa-user-astronaut';
-        if (profileWrap) profileWrap.style.background = 'rgba(15, 23, 42, 0.8)';
-        if (statusDot) { statusDot.style.background = '#94a3b8'; statusDot.style.boxShadow = 'none'; }
+    function debounce(fn, ms = 300) {
+        let timer;
+        return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
     }
 
-    if (typeof updateUIForMode === 'function') updateUIForMode();
-});
-
-window.studentStatusListener = null;
-
-window.monitorMyParticipation = async function () {
-    const user = auth.currentUser;
-    const mainBtn = document.getElementById('mainActionBtn');
-    if (!user) return;
-
-    const setButtonToEnterMode = () => {
-        if (!mainBtn) return;
-        const lang = localStorage.getItem('sys_lang') || 'ar';
-        const enterText = (lang === 'ar') ? "دخول المحاضرة" : "Enter Lecture";
-        mainBtn.innerHTML = `${enterText} <i class="fa-solid fa-door-open fa-beat-fade"></i>`;
-        mainBtn.style.background = "linear-gradient(135deg, #10b981, #059669)";
-        mainBtn.style.boxShadow = "0 8px 25px -5px rgba(16, 185, 129, 0.5)";
-        mainBtn.style.border = "1px solid #10b981";
-        mainBtn.onclick = function () {
-            if (typeof window.playClick === 'function') window.playClick();
-            if (typeof window.switchScreen === 'function') window.switchScreen('screenLiveSession');
-            if (typeof window.startLiveSnapshotListener === 'function') window.startLiveSnapshotListener();
-        };
-    };
-
-    const resetButtonToDefault = () => {
-        if (!mainBtn) return;
-        const lang = localStorage.getItem('sys_lang') || 'ar';
-        const regText = (lang === 'ar') ? "تسجيل الحضور" : "Register Attendance";
-        mainBtn.innerHTML = `${regText} <i class="fa-solid fa-fingerprint"></i>`;
-        mainBtn.style.background = "";
-        mainBtn.style.boxShadow = "";
-        mainBtn.style.border = "";
-        mainBtn.onclick = () => {
-            if (typeof window.forceOpenPinScreen === 'function') window.forceOpenPinScreen();
-            else if (typeof window.startProcess === 'function') window.startProcess(false);
-        };
-    };
-
-    let targetDoctorUID = localStorage.getItem('TARGET_DOCTOR_UID');
-
-    if (!targetDoctorUID) {
-        try {
-            if (mainBtn) {
-                mainBtn.innerHTML = `<i class="fa-solid fa-arrows-rotate fa-spin"></i> جاري المزامنة...`;
-                mainBtn.style.opacity = "0.7";
-                mainBtn.style.pointerEvents = "none";
-            }
-
-            const activeSessionsQ = query(collection(db, "active_sessions"), where("isActive", "==", true), limit(20));
-            const sessionsSnap = await getDocs(activeSessionsQ);
-
-            for (const sessionDoc of sessionsSnap.docs) {
-                const studentRef = doc(db, "active_sessions", sessionDoc.id, "participants", user.uid);
-                const studentSnap = await getDoc(studentRef);
-                if (studentSnap.exists() && studentSnap.data().status === 'active') {
-                    targetDoctorUID = sessionDoc.id;
-                    break;
-                }
-            }
-
-            if (targetDoctorUID) {
-                localStorage.setItem('TARGET_DOCTOR_UID', targetDoctorUID);
-            } else {
-                resetButtonToDefault();
-            }
-        } catch (e) {
-            console.error("Server Recovery Error:", e);
-            resetButtonToDefault();
-        }
+    function haversineKm(lat1, lon1, lat2, lon2) {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) ** 2
+            + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180)
+            * Math.sin(dLon / 2) ** 2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
-    if (!targetDoctorUID) { resetButtonToDefault(); return; }
-
-    const studentRef = doc(db, "active_sessions", targetDoctorUID, "participants", user.uid);
-    if (window.studentStatusListener) window.studentStatusListener();
-
-    const sessionRef = doc(db, "active_sessions", targetDoctorUID);
-    if (window.sessionStatusListener) window.sessionStatusListener();
-
-    window.sessionStatusListener = onSnapshot(sessionRef, (sessionSnap) => {
-        if (!sessionSnap.exists() || !sessionSnap.data().isActive) {
-            localStorage.removeItem('TARGET_DOCTOR_UID');
-            sessionStorage.removeItem('TARGET_DOCTOR_UID');
-            resetButtonToDefault();
-            if (window.studentStatusListener) { window.studentStatusListener(); window.studentStatusListener = null; }
-        }
-    });
-
-    window.studentStatusListener = onSnapshot(studentRef, (docSnap) => {
-        if (!docSnap.exists()) {
-            sessionStorage.removeItem('TARGET_DOCTOR_UID');
-            resetButtonToDefault();
-            const currentScreen = document.querySelector('.section.active')?.id;
-            if (currentScreen === 'screenLiveSession') {
-                if (typeof window.showToast === 'function') window.showToast("⚠️ تم إغلاق الجلسة أو إخراجك منها", 4000, "#f59e0b");
-                if (typeof window.goHome === 'function') window.goHome();
-            }
-            return;
-        }
-
-        const data = docSnap.data();
-
-        if (data.status === 'expelled') {
-            const _t = (typeof t === 'function') ? t : (key, def) => def;
-            if (window.studentStatusListener) { window.studentStatusListener(); window.studentStatusListener = null; }
-            sessionStorage.removeItem('TARGET_DOCTOR_UID');
-            localStorage.removeItem('TARGET_DOCTOR_UID');
-            resetButtonToDefault();
-
-            const liveScreen = document.getElementById('screenLiveSession');
-            if (liveScreen) { liveScreen.style.setProperty('display', 'none', 'important'); liveScreen.classList.remove('active'); }
-            if (typeof window.goHome === 'function') window.goHome();
-
-            const exModal = document.getElementById('expulsionModal');
-            const exTitle = document.getElementById('expelTitle');
-            const exBody = document.getElementById('expelBody');
-            if (exTitle) exTitle.innerText = _t('modal_expel_title', "⛔ You have been expelled!");
-            if (exBody) exBody.innerHTML = _t('modal_expel_body', "The instructor has removed you from this session.<br>You cannot rejoin.");
-            if (exModal) {
-                exModal.style.setProperty('display', 'flex', 'important');
-                const leaveBtn = exModal.querySelector('button') || exModal.querySelector('.btn-danger');
-                if (leaveBtn) {
-                    leaveBtn.innerHTML = _t('btn_leave_hall', "Leave Hall ➜");
-                    leaveBtn.onclick = function () { exModal.style.display = 'none'; window.location.reload(); };
-                }
-                if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
-            } else {
-                alert(_t('modal_expel_title', "⛔ You have been expelled!"));
-                window.location.reload();
-            }
-            return;
-        }
-
-        if (data.status === 'on_break') {
-            sessionStorage.removeItem('TARGET_DOCTOR_UID');
-            resetButtonToDefault();
-            if (window.unsubscribeLiveSnapshot) { window.unsubscribeLiveSnapshot(); window.unsubscribeLiveSnapshot = null; }
-            const liveScreen = document.getElementById('screenLiveSession');
-            const welcomeScreen = document.getElementById('screenWelcome');
-            if (liveScreen) { liveScreen.style.cssText = ""; liveScreen.style.setProperty('display', 'none', 'important'); }
-            window.switchScreen('screenWelcome');
-            if (typeof window.showToast === 'function') window.showToast("⏸️ استراحة: يرجى تسجيل الدخول مجدداً عند الاستئناف", 4000, "#f59e0b");
-            return;
-        }
-
-        if (data.status === 'active') {
-            setButtonToEnterMode();
-            const breakModal = document.getElementById('breakModal');
-            if (breakModal) breakModal.style.display = 'none';
-            sessionStorage.setItem('TARGET_DOCTOR_UID', targetDoctorUID);
-        }
-    }, (error) => {
-        console.log("Listener Error:", error);
-        sessionStorage.removeItem('TARGET_DOCTOR_UID');
-        resetButtonToDefault();
-    });
-};
-
-window.performStudentSignup = async function () {
-    const lang = localStorage.getItem('sys_lang') || 'ar';
-    const _t = (typeof t === 'function') ? t : (key, def) => def;
-
-    const email = document.getElementById('regEmail').value.trim();
-    const pass = document.getElementById('regPass').value;
-    const fullName = document.getElementById('regFullName').value.trim();
-    const studentID = document.getElementById('regStudentID').value.trim();
-    const level = document.getElementById('regLevel').value;
-    const gender = document.getElementById('regGender').value;
-    const group = document.getElementById('regGroup') ? document.getElementById('regGroup').value : "عام";
-
-    if (!email || !pass || !fullName || !studentID) {
-        if (typeof playBeep === 'function') playBeep();
-        showToast(_t('msg_missing_data', "⚠️ بيانات ناقصة! يرجى ملء كل الحقول"), 3000, "#f59e0b");
-        return;
-    }
-    if (pass.length < 6) {
-        if (typeof playBeep === 'function') playBeep();
-        showToast(_t('msg_weak_pass', "⚠️ كلمة المرور ضعيفة (6 أحرف على الأقل)"), 3000, "#f59e0b");
-        return;
+    function smartNormalize(text = '') {
+        return text.toString().toLowerCase()
+            .replace(/\b(dr|prof|eng|mr|mrs|ms|د|دكتور|مهندس)\b\.?/g, ' ')
+            .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, ' ')
+            .replace(/\s+/g, ' ').trim();
     }
 
-    const btn = document.getElementById('btnDoSignup');
-    const originalText = btn ? btn.innerText : "REGISTER";
-    if (btn) { btn.disabled = true; btn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up fa-fade"></i> ${_t('status_connecting', 'جاري الاتصال بالسيرفر...')}`; }
-
-    try {
-        const deviceID = await window.getUniqueDeviceId();
-        const response = await fetch(`https://nursing-backend-rej8.vercel.app/api/registerStudent`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password: pass, fullName, studentID, level, gender, group, deviceFingerprint: deviceID })
-        });
-        const result = await response.json();
-
-        if (response.ok && result.success) {
-            if (btn) btn.innerHTML = `<i class="fa-regular fa-envelope fa-bounce"></i> ${_t('status_sending_email', 'إرسال رابط التفعيل...')}`;
-            try {
-                const userCredential = await signInWithEmailAndPassword(window.auth, email, pass);
-                await sendEmailVerification(userCredential.user);
-                await signOut(window.auth);
-            } catch (emailError) {
-                console.error("Email Warning:", emailError);
-                showToast(_t('msg_email_fail', "⚠️ تم الحساب، لكن تعذر إرسال الإيميل تلقائياً"), 4000, "#f59e0b");
-            }
-
-            if (typeof playSuccess === 'function') playSuccess();
-            showToast(_t('msg_account_created', "✅ تم إنشاء الحساب بنجاح!"), 4000, "#10b981");
-            if (typeof closeAuthDrawer === 'function') closeAuthDrawer();
-            if (typeof toggleAuthMode === 'function') toggleAuthMode('login');
-
-            const loginEmailInput = document.getElementById('studentLoginEmail');
-            if (loginEmailInput) loginEmailInput.value = email;
-            document.getElementById('regPass').value = "";
-            document.getElementById('regEmail').value = "";
-
-            const firstName = (typeof arabToEng === 'function') ? arabToEng(fullName.split(' ')[0]) : fullName.split(' ')[0];
-            const modalTitle = document.getElementById('successModalTitle');
-            const modalBody = document.getElementById('successModalBody');
-            const successModal = document.getElementById('signupSuccessModal');
-
-            if (modalTitle) modalTitle.innerText = `${_t('modal_welcome_title', '🎉 Welcome')} ${firstName}!`;
-            if (modalBody) {
-                modalBody.innerHTML = `
-                    <div style="background:#f8fafc;padding:15px;border-radius:12px;margin-bottom:20px;border:1px dashed #cbd5e1;text-align:center;">
-                        <div style="font-size:12px;font-weight:bold;color:#64748b;margin-bottom:5px;">${_t('modal_id_reserved', 'تم حجز الكود الجامعي:')}</div>
-                        <div style="font-size:24px;font-weight:900;color:#0ea5e9;font-family:'Outfit',sans-serif;letter-spacing:1px;">${studentID}</div>
-                    </div>
-                    <p style="font-size:14px;color:#334155;margin-bottom:8px;">📨 ${_t('modal_email_sent', 'تم إرسال رابط تفعيل إلى بريدك الإلكتروني.')}</p>
-                    <div style="background:#fee2e2;color:#b91c1c;padding:10px;border-radius:8px;font-weight:bold;font-size:12px;display:flex;align-items:center;gap:8px;">
-                        <i class="fa-solid fa-triangle-exclamation"></i>
-                        <span>${_t('modal_verify_warning', 'يرجى تفعيل الحساب من الإيميل قبل تسجيل الدخول.')}</span>
-                    </div>`;
-            }
-            if (successModal) successModal.style.display = 'flex';
-        } else {
-            throw new Error(result.error || _t('error_security_fail', "فشل التسجيل لأسباب أمنية"));
-        }
-    } catch (error) {
-        console.error("Signup Error:", error);
-        let errorMsg = error.message;
-        if (errorMsg.includes("email-already-in-use")) errorMsg = _t('error_email_exists', "هذا البريد مسجل بالفعل!");
-        showToast(`❌ ${errorMsg}`, 5000, "#ef4444");
-    } finally {
-        if (btn) { btn.disabled = false; btn.innerText = originalText; }
-    }
-};
-
-window.performStudentLogin = async () => {
-    const _t = (typeof t === 'function') ? t : (key, def) => def;
-    const email = document.getElementById('studentLoginEmail').value.trim();
-    const pass = document.getElementById('studentLoginPass').value;
-    const btn = document.querySelector('#loginSection .btn-modern-action') || document.querySelector('#loginSection .btn-main');
-
-    let originalText = "Sign In";
-    if (btn) { originalText = btn.innerHTML; btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${_t('status_verifying', 'جاري التحقق...')}`; btn.disabled = true; }
-
-    if (!email || !pass) {
-        showToast(_t('msg_enter_creds', "⚠️ أدخل الإيميل والباسورد"), 3000, "#f59e0b");
-        if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
-        return;
+    function safeJsonParse(str, fallback = null) {
+        try { return JSON.parse(str); } catch { return fallback; }
     }
 
-    try {
-        const userCredential = await signInWithEmailAndPassword(auth, email, pass);
-        const user = userCredential.user;
+    const $ = id => document.getElementById(id);
 
-        const userRef = doc(db, "user_registrations", user.uid);
-        const userSnap = await getDoc(userRef);
+    const _t = (key, def) => (typeof t === 'function' ? t(key, def) : def);
 
-        let isManuallyVerified = false;
-        if (userSnap.exists() && userSnap.data().status === 'verified') isManuallyVerified = true;
+    const lang = () => localStorage.getItem('sys_lang') || 'ar';
 
-        if (!user.emailVerified && !isManuallyVerified) {
-            await signOut(auth);
-            const vModal = document.getElementById('verificationModal');
-            if (vModal) { vModal.style.display = 'flex'; if (navigator.vibrate) navigator.vibrate([200, 100, 200]); }
-            else showToast(_t('msg_email_not_verified', "⛔ حساب غير مفعل! راجع الإيميل."), 5000, "#ef4444");
-            if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
-            return;
-        }
+    return { hashString, debounce, haversineKm, smartNormalize, safeJsonParse, $, _t, lang };
+})();
 
-        if (userSnap.exists()) {
-            const userData = userSnap.data();
-            const info = userData.registrationInfo || userData;
-            const profileCache = {
-                fullName: info.fullName, email: info.email, studentID: info.studentID,
-                level: info.level, gender: info.gender, group: info.group || "",
-                avatarClass: userData.avatarClass || info.avatarClass || "fa-user-graduate",
-                status_message: userData.status_message || "", uid: user.uid, type: 'student'
-            };
-            localStorage.setItem('cached_profile_data', JSON.stringify(profileCache));
 
-            let currentDeviceId = "UNKNOWN_DEVICE";
-            try { currentDeviceId = await getUniqueDeviceId(); } catch (e) { }
-            try {
-                await updateDoc(userRef, {
-                    bound_device_id: currentDeviceId,
-                    device_bind_date: serverTimestamp(),
-                    last_device_sync: serverTimestamp()
-                });
-            } catch (err) { console.warn("Device sync warning:", err); }
-        }
-
-        showToast(_t('msg_login_success', "🔓 تم تسجيل الدخول.. أهلاً بك"), 3000, "#10b981");
-        if (typeof closeAuthDrawer === 'function') closeAuthDrawer();
-
-    } catch (error) {
-        console.error("Login Error:", error.code);
-        let msg = "";
-        switch (error.code) {
-            case 'auth/user-not-found': msg = _t('error_user_not_found', "❌ هذا البريد الإلكتروني غير مسجل لدينا!"); break;
-            case 'auth/wrong-password': msg = _t('error_wrong_pass', "❌ كلمة المرور غير صحيحة!"); break;
-            case 'auth/invalid-credential': msg = _t('error_invalid_cred', "❌ البريد الإلكتروني أو كلمة المرور غير صحيحة."); break;
-            case 'auth/invalid-email': msg = _t('error_invalid_email', "⚠️ صيغة البريد الإلكتروني غير سليمة!"); break;
-            case 'auth/user-disabled': msg = _t('error_user_disabled', "⛔ تم تعطيل هذا الحساب من قبل الإدارة."); break;
-            case 'auth/too-many-requests': msg = _t('error_too_many', "⏳ محاولات كثيرة! تم إيقاف الدخول مؤقتاً."); break;
-            case 'auth/network-request-failed': msg = _t('error_network', "📡 فشل الاتصال! تأكد من الإنترنت."); break;
-            default: msg = _t('error_unknown', "❌ خطأ غير معروف") + ": " + error.code;
-        }
-        showToast(msg, 5000, "#ef4444");
-        if (typeof playBeep === 'function') playBeep();
-    } finally {
-        if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
-    }
-};
-
-window.joinSessionAction = async function () {
-    const passInput = document.getElementById('sessionPass').value.trim();
-    const btn = document.getElementById('btnJoinFinal');
-    const targetDrUID = sessionStorage.getItem('TEMP_DR_UID');
-    const originalText = btn.innerHTML;
-    const user = auth.currentUser;
-
-    if (!user) { showToast("❌ يجب تسجيل الدخول أولاً", 3000, "#ef4444"); return; }
-    if (!targetDrUID) {
-        showToast("⚠️ حدث خطأ في بيانات الجلسة، يرجى البحث مجدداً", 4000, "#f59e0b");
-        if (typeof resetSearchSession === 'function') resetSearchSession();
-        return;
-    }
-
-    window.isJoiningProcessActive = true;
-    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Verifying & Joining...';
-    btn.style.pointerEvents = 'none';
-
-    try {
-        const sessionRef = doc(db, "active_sessions", targetDrUID);
-        const sensRef = doc(db, "user_registrations", user.uid, "sensitive_info", "main");
-
-        const [sessionSnap, gpsData, deviceFingerprint, idToken, sensSnap] = await Promise.all([
-            getDoc(sessionRef),
-            window.getGPSForJoin(),
-            window.getUniqueDeviceId(),
-            user.getIdToken(),
-            getDoc(sensRef)
-        ]);
-
-        if (!sessionSnap.exists()) throw new Error("⛔ الجلسة غير موجودة");
-
-        const sessionData = sessionSnap.data();
-        if (!sessionData.isActive || !sessionData.isDoorOpen) throw new Error("🔒 عذراً، الجلسة مغلقة حالياً.");
-        if (sessionData.sessionPassword && sessionData.sessionPassword !== "" && passInput !== sessionData.sessionPassword)
-            throw new Error("❌ كلمة المرور غير صحيحة");
-
-        let isDeviceMatch = true;
-        try {
-            if (sensSnap.exists()) {
-                const sensData = sensSnap.data();
-                let allowed = sensData.allowed_devices || (sensData.bound_device_id ? [sensData.bound_device_id] : []);
-                if (!allowed.includes(deviceFingerprint)) {
-                    if (allowed.length < 2) {
-                        allowed.push(deviceFingerprint);
-                        await setDoc(sensRef, { allowed_devices: allowed, second_device_added_at: serverTimestamp() }, { merge: true });
-                        isDeviceMatch = true;
-                    } else { isDeviceMatch = false; }
-                } else { isDeviceMatch = true; }
-            }
-        } catch (e) { console.error("Security Sync Error:", e); isDeviceMatch = true; }
-
-        await AuditManager.sendSecretLog(db, user, sessionData, {
-            deviceFingerprint,
-            isDeviceMatch,
-            userIP: typeof userIP !== 'undefined' ? userIP : "Hidden",
-            gpsData
-        });
-
-        const response = await fetch('https://nursing-backend-rej8.vercel.app/joinSessionSecure', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
-            body: JSON.stringify({
-                studentUID: user.uid, sessionDocID: targetDrUID,
-                gpsLat: gpsData.lat || 0, gpsLng: gpsData.lng || 0,
-                deviceFingerprint, isDeviceMatch, codeInput: sessionData.sessionCode
-            })
-        });
-        const result = await response.json();
-
-        if (response.ok && result.success) {
-            if (typeof window.stopCodeEntryIdleTimer === 'function') window.stopCodeEntryIdleTimer();
-            if (typeof playSuccess === 'function') playSuccess();
-            showToast(`✅ ${result.message}`, 3000, "#10b981");
-
-            localStorage.setItem('TARGET_DOCTOR_UID', targetDrUID);
-            sessionStorage.setItem('TARGET_DOCTOR_UID', targetDrUID);
-            sessionStorage.removeItem('TEMP_DR_UID');
-
-            if (typeof window.resetMainButtonUI === 'function') window.resetMainButtonUI();
-            setTimeout(() => { if (typeof window.monitorMyParticipation === 'function') window.monitorMyParticipation(); }, 100);
-
-            try {
-                let cached = localStorage.getItem('cached_profile_data');
-                if (cached) {
-                    let cacheObj = JSON.parse(cached);
-                    if (cacheObj.uid === user.uid) { cacheObj.attendanceCount = (cacheObj.attendanceCount || 0) + 1; localStorage.setItem('cached_profile_data', JSON.stringify(cacheObj)); }
-                }
-            } catch (err) { console.warn("Cache update skipped."); }
-
-            if (document.getElementById('liveDocName')) document.getElementById('liveDocName').innerText = sessionData.doctorName || "Professor";
-            if (document.getElementById('liveSubjectTag')) document.getElementById('liveSubjectTag').innerText = sessionData.allowedSubject || "Subject";
-            const liveAvatar = document.getElementById('liveDocAvatar');
-            if (liveAvatar && sessionData.doctorAvatar) liveAvatar.innerHTML = `<i class="fa-solid ${sessionData.doctorAvatar}"></i>`;
-
-            switchScreen('screenLiveSession');
-            if (typeof startLiveSnapshotListener === 'function') startLiveSnapshotListener();
-        } else {
-            throw new Error(result.error || "تم رفض الدخول من قبل النظام الأمني");
-        }
-    } catch (e) {
-        console.error("Join Session Error:", e);
-        window.isJoiningProcessActive = false;
-        let msg = e.message;
-        if (msg.includes("Failed to fetch")) msg = "فشل الاتصال بالسيرفر! تأكد من الإنترنت.";
-        showToast(msg.startsWith("❌") || msg.startsWith("⛔") || msg.startsWith("🔒") ? msg : "⚠️ " + msg, 4000, "#ef4444");
-        if (msg.includes("غير موجودة") || msg.includes("مغلقة")) setTimeout(() => location.reload(), 1500);
-    } finally {
-        const currentScreen = document.querySelector('.section.active')?.id;
-        if (currentScreen !== 'screenLiveSession') { btn.innerHTML = originalText; btn.style.pointerEvents = 'auto'; }
-    }
-};
-window.searchForSession = async function () {
-    const codeInput = document.getElementById('attendanceCode').value.trim();
-    const btn = document.getElementById('btnSearchSession');
-
-    if (!codeInput) { showToast("⚠️ Please enter session PIN", 3000, "#f59e0b"); return; }
-
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> SEARCHING...';
-    btn.style.pointerEvents = 'none';
-
-    try {
-        const q = query(collection(db, "active_sessions"), where("sessionCode", "==", codeInput), where("isActive", "==", true), where("isDoorOpen", "==", true));
-        const querySnapshot = await getDocs(q);
-
-        if (querySnapshot.empty) {
-            const checkQ = query(collection(db, "active_sessions"), where("sessionCode", "==", codeInput));
-            const checkSnap = await getDocs(checkQ);
-            showToast(checkSnap.empty ? "❌ Invalid Session PIN" : "🔒 Session is currently CLOSED", 4000, "#ef4444");
-            btn.innerHTML = originalText; btn.style.pointerEvents = 'auto';
-            return;
-        }
-
-        const sessionDoc = querySnapshot.docs[0];
-        const sessionData = sessionDoc.data();
-        const doctorUID = sessionDoc.id;
-        sessionStorage.setItem('TEMP_DR_UID', doctorUID);
-
-        if (typeof window.stopCodeEntryIdleTimer === 'function') window.stopCodeEntryIdleTimer();
-
-        const docNameEl = document.getElementById('foundDocName');
-        const subjectNameEl = document.getElementById('foundSubjectName');
-        const foundAvatar = document.getElementById('foundDocAvatar');
-
-        if (docNameEl) { docNameEl.innerText = "Dr. " + (sessionData.doctorName || "Unknown"); docNameEl.style.fontFamily = "'Outfit', sans-serif"; }
-        if (subjectNameEl) { subjectNameEl.innerText = sessionData.allowedSubject || "--"; subjectNameEl.style.fontFamily = "'Outfit', sans-serif"; }
-        if (foundAvatar && sessionData.doctorAvatar) foundAvatar.innerHTML = `<i class="fa-solid ${sessionData.doctorAvatar}"></i>`;
-
-        if (!sessionData.sessionPassword || sessionData.sessionPassword.trim() === "") {
-            if (typeof startAuthScreenTimer === 'function') startAuthScreenTimer(doctorUID);
-            const step1 = document.getElementById('step1_search');
-            const step2 = document.getElementById('step2_auth');
-            if (step1) step1.style.display = 'none';
-            if (step2) { step2.style.display = 'block'; step2.classList.add('active'); }
-            setTimeout(() => {
-                if (typeof window.joinSessionAction === 'function') window.joinSessionAction();
-            }, 300);
-            return;
-        }
-
-        if (typeof startAuthScreenTimer === 'function') startAuthScreenTimer(doctorUID);
-        const step1 = document.getElementById('step1_search');
-        const step2 = document.getElementById('step2_auth');
-        if (step1) step1.style.display = 'none';
-        if (step2) {
-            step2.style.display = 'block';
-            step2.classList.add('active');
-            setTimeout(() => { const p = document.getElementById('sessionPass'); if (p) p.focus(); }, 400);
-        }
-
-    } catch (e) {
-        console.error("Critical Search Error:", e);
-        showToast("⚠️ Connection Error", 3000, "#ef4444");
-    } finally {
-        btn.innerHTML = originalText; btn.style.pointerEvents = 'auto';
-    }
-};
-
-window.startAuthScreenTimer = function (doctorUID) {
-    const display = document.getElementById('authTimerDisplay');
-    const pill = document.querySelector('.auth-timer-pill');
-    const _t = window.t || ((key, def) => def);
-
-    if (window.authUnsubscribe) { window.authUnsubscribe(); window.authUnsubscribe = null; }
-    if (window.localTicker) { clearInterval(window.localTicker); window.localTicker = null; }
-    if (window.authScreenInterval) { clearInterval(window.authScreenInterval); window.authScreenInterval = null; }
-
-    const sessionRef = doc(db, "active_sessions", doctorUID);
-
-    window.authUnsubscribe = onSnapshot(sessionRef, (docSnap) => {
-        if (!docSnap.exists()) { handleSessionEnd(_t, '⛔ Session ended by instructor.'); return; }
-        const data = docSnap.data();
-        if (!data.isActive || !data.isDoorOpen) {
-            if (window.isJoiningProcessActive) return;
-            handleSessionEnd(_t, '🔒 Registration closed by lecturer.');
-            return;
-        }
-        if (data.duration === -1) {
-            if (window.localTicker) clearInterval(window.localTicker);
-            updateTimerUI(display, pill, "OPEN", "normal");
-            return;
-        }
-        const serverReadTime = docSnap.readTime ? docSnap.readTime.toMillis() : Date.now();
-        const timeOffset = serverReadTime - Date.now();
-        const startMs = data.startTime ? data.startTime.toMillis() : serverReadTime;
-        const deadline = startMs + (data.duration * 1000);
-        if (window.localTicker) clearInterval(window.localTicker);
-        runSyncedTimer(deadline, timeOffset, display, pill, _t);
-        window.localTicker = setInterval(() => runSyncedTimer(deadline, timeOffset, display, pill, _t), 1000);
-    }, (error) => { console.error("Timer Listener Error:", error); });
-
-    function runSyncedTimer(deadline, offset, display, pill, t) {
-        const remaining = Math.floor((deadline - (Date.now() + offset)) / 1000);
-        if (remaining <= 0) {
-            if (window.localTicker) clearInterval(window.localTicker);
-            if (window.isJoiningProcessActive) return;
-            updateTimerUI(display, pill, "0s", "urgent");
-            if (window.authUnsubscribe) { window.authUnsubscribe(); window.authUnsubscribe = null; }
-            showToast(t('toast_session_timer_ended', '⏰ Time is up! Entrance period has ended.'), 4000, "#ef4444");
-            setTimeout(() => location.reload(), 3000);
-            return;
-        }
-        updateTimerUI(display, pill, remaining + "s", remaining <= 10 ? "urgent" : "normal");
-    }
-
-    function updateTimerUI(display, pill, text, mode) {
-        if (display) display.innerText = text;
-        if (pill) {
-            pill.classList.remove('urgent-mode');
-            pill.style.cssText = "";
-            if (mode === "urgent") pill.classList.add('urgent-mode');
-            else if (text === "OPEN") { pill.style.background = "#ecfdf5"; pill.style.color = "#10b981"; pill.style.borderColor = "#a7f3d0"; }
-        }
-    }
-
-    function handleSessionEnd(t, msg) {
-        if (window.authUnsubscribe) window.authUnsubscribe();
-        if (window.localTicker) clearInterval(window.localTicker);
-        showToast(t('toast_session_closed_manual', msg), 4000, "#ef4444");
-        setTimeout(() => location.reload(), 2500);
-    }
-};
-
-window.resetSearchSession = function () {
-    const step1 = document.getElementById('step1_search');
-    const step2 = document.getElementById('step2_auth');
-    if (step2) { step2.style.display = 'none'; step2.classList.remove('active'); }
-    if (step1) { step1.style.display = 'block'; step1.style.opacity = '1'; step1.style.visibility = 'visible'; }
-    const passInput = document.getElementById('sessionPass');
-    const codeInput = document.getElementById('attendanceCode');
-    if (passInput) passInput.value = '';
-    if (codeInput) codeInput.value = '';
-    const errorContainer = document.getElementById('screenError');
-    if (errorContainer) errorContainer.style.display = 'none';
-    if (typeof window.startCodeEntryIdleTimer === 'function') window.startCodeEntryIdleTimer();
-};
-
-(function () {
-    let hallsList = MASTER_HALLS;
-    let subjectsData = MASTER_SUBJECTS;
-    window.subjectsData = MASTER_SUBJECTS;
-    localStorage.removeItem('subjectsData_v4');
-
-    const COLLEGE_LAT = 30.385873919506743;
-    const COLLEGE_LNG = 30.488794680472196;
-
-    const CONFIG = {
-        gps: { targetLat: COLLEGE_LAT, targetLong: COLLEGE_LNG, allowedDistanceKm: 2.5 },
-        modelsUrl: './models'
-    };
-
-    let userIP = "Unknown";
-    let geo_watch_id = null;
-    let countdownInterval;
-    let processIsActive = false;
-    let userLat = "", userLng = "";
-    let isOpeningMaps = false;
-
-    let deferredPrompt;
-    const installBox = document.getElementById('installAppPrompt');
-    window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; if (installBox) installBox.style.display = 'flex'; });
-    window.addEventListener('appinstalled', () => { if (installBox) installBox.style.display = 'none'; deferredPrompt = null; showToast("شكراً لتثبيت التطبيق! 🚀", 4000, "#10b981"); });
-    function triggerAppInstall() {
-        if (deferredPrompt) {
-            deferredPrompt.prompt();
-            deferredPrompt.userChoice.then((r) => { if (r.outcome === 'accepted' && installBox) installBox.style.display = 'none'; deferredPrompt = null; });
-        }
-    }
-
-    fetch('https://api.ipify.org?format=json').then(r => r.json()).then(d => userIP = d.ip).catch(() => userIP = "Hidden IP");
-
-    function playSuccess() { document.getElementById('successSound').play().catch(() => { }); if (navigator.vibrate) navigator.vibrate([50, 50, 50]); }
-    function playBeep() { document.getElementById('beepSound').play().catch(() => { }); }
-
-    let wakeLock = null;
-    async function requestWakeLock() { try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (err) { } }
-    function releaseWakeLock() { if (wakeLock !== null) { wakeLock.release().then(() => { wakeLock = null; }); } }
-
-    window.history.pushState(null, null, window.location.href);
-    window.onpopstate = function () {
-        if (processIsActive) { window.history.pushState(null, null, window.location.href); }
-    };
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'hidden') { if (isOpeningMaps) return; if (processIsActive) location.reload(); releaseWakeLock(); }
-        else { if (isOpeningMaps) isOpeningMaps = false; if (processIsActive) requestWakeLock(); }
-    });
-
-    function updateHeaderState(screenId) {
-        const wrapper = document.getElementById('heroIconWrapper');
-        const icon = document.getElementById('statusIcon');
-        if (!wrapper || !icon) return;
-        wrapper.classList.remove('show-icon');
-        if (screenId !== 'screenWelcome') {
-            wrapper.classList.add('show-icon');
-            if (screenId === 'screenLoading') { icon.className = "fa-solid fa-satellite-dish hero-icon fa-spin"; icon.style.color = "var(--primary)"; }
-            else if (screenId === 'screenDataEntry') { icon.className = "fa-solid fa-user-pen hero-icon"; icon.style.color = "var(--primary)"; icon.style.animation = "none"; }
-            else if (screenId === 'screenSuccess') { icon.className = "fa-solid fa-check hero-icon"; icon.style.color = "#10b981"; icon.style.animation = "none"; }
-            else if (screenId === 'screenError') { icon.className = "fa-solid fa-triangle-exclamation hero-icon"; icon.style.color = "#ef4444"; icon.style.animation = "none"; }
-        }
-    }
-
-    window.switchScreen = function (screenId) {
-        const currentActive = document.querySelector('.section.active');
-        if (currentActive && currentActive.id === screenId) return;
-        window.scrollTo({ top: 0, behavior: 'auto' });
-        document.querySelectorAll('.section').forEach(sec => {
-            sec.style.cssText = "";
-            sec.style.setProperty('display', 'none', 'important');
-            sec.classList.remove('active');
-        });
-        const target = document.getElementById(screenId);
-        if (target) {
-            target.style.cssText = "";
-            target.style.setProperty('display', 'flex', 'important');
-            target.style.flexDirection = 'column';
-            setTimeout(() => target.classList.add('active'), 10);
-        }
-        const infoBtn = document.getElementById('infoBtn');
-        if (infoBtn) infoBtn.style.display = (screenId === 'screenWelcome') ? 'flex' : 'none';
-    };
-
-    function openMapsToRefreshGPS() {
-        isOpeningMaps = true;
-        window.open(`https://www.google.com/maps/search/?api=1&query=${CONFIG.gps.targetLat},${CONFIG.gps.targetLong}`, '_blank');
-    }
-
-    window.onload = function () {
-        const pinInput = document.getElementById('attendanceCode');
-        if (pinInput) pinInput.value = '';
-
-        const savedUID = localStorage.getItem('TARGET_DOCTOR_UID');
-        if (savedUID) {
-            sessionStorage.setItem('TARGET_DOCTOR_UID', savedUID);
-            if (typeof window.resetMainButtonUI === 'function') window.resetMainButtonUI();
-        }
-
-        initGlobalGuard();
-        updateUIForMode();
-        startGPSWatcher();
-
-        renderHallOptions();
-
-        if (typeof listenToSessionState === 'function') listenToSessionState();
-
-        const hallSearchInput = document.getElementById('hallSearchInput');
-        if (hallSearchInput) hallSearchInput.addEventListener('input', (e) => renderHallOptions(e.target.value));
-
-        setInterval(() => {
-            const now = new Date();
-            const timeEl = document.getElementById('currentTime');
-            const dateEl = document.getElementById('currentDate');
-            if (timeEl) timeEl.innerText = now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' });
-            if (dateEl) dateEl.innerText = now.toLocaleDateString('en-GB');
-        }, 1000);
-    };
-
-    function renderHallOptions(filter = "") {
-        const hallContainer = document.getElementById('hallOptionsContainer');
-        const hallSelect = document.getElementById('hallSelect');
-        if (!hallSelect || !hallContainer) return;
-
-        hallSelect.innerHTML = '<option value="" disabled selected>-- اختر المدرج --</option>';
-        hallContainer.innerHTML = '';
-
-        const filteredHalls = hallsList.filter(h => h.includes(filter));
-        filteredHalls.forEach(val => {
-            let opt = document.createElement('option');
-            opt.value = val; opt.text = val;
-            hallSelect.appendChild(opt);
-
-            let cOpt = document.createElement('div');
-            cOpt.className = "custom-option";
-            cOpt.setAttribute('data-value', val);
-            cOpt.innerHTML = `<span>${val}</span>`;
-            cOpt.addEventListener('click', function (e) {
-                e.stopPropagation();
-                hallContainer.parentElement.querySelectorAll('.custom-option').forEach(o => o.classList.remove('selected'));
-                this.classList.add('selected');
-                const triggerText = document.querySelector('#hallSelectWrapper .trigger-text');
-                if (triggerText) triggerText.textContent = val;
-                const wrapper = document.getElementById('hallSelectWrapper');
-                if (wrapper) wrapper.classList.remove('open');
-                hallSelect.value = val;
-                if (typeof playClick === 'function') playClick();
-            });
-            hallContainer.appendChild(cOpt);
-        });
-
-        if (filteredHalls.length === 0) hallContainer.innerHTML = '<div style="padding:10px;text-align:center;color:#94a3b8;font-size:12px;">لا توجد نتائج</div>';
-    }
-
-    function startGPSWatcher() {
-        if (navigator.geolocation) {
-            geo_watch_id = navigator.geolocation.watchPosition(
-                (pos) => { userLat = pos.coords.latitude; userLng = pos.coords.longitude; },
-                () => { },
-                { enableHighAccuracy: true, maximumAge: 30000, timeout: 20000 }
-            );
-        }
-    }
-
-    window.updateUIForMode = function () {
-        const adminToken = sessionStorage.getItem("secure_admin_session_token_v99");
-        const isStaff = !!adminToken;
-
-        document.body.classList.remove('is-dean', 'is-doctor', 'is-student');
-        document.body.classList.add('is-student');
-
-        const sessionBtn = document.getElementById('btnToggleSession');
-        const quickModeBtn = document.getElementById('btnQuickMode');
-        const toolsBtn = document.getElementById('btnToolsRequest');
-        const deanZone = document.getElementById('deanPrivateZone');
-        const btnDataEntry = document.getElementById('btnDataEntry');
-        const reportBtn = document.getElementById('btnViewReport');
-        const facultyProfileBtn = document.getElementById('facultyProfileBtn');
-        const studentProfileBtn = document.getElementById('studentProfileBtn');
-        const mainActionBtn = document.getElementById('mainActionBtn');
-        const makaniBar = document.getElementById('makaniSearchBar');
-        const btnFeed = document.getElementById('btnLiveFeedback');
-
-        [sessionBtn, quickModeBtn, toolsBtn, deanZone, btnDataEntry, facultyProfileBtn, btnFeed].forEach(el => {
-            if (el) el.style.setProperty('display', 'none', 'important');
-        });
-
-        if (reportBtn) reportBtn.classList.add('locked');
-        if (mainActionBtn) mainActionBtn.style.display = 'flex';
-        if (makaniBar) makaniBar.style.display = 'block';
-        if (studentProfileBtn) studentProfileBtn.style.display = 'flex';
-
-        const savedLang = localStorage.getItem('sys_lang') || 'ar';
-        if (typeof changeLanguage === 'function') changeLanguage(savedLang);
-    };
-    window.updateUIForMode = window.updateUIForMode;
-
-    window.startProcess = async function (isRetry) {
-        if (typeof playClick === 'function') playClick();
-        const user = auth.currentUser;
-        if (!user) { if (typeof window.openAuthDrawer === 'function') window.openAuthDrawer(); return; }
-
-        const savedDoctorUID = sessionStorage.getItem('TARGET_DOCTOR_UID');
-        if (savedDoctorUID) {
-            switchScreen('screenLiveSession');
-            if (typeof startLiveSnapshotListener === 'function') startLiveSnapshotListener();
-            return;
-        }
-
-        window.switchScreen('screenDataEntry');
-        const step1 = document.getElementById('step1_search');
-        const step2 = document.getElementById('step2_auth');
-        const errMsg = document.getElementById('screenError');
-        if (step2) step2.style.setProperty('display', 'none', 'important');
-        if (errMsg) errMsg.style.display = 'none';
-        if (step1) step1.style.cssText = "display: block !important; visibility: visible !important;";
-        setTimeout(() => { const input = document.getElementById('attendanceCode'); if (input) input.focus(); }, 150);
-        if (typeof window.startCodeEntryIdleTimer === 'function') window.startCodeEntryIdleTimer();
-
-    };
-    window.openAuthDrawer = function () {
-        const drawer = document.getElementById('studentAuthDrawer');
-        if (drawer) {
-            drawer.style.display = 'flex';
-            setTimeout(() => {
-                drawer.classList.add('active');
-                const content = drawer.querySelector('.auth-drawer-content');
-                if (content) { content.style.transform = 'translateY(0)'; content.style.opacity = '1'; }
-            }, 10);
-        }
-    };
-
-    window.closeAuthDrawer = function () {
-        const drawer = document.getElementById('studentAuthDrawer');
-        if (drawer) {
-            drawer.classList.remove('active');
-            setTimeout(() => { drawer.style.display = 'none'; document.body.style.overflow = 'auto'; }, 200);
-        }
-    };
-
-    window.toggleAuthMode = (mode) => {
-        const loginSec = document.getElementById('loginSection');
-        const signupSec = document.getElementById('signupSection');
-        const title = document.getElementById('authTitle');
-        const subtitle = document.getElementById('authSubtitle');
-        if (mode === 'signup') {
-            loginSec.classList.remove('active'); signupSec.classList.add('active');
-            title.innerText = 'Create Account'; subtitle.innerText = 'Join our nursing community below';
-        } else {
-            signupSec.classList.remove('active'); loginSec.classList.add('active');
-            title.innerText = 'Welcome Back'; subtitle.innerText = 'Please enter your details to continue';
-        }
-    };
-
-    window.togglePass = (inputId, icon) => {
-        const input = document.getElementById(inputId);
-        if (!input) return;
-        const isPassword = input.type === 'password';
-        input.type = isPassword ? 'text' : 'password';
-        if (icon) {
-            if (isPassword) { icon.classList.replace('fa-eye', 'fa-eye-slash'); icon.style.color = "#0ea5e9"; icon.style.filter = "drop-shadow(0 0 5px rgba(14,165,233,0.5))"; }
-            else { icon.classList.replace('fa-eye-slash', 'fa-eye'); icon.style.color = "#94a3b8"; icon.style.filter = "none"; }
-        }
-        if (navigator.vibrate) navigator.vibrate(10);
-    };
-
-    window.validateSignupForm = function () {
-        const getEl = (id) => document.getElementById(id);
-        const getVal = (id) => getEl(id)?.value?.trim() || "";
-
-        const email = getVal('regEmail');
-        const emailConfirm = getVal('regEmailConfirm');
-        const pass = getVal('regPass');
-        const passConfirm = getVal('regPassConfirm');
-        const level = getVal('regLevel');
-        const gender = getVal('regGender');
-        const name = getVal('regFullName');
-        const groupRaw = getVal('regGroup').toUpperCase();
-
-        const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-        const isEmailValid = emailPattern.test(email);
-        const isEmailMatch = (email === emailConfirm && isEmailValid);
-        const emailConfEl = getEl('regEmailConfirm');
-        const emailErr = getEl('emailError');
-        if (emailConfirm !== "") {
-            emailConfEl.style.borderColor = isEmailMatch ? "#10b981" : "#ef4444";
-            if (emailErr) emailErr.style.display = isEmailMatch ? 'none' : 'block';
-        }
-
-        const isPassLen = pass.length >= 6;
-        const isPassMatch = (pass === passConfirm && isPassLen);
-        const passConfEl = getEl('regPassConfirm');
-        const passErr = getEl('passError');
-        if (passConfirm !== "") {
-            passConfEl.style.borderColor = isPassMatch ? "#10b981" : "#ef4444";
-            if (passErr) passErr.style.display = isPassMatch ? 'none' : 'block';
-        }
-
-        const groupPattern = /^[1-4][GPNCDTBH]\d{1,2}$/;
-        const isGroupFormatValid = groupPattern.test(groupRaw);
-        const isGroupLevelMatch = (level === "" || !isGroupFormatValid) ? true : groupRaw.startsWith(level);
-        const isGroupValid = isGroupFormatValid && isGroupLevelMatch;
-
-        const groupEl = getEl('regGroup');
-        if (groupEl && groupRaw.length > 0) {
-            groupEl.style.borderColor = isGroupValid ? "#10b981" : "#ef4444";
-            groupEl.style.backgroundColor = isGroupValid ? "#f0fdf4" : "#fef2f2";
-            if (getEl('regGroup').value !== groupRaw) getEl('regGroup').value = groupRaw;
-        } else if (groupEl) { groupEl.style.borderColor = ""; groupEl.style.backgroundColor = ""; }
-
-        const isNameValid = name !== "" && !name.toLowerCase().includes("not registered") && !name.includes("⚠️") && !name.includes("❌");
-        const isEverythingValid = isEmailValid && isEmailMatch && isPassLen && isPassMatch && level !== "" && gender !== "" && isNameValid && isGroupValid;
-
-        const btn = getEl('btnDoSignup');
-        if (btn) {
-            btn.disabled = !isEverythingValid;
-            btn.style.opacity = isEverythingValid ? "1" : "0.5";
-            btn.style.filter = isEverythingValid ? "grayscale(0%)" : "grayscale(100%)";
-            btn.style.cursor = isEverythingValid ? "pointer" : "not-allowed";
-            btn.style.boxShadow = isEverythingValid ? "0 4px 12px rgba(16,185,129,0.2)" : "none";
-        }
-    };
-
-    document.addEventListener('input', (e) => { if (e.target.id && e.target.id.startsWith('reg')) validateSignupForm(); });
-
-    document.addEventListener('DOMContentLoaded', () => {
-        const pinInput = document.getElementById('attendanceCode');
-        if (pinInput) {
-            pinInput.value = '';
-            pinInput.setAttribute('autocomplete', 'off');
-            pinInput.setAttribute('inputmode', 'numeric');
-
-            pinInput.addEventListener('keydown', () => { if (typeof isTyping !== 'undefined') isTyping = true; if (typeof elapsedTime !== 'undefined') elapsedTime = 0; });
-            pinInput.addEventListener('keyup', () => { if (typeof isTyping !== 'undefined') isTyping = false; });
-            pinInput.addEventListener('input', (e) => {
-                if (typeof isTyping !== 'undefined') isTyping = false;
-                if (typeof elapsedTime !== 'undefined') elapsedTime = 0;
-                if (e.target.value.trim().length === 6) {
-                    if (typeof window.searchForSession === 'function') window.searchForSession();
-                }
-            });
-        }
-
-        const passInputForEnter = document.getElementById('sessionPass');
-        if (passInputForEnter) {
-            passInputForEnter.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter' && typeof window.joinSessionAction === 'function') window.joinSessionAction();
-            });
-        }
-
-        const signupFields = ['regStudentID', 'regFullName', 'regLevel', 'regGender', 'regGroup', 'regEmail', 'regEmailConfirm', 'regPass', 'regPassConfirm'];
-        signupFields.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) { el.addEventListener('input', () => { if (typeof validateSignupForm === 'function') validateSignupForm(); }); el.addEventListener('change', () => { if (typeof validateSignupForm === 'function') validateSignupForm(); }); }
-        });
-
-        const savedLang = localStorage.getItem('sys_lang') || 'ar';
-        if (typeof changeLanguage === 'function') {
-            changeLanguage(savedLang);
-            document.querySelectorAll('.active-lang-text-pro').forEach(s => { s.innerText = (savedLang === 'ar') ? 'EN' : 'عربي'; });
-        }
-
-        const groupInput = document.getElementById('regGroup');
-        const levelSelect = document.getElementById('regLevel');
-        if (groupInput) {
-            groupInput.addEventListener('input', function () {
-                this.value = this.value.toUpperCase().replace(/[^0-9GPNCDTBH]/g, '');
-                if (typeof window.validateSignupForm === 'function') window.validateSignupForm();
-            });
-        }
-        if (levelSelect) levelSelect.addEventListener('change', () => { if (typeof window.validateSignupForm === 'function') window.validateSignupForm(); });
-    });
-
-    ['regEmail', 'regEmailConfirm', 'regPass', 'regPassConfirm', 'regGender', 'regLevel', 'regGroup'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.addEventListener('input', validateSignupForm);
-    });
+const UI = (() => {
 
     function showToast(message, duration = 3000, bgColor = '#334155') {
-        const toast = document.getElementById('toastNotification');
+        const toast = Utils.$('toastNotification');
+        if (!toast) return;
         toast.style.backgroundColor = bgColor;
         toast.innerText = message;
         toast.style.display = 'block';
-        setTimeout(() => { toast.style.display = 'none'; }, duration);
+        clearTimeout(toast._timer);
+        toast._timer = setTimeout(() => { toast.style.display = 'none'; }, duration);
     }
 
-    document.addEventListener('contextmenu', (e) => { e.preventDefault(); showToast('إجراء محظور لأسباب أمنية.', 2000, '#ef4444'); });
-    document.addEventListener('copy', (e) => { e.preventDefault(); showToast('النسخ محظور لأسباب أمنية.', 2000, '#ef4444'); });
-    document.addEventListener('cut', (e) => { e.preventDefault(); showToast('القص محظور لأسباب أمنية.', 2000, '#ef4444'); });
-    document.addEventListener('paste', (e) => { e.preventDefault(); showToast('اللصق محظور لأسباب أمنية.', 2000, '#ef4444'); });
+    function switchScreen(screenId) {
+        const current = document.querySelector('.section.active');
+        if (current?.id === screenId) return;
+        window.scrollTo({ top: 0, behavior: 'auto' });
+        document.querySelectorAll('.section').forEach(sec => {
+            sec.style.cssText = '';
+            sec.style.setProperty('display', 'none', 'important');
+            sec.classList.remove('active');
+        });
+        const target = Utils.$(screenId);
+        if (!target) return;
+        target.style.cssText = '';
+        target.style.setProperty('display', 'flex', 'important');
+        target.style.flexDirection = 'column';
+        setTimeout(() => target.classList.add('active'), 10);
 
-    function safeClick(btn) { if (btn) { btn.style.opacity = "0.7"; btn.style.pointerEvents = "none"; } }
-
-    function showConnectionLostModal() { const m = document.getElementById('connectionLostModal'); if (m) m.style.display = 'flex'; }
-    function hideConnectionLostModal() { const m = document.getElementById('connectionLostModal'); if (m) m.style.display = 'none'; }
-    async function checkRealConnection() { return true; }
-
-    function initGlobalGuard() {
-        setInterval(async () => { const o = await checkRealConnection(); if (!o) showConnectionLostModal(); else hideConnectionLostModal(); }, 2000);
-        if (!isMobileDevice()) { document.getElementById('desktop-blocker').style.display = 'flex'; document.body.style.overflow = 'hidden'; throw new Error("Desktop access denied."); }
+        const infoBtn = Utils.$('infoBtn');
+        if (infoBtn) infoBtn.style.display = screenId === 'screenWelcome' ? 'flex' : 'none';
     }
 
-    window.getDistanceFromLatLonInKm = function (lat1, lon1, lat2, lon2) {
-        const R = 6371;
-        const dLat = (lat2 - lat1) * (Math.PI / 180);
-        const dLon = (lon2 - lon1) * (Math.PI / 180);
-        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    };
+    function updateHeaderState(screenId) {
+        const wrapper = Utils.$('heroIconWrapper');
+        const icon = Utils.$('statusIcon');
+        if (!wrapper || !icon) return;
+        wrapper.classList.remove('show-icon');
+        if (screenId === 'screenWelcome') return;
+        wrapper.classList.add('show-icon');
+        const states = {
+            screenLoading: ['fa-solid fa-satellite-dish hero-icon fa-spin', 'var(--primary)'],
+            screenDataEntry: ['fa-solid fa-user-pen hero-icon', 'var(--primary)'],
+            screenSuccess: ['fa-solid fa-check hero-icon', '#10b981'],
+            screenError: ['fa-solid fa-triangle-exclamation hero-icon', '#ef4444'],
+        };
+        const [cls, color] = states[screenId] || ['', ''];
+        if (cls) { icon.className = cls; icon.style.color = color; icon.style.animation = screenId === 'screenLoading' ? '' : 'none'; }
+    }
 
-    window.toggleDropdown = function (listId) {
-        const list = document.getElementById(listId);
-        document.querySelectorAll('.dropdown-list').forEach(el => { if (el.id !== listId) el.classList.remove('show'); });
-        list.classList.toggle('show');
-    };
-
-    document.addEventListener('click', (e) => { if (!e.target.closest('.custom-dropdown')) document.querySelectorAll('.dropdown-list').forEach(el => el.classList.remove('show')); });
-
-    window.selectOption = function (type, value, text) {
-        const hiddenInput = document.getElementById('reg' + type);
-        if (hiddenInput) hiddenInput.value = value;
-        const parentDiv = document.getElementById('dropdown' + type);
-        if (parentDiv) parentDiv.classList.add('selected-active');
-        const listUl = document.getElementById('list' + type);
-        if (listUl) listUl.classList.remove('show');
-        if (typeof validateSignupForm === 'function') validateSignupForm();
-    };
-
-    const AVATAR_ASSETS = {
-        "Male": ['fa-user-tie', 'fa-user-graduate', 'fa-user-doctor', 'fa-user-astronaut', 'fa-user-ninja', 'fa-user-secret', 'fa-user-crown', 'fa-person-biking', 'fa-person-skating', 'fa-person-snowboarding', 'fa-person-swimming', 'fa-robot', 'fa-ghost', 'fa-dragon', 'fa-gamepad', 'fa-headset', 'fa-guitar', 'fa-rocket', 'fa-bolt', 'fa-fire'],
-        "Female": ['fa-user-nurse', 'fa-user-graduate', 'fa-user-doctor', 'fa-person-dress', 'fa-person-praying', 'fa-person-hiking', 'fa-person-skiing', 'fa-cat', 'fa-dove', 'fa-gem', 'fa-wand-magic-sparkles', 'fa-camera-retro', 'fa-palette', 'fa-mug-hot', 'fa-leaf', 'fa-heart', 'fa-star', 'fa-crown']
-    };
-    const AVATAR_COLORS = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef', '#f43f5e'];
-
-    window.openStudentProfile = async function (forceRefresh = false) {
-        const user = auth.currentUser;
-        const infoBtn = document.getElementById('infoBtn');
-        if (infoBtn) infoBtn.style.display = 'none';
-
-        if (!user) { showToast("⚠️ يرجى تسجيل الدخول أولاً", 3000, "#f59e0b"); return; }
-
-        const modal = document.getElementById('studentProfileModal');
-        if (modal) { modal.style.display = 'flex'; setTimeout(() => modal.classList.add('active'), 10); }
-
-        const cachedProfileData = localStorage.getItem('cached_profile_data');
-        if (cachedProfileData) {
-            try {
-                const cData = JSON.parse(cachedProfileData);
-                if (cData.uid === user.uid) {
-                    document.getElementById('profFullName').innerText = cData.fullName || "--";
-                    document.getElementById('profStudentID').innerText = cData.studentID || "--";
-
-                    const COLLEGE_NAME_MAP = { 'N': 'Nursing', 'P': 'Physical Therapy', 'C': 'Pharmacy', 'D': 'Dentistry', 'T': 'Computer Science', 'B': 'Business Admin', 'H': 'Health Sciences' };
-                    const COLLEGE_CODE_MAP = { 'NURS': 'N', 'PT': 'P', 'PHARM': 'C', 'DENT': 'D', 'CS': 'T', 'BA': 'B', 'HS': 'H' };
-                    const grp = cData.group || "";
-                    const letter = (cData.college ? (COLLEGE_CODE_MAP[cData.college] || grp[1]?.toUpperCase() || 'N') : (grp.length >= 2 ? grp[1].toUpperCase() : 'N'));
-                    const roleEl = document.querySelector('.pro-role');
-                    if (roleEl) roleEl.innerHTML = `<span style="font-size:13px;font-weight:800;">${COLLEGE_NAME_MAP[letter] || 'Nursing'} Student</span><br><span style="font-size:13px;color:#0ea5e9;font-weight:900;background:#e0f2fe;padding:2px 10px;border-radius:20px;display:inline-block;margin-top:4px;">${grp || "--"}</span>`;
-
-                    document.getElementById('profLevel').innerText = `الفرقة ${cData.level || '?'}`;
-                    document.getElementById('profGender').innerText = cData.gender || "--";
-                    document.getElementById('profEmail').innerText = cData.email || user.email;
-
-                    const cAvatarEl = document.getElementById('currentAvatar');
-                    if (cAvatarEl) { cAvatarEl.innerHTML = `<i class="fa-solid ${cData.avatarClass || 'fa-user-graduate'}"></i>`; cAvatarEl.style.color = "var(--primary-dark)"; }
-                }
-            } catch (e) { }
-        }
-
-        const statsCacheKey = `stats_cache_${user.uid}`;
-        const cachedStatsStr = localStorage.getItem(statsCacheKey);
-        if (cachedStatsStr && !forceRefresh) {
-            try {
-                const cachedStats = JSON.parse(cachedStatsStr);
-                if ((Date.now() - cachedStats.timestamp) < 900000) {
-                    document.getElementById('profAttendanceVal').innerText = cachedStats.attendance;
-                    document.getElementById('profAbsenceVal').innerText = cachedStats.absence;
-                    const discEl = document.getElementById('profDisciplineVal');
-                    if (cachedStats.discipline === "bad") { discEl.innerText = "مشاغب"; discEl.style.color = "#ef4444"; }
-                    else if (cachedStats.discipline === "warning") { discEl.innerText = "تنبيه"; discEl.style.color = "#f59e0b"; }
-                    else { discEl.innerText = "ملتزم"; discEl.style.color = "#10b981"; }
-                    return;
-                }
-            } catch (e) { }
-        }
-
-        document.getElementById('profAttendanceVal').innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" style="font-size:14px"></i>';
-        document.getElementById('profAbsenceVal').innerHTML = '-';
-        document.getElementById('profDisciplineVal').innerHTML = '-';
-
-        try {
-            const docSnap = await getDoc(doc(db, "user_registrations", user.uid));
-            if (!docSnap.exists()) return;
-            const data = docSnap.data();
-            const info = data.registrationInfo || data;
-
-            document.getElementById('profFullName').innerText = info.fullName || "--";
-            document.getElementById('profStudentID').innerText = info.studentID || "--";
-
-            const COLLEGE_NAME_MAP = { 'N': 'Nursing', 'P': 'Physical Therapy', 'C': 'Pharmacy', 'D': 'Dentistry', 'T': 'Computer Science', 'B': 'Business Admin', 'H': 'Health Sciences' };
-            const COLLEGE_CODE_MAP = { 'NURS': 'N', 'PT': 'P', 'PHARM': 'C', 'DENT': 'D', 'CS': 'T', 'BA': 'B', 'HS': 'H' };
-            const studentGroup = info.group || "";
-            const collegeCode = data.college || info.college || "";
-            const letter = collegeCode ? (COLLEGE_CODE_MAP[collegeCode] || studentGroup[1]?.toUpperCase() || 'N') : (studentGroup.length >= 2 ? studentGroup[1].toUpperCase() : 'N');
-            const roleEl = document.querySelector('.pro-role');
-            if (roleEl) roleEl.innerHTML = `<span style="font-size:13px;font-weight:800;">${COLLEGE_NAME_MAP[letter] || 'Nursing'} Student</span><br><span style="font-size:13px;color:#0ea5e9;font-weight:900;background:#e0f2fe;padding:2px 10px;border-radius:20px;display:inline-block;margin-top:4px;">${studentGroup || "--"}</span>`;
-
-            document.getElementById('profLevel').innerText = `الفرقة ${info.level || '?'}`;
-            document.getElementById('profGender').innerText = info.gender || "--";
-            document.getElementById('profEmail').innerText = info.email || user.email || "--";
-
-            const currentAvatarEl = document.getElementById('currentAvatar');
-            if (currentAvatarEl) { currentAvatarEl.innerHTML = `<i class="fa-solid ${data.avatarClass || info.avatarClass || 'fa-user-graduate'}"></i>`; currentAvatarEl.style.color = "var(--primary-dark)"; }
-
-            const myGroup = (info.group && info.group.trim() !== "") ? info.group.trim() : "General";
-            const countersQuery = query(collection(db, "course_counters"), where("targetGroups", "array-contains", myGroup));
-            const [myStatsSnap, countersSnap] = await Promise.all([getDoc(doc(db, "student_stats", user.uid)), getDocs(countersQuery)]);
-
-            let myAttendedSubjects = {};
-            let disciplineStatus = "good";
-            if (myStatsSnap.exists()) {
-                const sData = myStatsSnap.data();
-                myAttendedSubjects = sData.attended || {};
-                if (sData.cumulative_unruly >= 3) disciplineStatus = "bad";
-                else if (sData.cumulative_unruly > 0) disciplineStatus = "warning";
-            }
-
-            let totalSessionsHeldMap = {};
-            countersSnap.forEach(doc => {
-                const subjectName = doc.data().subject.trim();
-                totalSessionsHeldMap[subjectName] = (totalSessionsHeldMap[subjectName] || 0) + 1;
-            });
-
-            const normalizeStr = (str) => str.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '').toLowerCase();
-            let totalAttendanceDays = 0;
-            let totalAbsenceDays = 0;
-
-            for (const [subjectHeld, totalHeldCount] of Object.entries(totalSessionsHeldMap)) {
-                let studentCount = 0;
-                const targetNorm = normalizeStr(subjectHeld);
-                for (const [studentSubject, studentVal] of Object.entries(myAttendedSubjects)) {
-                    if (normalizeStr(studentSubject) === targetNorm) { studentCount = studentVal; break; }
-                }
-                totalAttendanceDays += studentCount;
-                totalAbsenceDays += Math.max(0, totalHeldCount - studentCount);
-            }
-
-            document.getElementById('profAttendanceVal').innerText = totalAttendanceDays;
-            document.getElementById('profAbsenceVal').innerText = totalAbsenceDays;
-            const discEl = document.getElementById('profDisciplineVal');
-            if (disciplineStatus === "bad") { discEl.innerText = "مشاغب"; discEl.style.color = "#ef4444"; }
-            else if (disciplineStatus === "warning") { discEl.innerText = "تنبيه"; discEl.style.color = "#f59e0b"; }
-            else { discEl.innerText = "ملتزم"; discEl.style.color = "#10b981"; }
-
-            localStorage.setItem(statsCacheKey, JSON.stringify({ attendance: totalAttendanceDays, absence: totalAbsenceDays, discipline: disciplineStatus, timestamp: Date.now() }));
-        } catch (calcError) {
-            console.error("Profile Calculation Error:", calcError);
-            document.getElementById('profAttendanceVal').innerText = "?";
-            document.getElementById('profAbsenceVal').innerText = "?";
-        }
-    };
-
-    window.openAvatarSelector = async function () {
-        const user = auth.currentUser;
-        if (!user) return;
-        const grid = document.getElementById('avatarsGrid');
-        if (!grid) return;
-
-        let gender = "Male";
-        try {
-            const docSnap = await getDoc(doc(db, "user_registrations", user.uid));
-            if (docSnap.exists()) { const info = docSnap.data().registrationInfo || docSnap.data(); if (info.gender) gender = info.gender; }
-        } catch (e) { }
-
-        grid.innerHTML = '';
-        const icons = AVATAR_ASSETS[gender] || AVATAR_ASSETS["Male"];
-        icons.forEach((iconClass, index) => {
-            const color = AVATAR_COLORS[index % AVATAR_COLORS.length];
-            const item = document.createElement('div');
-            item.className = 'avatar-option-modern';
-            item.innerHTML = `<i class="fa-solid ${iconClass}"></i>`;
-            item.style.color = color;
-            item.style.borderColor = color + '40';
-            item.style.backgroundColor = color + '10';
-            item.onclick = () => saveNewAvatar(iconClass, color);
-            grid.appendChild(item);
+    function openAuthDrawer() {
+        const drawer = Utils.$('studentAuthDrawer');
+        if (!drawer) return;
+        drawer.style.display = 'flex';
+        requestAnimationFrame(() => {
+            drawer.classList.add('active');
+            const content = drawer.querySelector('.auth-drawer-content');
+            if (content) { content.style.transform = 'translateY(0)'; content.style.opacity = '1'; }
         });
+    }
 
-        const modal = document.getElementById('avatarSelectorModal');
-        if (modal) { modal.style.zIndex = "2147483647"; modal.style.display = 'flex'; setTimeout(() => modal.classList.add('active'), 10); }
-    };
+    function closeAuthDrawer() {
+        const drawer = Utils.$('studentAuthDrawer');
+        if (!drawer) return;
+        drawer.classList.remove('active');
+        setTimeout(() => { drawer.style.display = 'none'; document.body.style.overflow = 'auto'; }, 200);
+    }
 
-    window.saveNewAvatar = async function (iconClass, color) {
-        const user = auth.currentUser;
-        if (!user) return;
-
-        const studentAvatar = document.getElementById('currentAvatar');
-        if (studentAvatar) {
-            studentAvatar.innerHTML = `<i class="fa-solid ${iconClass}"></i>`;
-            if (color) { studentAvatar.style.color = color; studentAvatar.style.borderColor = color; studentAvatar.style.backgroundColor = color + '10'; }
+    function toggleAuthMode(mode) {
+        const loginSec = Utils.$('loginSection');
+        const signupSec = Utils.$('signupSection');
+        const title = Utils.$('authTitle');
+        const subtitle = Utils.$('authSubtitle');
+        if (mode === 'signup') {
+            loginSec?.classList.remove('active');
+            signupSec?.classList.add('active');
+            if (title) title.innerText = 'Create Account';
+            if (subtitle) subtitle.innerText = 'Join our nursing community below';
+        } else {
+            signupSec?.classList.remove('active');
+            loginSec?.classList.add('active');
+            if (title) title.innerText = 'Welcome Back';
+            if (subtitle) subtitle.innerText = 'Please enter your details to continue';
         }
-        document.getElementById('avatarSelectorModal').style.display = 'none';
+    }
 
-        try {
-            await setDoc(doc(db, "user_registrations", user.uid), { avatarClass: iconClass }, { merge: true });
-            const cached = localStorage.getItem('cached_profile_data');
-            if (cached) {
-                let cacheObj = JSON.parse(cached);
-                if (cacheObj.uid === user.uid) { cacheObj.avatarClass = iconClass; localStorage.setItem('cached_profile_data', JSON.stringify(cacheObj)); }
-            }
-            showToast("✅ تم تحديث صورتك بنجاح", 2000, "#10b981");
-        } catch (e) { console.error("Save Avatar Error:", e); showToast("❌ فشل حفظ التغييرات", 3000, "#ef4444"); }
-    };
-
-    window.checkForPendingSurveys = async function () {
-        const user = auth.currentUser;
-        if (!user) return;
-
-        const excludedUID = "R78Lu7IZBpYK0WngcaSL6t1Our62";
-        if (user.uid === excludedUID) {
-            console.log("Feedback skipped for this specific user.");
-            return;
+    function togglePass(inputId, icon) {
+        const input = Utils.$(inputId);
+        if (!input) return;
+        const showing = input.type !== 'password';
+        input.type = showing ? 'password' : 'text';
+        if (icon) {
+            icon.classList.replace(showing ? 'fa-eye-slash' : 'fa-eye', showing ? 'fa-eye' : 'fa-eye-slash');
+            icon.style.color = showing ? '#94a3b8' : '#0ea5e9';
+            icon.style.filter = showing ? 'none' : 'drop-shadow(0 0 5px rgba(14,165,233,0.5))';
         }
+        navigator.vibrate?.(10);
+    }
 
-        try {
-            let studentCode = "";
-            const userDoc = await getDoc(doc(db, "user_registrations", user.uid));
-            if (userDoc.exists()) {
-                const data = userDoc.data();
-                studentCode = data.registrationInfo?.studentID || data.studentID;
-            }
-            if (!studentCode) return;
-
-            const q = query(collection(db, "attendance"), where("id", "==", studentCode), where("feedback_status", "==", "pending"), limit(1));
-            const querySnapshot = await getDocs(q);
-
-            if (!querySnapshot.empty) {
-                const pendingDoc = querySnapshot.docs[0];
-                const data = pendingDoc.data();
-                document.getElementById('feedbackSubjectName').innerText = data.subject || "محاضرة";
-                document.getElementById('feedbackDocName').innerText = data.doctorName || "الكلية";
-                document.getElementById('targetAttendanceDocId').value = pendingDoc.id;
-                window.selectStar(0);
-                document.getElementById('feedbackModal').style.display = 'flex';
-            }
-        } catch (e) { console.error("Survey Check Error:", e); }
-    };
-
-    window.selectStar = function (val) {
-        const stars = document.querySelectorAll('.star-btn');
-        const textField = document.getElementById('ratingText');
-        const input = document.getElementById('selectedRating');
-        input.value = val;
-
-        const lang = localStorage.getItem('sys_lang') || 'ar';
-        const dict = i18n[lang];
-        const texts = ["", dict.rate_bad, dict.rate_poor, dict.rate_fair, dict.rate_good, dict.rate_excellent];
-
-        stars.forEach(star => {
-            const starVal = parseInt(star.getAttribute('data-value'));
-            if (starVal <= val) star.classList.add('active');
-            else star.classList.remove('active');
-        });
-
-        if (textField) { textField.innerText = texts[val]; textField.style.animation = "none"; setTimeout(() => textField.style.animation = "fadeIn 0.3s", 10); }
-        if (navigator.vibrate) navigator.vibrate(20);
-    };
-
-    window.submitFeedback = async function () {
-        const rating = document.getElementById('selectedRating').value;
-        const docId = document.getElementById('targetAttendanceDocId').value;
-        const btn = document.querySelector('#feedbackModal .btn-main');
-
-        if (rating == "0") { showToast("⚠️ من فضلك قيم بعدد النجوم", 2000, "#f59e0b"); return; }
-
-        btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> جاري التوثيق...';
-        btn.style.pointerEvents = 'none';
-
-        try {
-            const attRef = doc(db, "attendance", docId);
-            const attSnap = await getDoc(attRef);
-            if (!attSnap.exists()) throw new Error("بيانات الحضور غير موجودة");
-
-            const roomData = attSnap.data();
-            const batch = writeBatch(db);
-            batch.update(attRef, { feedback_status: "submitted", feedback_timestamp: serverTimestamp() });
-            batch.set(doc(collection(db, "feedback_reports")), {
-                rating: parseInt(rating), comment: "", timestamp: serverTimestamp(),
-                doctorName: roomData.doctorName, doctorUID: roomData.doctorUID, subject: roomData.subject,
-                hall: roomData.hall || "Unknown", date: roomData.date, studentId: roomData.id, studentLevel: "General"
-            });
-            await batch.commit();
-            document.getElementById('feedbackModal').style.display = 'none';
-            showToast("✅ تم وصول تقييمك للإدارة بخصوصية تامة.", 3000, "#10b981");
-            setTimeout(() => window.checkForPendingSurveys(), 1000);
-        } catch (e) { console.error("Feedback Error:", e); showToast("❌ تعذر الإرسال، حاول مرة أخرى", 3000, "#ef4444"); }
-        finally { btn.innerHTML = 'إرسال التقييم <i class="fa-solid fa-paper-plane"></i>'; btn.style.pointerEvents = 'auto'; }
-    };
-
-    window.showSmartWelcome = function (name) {
-        const today = new Date().toLocaleDateString('en-GB');
-        if (localStorage.getItem('last_welcome_date') !== today) {
-            const modal = document.getElementById('dailyWelcomeModal');
-            const nameSpan = document.getElementById('welcomeUserName');
-            if (modal && nameSpan) {
-                let englishName = (typeof arabToEng === 'function') ? arabToEng(name.split(' ')[0]) : name.split(' ')[0];
-                nameSpan.innerText = englishName;
-                modal.style.display = 'flex';
-                modal.style.opacity = '1';
-                localStorage.setItem('last_welcome_date', today);
-            }
-        }
-    };
-
-    window.closeDailyWelcome = function () {
-        const modal = document.getElementById('dailyWelcomeModal');
-        if (modal) { modal.style.transition = "0.3s ease"; modal.style.opacity = "0"; setTimeout(() => modal.style.display = 'none', 300); }
-    };
-
-    window.changeLanguage = function (lang) {
+    function applyLanguage(lang) {
         const dict = i18n[lang];
         if (!dict) return;
-        document.documentElement.dir = dict.dir || "rtl";
+        document.documentElement.dir = dict.dir || 'rtl';
         document.documentElement.lang = lang;
-
         document.querySelectorAll('[data-i18n]').forEach(el => {
             const key = el.getAttribute('data-i18n');
-            const newText = dict[key];
-            if (newText && newText !== "") {
-                const icon = el.querySelector('i');
-                if (icon) el.innerHTML = `${icon.outerHTML} <span class="btn-text-content">${newText}</span>`;
-                else el.innerText = newText;
-            }
+            const text = dict[key];
+            if (!text) return;
+            const icon = el.querySelector('i');
+            el.innerHTML = icon
+                ? `${icon.outerHTML} <span class="btn-text-content">${text}</span>`
+                : text;
         });
-
         document.querySelectorAll('[data-i18n-placeholder]').forEach(input => {
             const key = input.getAttribute('data-i18n-placeholder');
             if (dict[key]) input.placeholder = dict[key];
         });
         localStorage.setItem('sys_lang', lang);
-    };
+    }
 
-    window.toggleSystemLanguage = async function () {
-        const user = auth.currentUser;
-        const currentLang = localStorage.getItem('sys_lang') || 'ar';
-        const newLang = (currentLang === 'ar') ? 'en' : 'ar';
-        changeLanguage(newLang);
-        document.querySelectorAll('.active-lang-text-pro').forEach(s => { s.innerText = (newLang === 'ar') ? 'EN' : 'عربي'; });
-        if (user) {
-            try { await setDoc(doc(db, "user_registrations", user.uid), { preferredLanguage: newLang }, { merge: true }); }
-            catch (e) { console.warn("Language sync skipped:", e.message); }
-        }
-    };
-
-    window.forceOpenPinScreen = function () {
-        const user = auth.currentUser;
-        if (!user) {
-            showToast("⚠️ عذراً، يجب تسجيل الدخول أولاً", 3000, "#f59e0b");
-            if (typeof window.openAuthDrawer === 'function') window.openAuthDrawer();
-            return;
-        }
-        window.switchScreen('screenDataEntry');
-        const step1 = document.getElementById('step1_search');
-        const step2 = document.getElementById('step2_auth');
-        const errMsg = document.getElementById('screenError');
-        if (step2) step2.style.setProperty('display', 'none', 'important');
-        if (errMsg) errMsg.style.display = 'none';
-        if (step1) step1.style.cssText = "display: block !important; opacity: 1 !important; visibility: visible !important; width: 100%;";
-        setTimeout(() => { const input = document.getElementById('attendanceCode'); if (input) input.focus(); }, 150);
-        if (typeof window.startCodeEntryIdleTimer === 'function') window.startCodeEntryIdleTimer();
-
-    };
-    window.resetMainButtonUI = function () {
-        const btn = document.getElementById('mainActionBtn');
-        const lang = localStorage.getItem('sys_lang') || 'ar';
-        const isAr = (lang === 'ar');
+    function setMainButton(mode) {
+        const btn = Utils.$('mainActionBtn');
         if (!btn) return;
+        const isAr = Utils.lang() === 'ar';
+        const dict = typeof i18n !== 'undefined' ? i18n[Utils.lang()] : null;
 
-        const targetDoctorUID = sessionStorage.getItem('TARGET_DOCTOR_UID');
-        if (targetDoctorUID) {
-            btn.innerHTML = `${isAr ? "دخول المحاضرة" : "Enter Lecture"} <i class="fa-solid fa-door-open fa-beat-fade"></i>`;
-            btn.style.background = "linear-gradient(135deg, #10b981, #059669)";
-            btn.style.boxShadow = "0 8px 25px -5px rgba(16, 185, 129, 0.5)";
-            btn.style.border = "1px solid #10b981";
-            btn.onclick = function () {
-                if (typeof playClick === 'function') playClick();
+        btn.style.pointerEvents = 'auto';
+        btn.style.opacity = '1';
+        btn.disabled = false;
+        btn.classList.remove('locked');
+
+        if (mode === 'enter') {
+            btn.innerHTML = `${isAr ? 'دخول المحاضرة' : 'Enter Lecture'} <i class="fa-solid fa-door-open fa-beat-fade"></i>`;
+            btn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+            btn.style.boxShadow = '0 8px 25px -5px rgba(16, 185, 129, 0.5)';
+            btn.style.border = '1px solid #10b981';
+            btn.onclick = () => {
+                window.playClick?.();
                 switchScreen('screenLiveSession');
-                if (typeof startLiveSnapshotListener === 'function') startLiveSnapshotListener();
+                window.startLiveSnapshotListener?.();
             };
         } else {
-            const dict = (typeof i18n !== 'undefined') ? i18n[lang] : null;
-            const regText = dict ? dict.main_reg_btn : (isAr ? "تسجيل الحضور" : "Register Attendance");
+            const regText = dict?.main_reg_btn || (isAr ? 'تسجيل الحضور' : 'Register Attendance');
             btn.innerHTML = `${regText} <i class="fa-solid fa-fingerprint"></i>`;
-            btn.style.background = "";
-            btn.style.boxShadow = "";
-            btn.style.border = "";
-            btn.onclick = function () {
-                if (typeof window.forceOpenPinScreen === 'function') window.forceOpenPinScreen();
-                else window.startProcess(false);
-            };
+            btn.style.background = '';
+            btn.style.boxShadow = '';
+            btn.style.border = '';
+            btn.onclick = () => window.forceOpenPinScreen?.() ?? window.startProcess?.(false);
         }
-        btn.style.pointerEvents = 'auto';
-        btn.style.opacity = "1";
-        btn.classList.remove('locked');
-        btn.disabled = false;
-    };
+    }
 
-    window.goHome = function () {
-        const liveScreen = document.getElementById('screenLiveSession');
-        if (liveScreen) { liveScreen.style.cssText = ""; liveScreen.style.setProperty('display', 'none', 'important'); }
-        window.switchScreen('screenWelcome');
-        const infoBtn = document.getElementById('infoBtn');
-        if (infoBtn) infoBtn.style.display = 'flex';
-        document.body.classList.add('on-welcome-screen');
-        document.body.classList.remove('hide-main-icons');
-        document.body.style.overflow = 'auto';
-    };
+    function openModal(id) { const m = Utils.$(id); if (m) m.style.display = 'flex'; }
+    function closeModal(id) { const m = Utils.$(id); if (m) m.style.display = 'none'; }
 
-    window.startSmartSearch = async function () {
-        const rawInput = document.getElementById('makaniInput').value.trim();
-        const content = document.getElementById('makaniContent');
-        const modal = document.getElementById('makaniResultsModal');
-        const btn = document.getElementById('btnMakani');
-        const _t = window.t || ((k, def) => def);
+    function renderHallOptions(filter = '') {
+        const container = Utils.$('hallOptionsContainer');
+        const select = Utils.$('hallSelect');
+        if (!select || !container) return;
 
-        const smartNormalize = (text) => {
-            if (!text) return "";
-            let clean = text.toString().toLowerCase();
-            clean = clean.replace(/\b(dr|prof|eng|mr|mrs|ms|د|دكتور|مهندس)\b\.?/g, ' ');
-            clean = clean.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, " ");
-            return clean.replace(/\s+/g, ' ').trim();
+        select.innerHTML = '<option value="" disabled selected>-- اختر المدرج --</option>';
+        container.innerHTML = '';
+
+        const filtered = MASTER_HALLS.filter(h => h.includes(filter));
+
+        if (!filtered.length) {
+            container.innerHTML = '<div style="padding:10px;text-align:center;color:#94a3b8;font-size:12px;">لا توجد نتائج</div>';
+            return;
+        }
+
+        filtered.forEach(val => {
+            const opt = Object.assign(document.createElement('option'), { value: val, text: val });
+            select.appendChild(opt);
+
+            const div = Object.assign(document.createElement('div'), { className: 'custom-option' });
+            div.setAttribute('data-value', val);
+            div.innerHTML = `<span>${val}</span>`;
+            div.addEventListener('click', e => {
+                e.stopPropagation();
+                container.parentElement.querySelectorAll('.custom-option').forEach(o => o.classList.remove('selected'));
+                div.classList.add('selected');
+                const trigger = document.querySelector('#hallSelectWrapper .trigger-text');
+                if (trigger) trigger.textContent = val;
+                Utils.$('hallSelectWrapper')?.classList.remove('open');
+                select.value = val;
+                window.playClick?.();
+            });
+            container.appendChild(div);
+        });
+    }
+
+    function filterModalSubjects() {
+        const input = Utils.$('subjectSearchInput');
+        const select = Utils.$('modalSubjectSelect');
+        if (!input || !select) return;
+        const q = input.value;
+        select.innerHTML = '';
+        const labelMap = {
+            first_year: 'First Year', '1': 'First Year', second_year: 'Second Year', '2': 'Second Year',
+            third_year: 'Third Year', '3': 'Third Year', fourth_year: 'Fourth Year', '4': 'Fourth Year',
+        };
+        let hasResults = false;
+        for (const [year, subjects] of Object.entries(MASTER_SUBJECTS)) {
+            const matched = subjects.filter(s => s.includes(q));
+            if (!matched.length) continue;
+            hasResults = true;
+            const group = Object.assign(document.createElement('optgroup'), { label: labelMap[year] || year });
+            matched.forEach(sub => {
+                group.appendChild(Object.assign(document.createElement('option'), { value: sub, text: sub }));
+            });
+            select.appendChild(group);
+        }
+        if (!hasResults) {
+            select.appendChild(Object.assign(document.createElement('option'), {
+                text: Utils.lang() === 'ar' ? 'لا توجد نتائج' : 'No results found',
+                disabled: true,
+            }));
+        }
+    }
+
+    function toggleDropdown(listId) {
+        const list = Utils.$(listId);
+        document.querySelectorAll('.dropdown-list').forEach(el => { if (el.id !== listId) el.classList.remove('show'); });
+        list?.classList.toggle('show');
+    }
+
+    function selectOption(type, value) {
+        const hidden = Utils.$('reg' + type);
+        if (hidden) hidden.value = value;
+        Utils.$('dropdown' + type)?.classList.add('selected-active');
+        Utils.$('list' + type)?.classList.remove('show');
+        validateSignupForm();
+    }
+
+    function validateSignupForm() {
+        const val = id => Utils.$(id)?.value?.trim() || '';
+        const setStyle = (el, valid) => {
+            if (!el) return;
+            el.style.borderColor = valid ? '#10b981' : '#ef4444';
         };
 
+        const email = val('regEmail');
+        const emailConfirm = val('regEmailConfirm');
+        const pass = val('regPass');
+        const passConfirm = val('regPassConfirm');
+        const level = val('regLevel');
+        const gender = val('regGender');
+        const name = val('regFullName');
+        const groupRaw = val('regGroup').toUpperCase();
+
+        const emailRx = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        const isEmailValid = emailRx.test(email);
+        const isEmailMatch = isEmailValid && email === emailConfirm;
+
+        if (emailConfirm) {
+            setStyle(Utils.$('regEmailConfirm'), isEmailMatch);
+            const err = Utils.$('emailError');
+            if (err) err.style.display = isEmailMatch ? 'none' : 'block';
+        }
+
+        const isPassLen = pass.length >= 6;
+        const isPassMatch = isPassLen && pass === passConfirm;
+        if (passConfirm) {
+            setStyle(Utils.$('regPassConfirm'), isPassMatch);
+            const err = Utils.$('passError');
+            if (err) err.style.display = isPassMatch ? 'none' : 'block';
+        }
+
+        const groupRx = /^[1-4][GPNCDTBH]\d{1,2}$/;
+        const isGroupFmt = groupRx.test(groupRaw);
+        const isGroupLevel = !level || !isGroupFmt || groupRaw.startsWith(level);
+        const isGroupOk = isGroupFmt && isGroupLevel;
+        const groupEl = Utils.$('regGroup');
+        if (groupEl && groupRaw.length > 0) {
+            groupEl.style.borderColor = isGroupOk ? '#10b981' : '#ef4444';
+            groupEl.style.backgroundColor = isGroupOk ? '#f0fdf4' : '#fef2f2';
+            if (groupEl.value !== groupRaw) groupEl.value = groupRaw;
+        } else if (groupEl) {
+            groupEl.style.borderColor = groupEl.style.backgroundColor = '';
+        }
+
+        const isNameOk = name && !name.includes('⚠️') && !name.includes('❌') && !name.toLowerCase().includes('not registered');
+        const allValid = isEmailValid && isEmailMatch && isPassLen && isPassMatch
+            && level && gender && isNameOk && isGroupOk;
+
+        const btn = Utils.$('btnDoSignup');
+        if (btn) {
+            btn.disabled = !allValid;
+            btn.style.opacity = allValid ? '1' : '0.5';
+            btn.style.filter = allValid ? 'grayscale(0%)' : 'grayscale(100%)';
+            btn.style.cursor = allValid ? 'pointer' : 'not-allowed';
+            btn.style.boxShadow = allValid ? '0 4px 12px rgba(16,185,129,0.2)' : 'none';
+        }
+    }
+
+    return {
+        showToast, switchScreen, updateHeaderState,
+        openAuthDrawer, closeAuthDrawer, toggleAuthMode, togglePass,
+        applyLanguage, setMainButton, openModal, closeModal,
+        renderHallOptions, filterModalSubjects, toggleDropdown,
+        selectOption, validateSignupForm,
+    };
+})();
+
+
+const DeviceManager = (() => {
+    let _cachedId = null;
+
+    async function getUniqueDeviceId() {
+        if (_cachedId) return _cachedId;
+
+        const stored = localStorage.getItem(CFG.device.cacheKey);
+        if (stored) { _cachedId = stored; return stored; }
+
+        const extras = [
+            navigator.hardwareConcurrency || 0,
+            navigator.deviceMemory || 0,
+            screen.colorDepth,
+            `${screen.width}x${screen.height}`,
+            screen.pixelDepth || 0,
+            navigator.platform || '',
+            navigator.maxTouchPoints || 0,
+            Intl.DateTimeFormat().resolvedOptions().timeZone,
+            (navigator.languages || []).join(','),
+        ].join('||');
+
+        let fpId = `FALLBACK_${Date.now().toString(36)}`;
+        try {
+            if (window.FingerprintJS) {
+                const fp = await FingerprintJS.load();
+                const res = await fp.get();
+                fpId = res.visitorId;
+            }
+        } catch (e) {
+            console.warn('FingerprintJS failed:', e);
+        }
+
+        const finalId = await Utils.hashString(`${fpId}|${extras}`);
+        _cachedId = finalId;
+        localStorage.setItem(CFG.device.cacheKey, finalId);
+        return finalId;
+    }
+
+    function saveVerifiedCache(uid) {
+        localStorage.setItem(CFG.device.verifiedCacheKey, JSON.stringify({ uid, ts: Date.now() }));
+    }
+
+    function readVerifiedCache(uid) {
+        const raw = localStorage.getItem(CFG.device.verifiedCacheKey);
+        if (!raw) return false;
+        const data = Utils.safeJsonParse(raw);
+        return data?.uid === uid && (Date.now() - data.ts) < CFG.device.verifiedTTL;
+    }
+
+    function clearVerifiedCache() {
+        localStorage.removeItem(CFG.device.verifiedCacheKey);
+    }
+
+    return { getUniqueDeviceId, saveVerifiedCache, readVerifiedCache, clearVerifiedCache };
+})();
+
+
+const NetworkManager = (() => {
+    let _pingInterval = null;
+    let userIP = 'Unknown';
+
+    async function isReallyOnline() {
+        if (!navigator.onLine) return false;
+        try {
+            const ctrl = new AbortController();
+            setTimeout(() => ctrl.abort(), CFG.network.pingTimeoutMs);
+            await fetch(`${CFG.network.pingUrl}?${Date.now()}`, { mode: 'no-cors', signal: ctrl.signal });
+            return true;
+        } catch { return false; }
+    }
+    function showLostModal() { UI.showToast('📡 لا يوجد اتصال بالإنترنت', 2000, '#334155'); }
+    function hideLostModal() { /* toast بتختفي لوحدها */ }
+
+    function fetchIP() {
+        fetch('https://api.ipify.org?format=json')
+            .then(r => r.json())
+            .then(d => { userIP = d.ip; })
+            .catch(() => { userIP = 'Hidden IP'; });
+    }
+
+    function getIP() { return userIP; }
+
+    function initNetworkIndicator() {
+        const indicator = Utils.$('superWifiIndicator');
+        if (!indicator) return;
+        const statusText = indicator.querySelector('.wifi-text');
+        const ICON_HTML = '<i class="fa-solid fa-wifi fa-fade"></i><i class="fa-solid fa-slash wifi-slash" id="wifiSlashIcon"></i>';
+
+        function updateUI(state) {
+            indicator.classList.remove('state-loading', 'state-weak', 'wifi-status-hidden');
+            const iconBox = indicator.querySelector('.wifi-icon-box');
+            if (state !== 'LOADING' && !iconBox.querySelector('.fa-wifi')) iconBox.innerHTML = ICON_HTML;
+            const slash = Utils.$('wifiSlashIcon');
+
+            switch (state) {
+                case 'ONLINE':
+                    if (document.readyState === 'complete') indicator.classList.add('wifi-status-hidden');
+                    if (slash) slash.style.display = 'none';
+                    break;
+                case 'OFFLINE':
+                    if (statusText) statusText.innerText = 'CONNECTION LOST';
+                    if (slash) slash.style.display = 'block';
+                    break;
+                case 'WEAK':
+                    indicator.classList.add('state-weak');
+                    if (statusText) statusText.innerText = 'UNSTABLE NETWORK';
+                    if (slash) slash.style.display = 'none';
+                    break;
+                case 'LOADING':
+                    indicator.classList.add('state-loading');
+                    if (statusText) statusText.innerText = 'CONNECTING...';
+                    iconBox.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" style="font-size:16px;"></i>';
+                    break;
+            }
+        }
+
+        async function diagnose() {
+            if (document.readyState !== 'complete') updateUI('LOADING');
+            if (!navigator.onLine) { updateUI('OFFLINE'); return; }
+            try {
+                const ctrl = new AbortController();
+                setTimeout(() => ctrl.abort(), CFG.network.pingTimeoutMs);
+                await fetch(`${CFG.network.pingUrl}?${Date.now()}`, { mode: 'no-cors', signal: ctrl.signal });
+                const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+                const weak = conn && (conn.effectiveType === 'slow-2g' || conn.effectiveType === '2g' || conn.rtt > 1000);
+                updateUI(weak ? 'WEAK' : 'ONLINE');
+            } catch { updateUI('OFFLINE'); }
+        }
+
+        window.addEventListener('online', diagnose);
+        window.addEventListener('offline', () => updateUI('OFFLINE'));
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') { clearInterval(_pingInterval); _pingInterval = null; }
+            else { diagnose(); _pingInterval = setInterval(diagnose, CFG.network.pingIntervalMs); }
+        });
+
+        if (document.readyState !== 'complete') updateUI('LOADING');
+        window.addEventListener('load', diagnose);
+        _pingInterval = setInterval(diagnose, CFG.network.pingIntervalMs);
+        diagnose();
+    }
+
+    // ── Global guard (connection polling + mobile check) ───────
+    function initGlobalGuard() {
+        setInterval(async () => {
+            // بعد
+            const onLiveScreen = document.querySelector('.section.active')?.id === 'screenLiveSession';
+            if (await isReallyOnline()) hideLostModal();
+            else if (!onLiveScreen) showLostModal();
+            else hideLostModal();
+        }, 2000);
+
+        if (!isMobileDevice()) {
+            Utils.$('desktop-blocker').style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            throw new Error('Desktop access denied.');
+        }
+    }
+
+    return { isReallyOnline, showLostModal, hideLostModal, fetchIP, getIP, initNetworkIndicator, initGlobalGuard };
+})();
+
+
+const GPSManager = (() => {
+    let _watchId = null;
+    let _lat = '', _lng = '';
+    let _prefetched = null;
+    let _prefetchTime = 0;
+
+    function startWatcher() {
+        if (!navigator.geolocation) return;
+        _watchId = navigator.geolocation.watchPosition(
+            pos => { _lat = pos.coords.latitude; _lng = pos.coords.longitude; },
+            () => { },
+            { enableHighAccuracy: true, maximumAge: 30_000, timeout: 20_000 },
+        );
+    }
+
+    function stopWatcher() {
+        if (_watchId !== null) { navigator.geolocation.clearWatch(_watchId); _watchId = null; }
+    }
+
+    async function getGPSForJoin() {
+        if (_lat && _lng) return { lat: _lat, lng: _lng, cached: true };
+        return new Promise(resolve => {
+            if (!navigator.geolocation) { resolve({ lat: 0, lng: 0, error: 'unavailable' }); return; }
+            navigator.geolocation.getCurrentPosition(
+                pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                () => resolve({ lat: 0, lng: 0, error: 'denied' }),
+                { enableHighAccuracy: true, timeout: 8_000, maximumAge: 0 },
+            );
+        });
+    }
+
+    function openMapsToCollegeLocation() {
+        window._isOpeningMaps = true;
+        window.open(`https://www.google.com/maps/search/?api=1&query=${CFG.gps.targetLat},${CFG.gps.targetLng}`, '_blank');
+    }
+
+    return { startWatcher, stopWatcher, getGPSForJoin, openMapsToCollegeLocation };
+})();
+
+
+const AuthManager = (() => {
+    const db = window.db;
+    const auth = window.auth;
+
+    async function onAuthChange(user) {
+        const drawerEl = Utils.$('studentAuthDrawer');
+        const profileWrap = Utils.$('profileIconWrapper');
+        const profileIcon = Utils.$('profileIconImg');
+        const statusDot = Utils.$('userStatusDot');
+
+        if (!user) {
+            _handleSignedOut({ drawerEl, profileWrap, profileIcon, statusDot });
+            return;
+        }
+
+        const isVerifiedCached = DeviceManager.readVerifiedCache(user.uid);
+
+        try { await user.reload(); }
+        catch (e) { console.warn('user.reload() skipped — weak network:', e.code || e.message); }
+
+        let isManuallyVerified = false;
+        try {
+            const snap = await getDoc(doc(db, 'user_registrations', user.uid));
+            if (snap.exists()) {
+                const d = snap.data();
+                isManuallyVerified = d.status === 'verified' || d.manual_verification === true;
+            }
+        } catch (e) { console.warn('Manual verification check warning:', e); }
+
+        if (user.emailVerified || isManuallyVerified || isVerifiedCached) {
+            DeviceManager.saveVerifiedCache(user.uid);
+            await _handleVerifiedUser(user, { drawerEl, profileWrap, profileIcon, statusDot });
+        } else {
+            _handleUnverifiedUser({ profileWrap, profileIcon, statusDot });
+        }
+
+        window.updateUIForMode?.();
+    }
+
+    async function _handleVerifiedUser(user, els) {
+        const { drawerEl, profileWrap, profileIcon, statusDot } = els;
+
+        if (drawerEl) {
+            drawerEl.classList.remove('active');
+            setTimeout(() => { drawerEl.style.display = 'none'; }, 300);
+        }
+
+        try {
+            const snap = await getDoc(doc(db, 'user_registrations', user.uid));
+            if (!snap.exists()) return;
+            const data = snap.data();
+            const name = data.registrationInfo?.fullName || data.fullName || 'Student';
+
+            window.listenToSessionState?.();
+
+            const savedUID = localStorage.getItem('TARGET_DOCTOR_UID');
+            if (savedUID) sessionStorage.setItem('TARGET_DOCTOR_UID', savedUID);
+
+            window.monitorMyParticipation?.();
+            window.showSmartWelcome?.(name);
+            setTimeout(() => window.checkForPendingSurveys?.(), 2500);
+
+            const avatarClass = data.avatarClass || data.registrationInfo?.avatarClass || 'fa-user-graduate';
+            if (profileIcon) profileIcon.className = `fa-solid ${avatarClass}`;
+            if (profileWrap) profileWrap.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+            if (statusDot) {
+                statusDot.style.background = '#22c55e';
+                statusDot.style.boxShadow = '0 0 10px #22c55e, 0 0 20px rgba(34,197,94,0.5)';
+            }
+
+            if (data.preferredLanguage) {
+                UI.applyLanguage(data.preferredLanguage);
+                document.querySelectorAll('.active-lang-text-pro').forEach(s => {
+                    s.innerText = data.preferredLanguage === 'ar' ? 'EN' : 'عربي';
+                });
+            }
+        } catch (e) { console.error('Auth state error:', e); }
+    }
+
+    function _handleUnverifiedUser({ profileWrap, profileIcon, statusDot }) {
+        sessionStorage.clear();
+        if (profileIcon) profileIcon.className = 'fa-solid fa-envelope-circle-check';
+        if (profileWrap) profileWrap.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+        if (statusDot) statusDot.style.background = '#f59e0b';
+    }
+
+    function _handleSignedOut({ drawerEl, profileWrap, profileIcon, statusDot }) {
+        sessionStorage.clear();
+        DeviceManager.clearVerifiedCache();
+        if (window.studentStatusListener) { window.studentStatusListener(); window.studentStatusListener = null; }
+        if (profileIcon) profileIcon.className = 'fa-solid fa-user-astronaut';
+        if (profileWrap) profileWrap.style.background = 'rgba(15, 23, 42, 0.8)';
+        if (statusDot) { statusDot.style.background = '#94a3b8'; statusDot.style.boxShadow = 'none'; }
+        window.updateUIForMode?.();
+    }
+
+    async function performStudentSignup() {
+        const _t = Utils._t;
+        const fields = {
+            email: Utils.$('regEmail')?.value.trim(),
+            pass: Utils.$('regPass')?.value,
+            fullName: Utils.$('regFullName')?.value.trim(),
+            studentID: Utils.$('regStudentID')?.value.trim(),
+            level: Utils.$('regLevel')?.value,
+            gender: Utils.$('regGender')?.value,
+            group: Utils.$('regGroup')?.value || 'عام',
+        };
+
+        if (!fields.email || !fields.pass || !fields.fullName || !fields.studentID) {
+            UI.showToast(_t('msg_missing_data', '⚠️ بيانات ناقصة! يرجى ملء كل الحقول'), 3000, '#f59e0b');
+            return;
+        }
+        if (fields.pass.length < 6) {
+            UI.showToast(_t('msg_weak_pass', '⚠️ كلمة المرور ضعيفة (6 أحرف على الأقل)'), 3000, '#f59e0b');
+            return;
+        }
+
+        const btn = Utils.$('btnDoSignup');
+        const originalHtml = btn?.innerHTML;
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up fa-fade"></i> ${_t('status_connecting', 'جاري الاتصال...')}`;
+        }
+
+        try {
+            const deviceID = await DeviceManager.getUniqueDeviceId();
+            const res = await fetch(`${CFG.api.base}/api/registerStudent`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...fields, deviceFingerprint: deviceID }),
+            });
+            const result = await res.json();
+
+            if (!res.ok || !result.success) throw new Error(result.error || _t('error_security_fail', 'فشل التسجيل'));
+
+            if (btn) btn.innerHTML = `<i class="fa-regular fa-envelope fa-bounce"></i> ${_t('status_sending_email', 'إرسال رابط التفعيل...')}`;
+
+            try {
+                const cred = await signInWithEmailAndPassword(auth, fields.email, fields.pass);
+                await sendEmailVerification(cred.user);
+                await signOut(auth);
+            } catch (emailErr) {
+                console.warn('Email send warning:', emailErr);
+                UI.showToast(_t('msg_email_fail', '⚠️ تم الحساب، لكن تعذر إرسال الإيميل'), 4000, '#f59e0b');
+            }
+
+            UI.showToast(_t('msg_account_created', '✅ تم إنشاء الحساب بنجاح!'), 4000, '#10b981');
+            UI.closeAuthDrawer();
+            UI.toggleAuthMode('login');
+
+            const loginEmail = Utils.$('studentLoginEmail');
+            if (loginEmail) loginEmail.value = fields.email;
+            if (Utils.$('regPass')) Utils.$('regPass').value = '';
+            if (Utils.$('regEmail')) Utils.$('regEmail').value = '';
+
+            _showSignupSuccessModal(fields.studentID, fields.fullName);
+        } catch (error) {
+            let msg = error.message;
+            if (msg.includes('email-already-in-use')) msg = _t('error_email_exists', 'هذا البريد مسجل بالفعل!');
+            UI.showToast(`❌ ${msg}`, 5000, '#ef4444');
+        } finally {
+            if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
+        }
+    }
+
+    function _showSignupSuccessModal(studentID, fullName) {
+        const _t = Utils._t;
+        const firstName = fullName.split(' ')[0];
+        const modal = Utils.$('signupSuccessModal');
+        const title = Utils.$('successModalTitle');
+        const body = Utils.$('successModalBody');
+
+        if (title) title.innerText = `${_t('modal_welcome_title', '🎉 Welcome')} ${firstName}!`;
+        if (body) body.innerHTML = `
+            <div style="background:#f8fafc;padding:15px;border-radius:12px;margin-bottom:20px;border:1px dashed #cbd5e1;text-align:center;">
+                <div style="font-size:12px;font-weight:bold;color:#64748b;margin-bottom:5px;">${_t('modal_id_reserved', 'تم حجز الكود الجامعي:')}</div>
+                <div style="font-size:24px;font-weight:900;color:#0ea5e9;font-family:'Outfit',sans-serif;letter-spacing:1px;">${studentID}</div>
+            </div>
+            <p style="font-size:14px;color:#334155;margin-bottom:8px;">📨 ${_t('modal_email_sent', 'تم إرسال رابط تفعيل إلى بريدك الإلكتروني.')}</p>
+            <div style="background:#fee2e2;color:#b91c1c;padding:10px;border-radius:8px;font-weight:bold;font-size:12px;display:flex;align-items:center;gap:8px;">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span>${_t('modal_verify_warning', 'يرجى تفعيل الحساب من الإيميل قبل تسجيل الدخول.')}</span>
+            </div>`;
+        if (modal) modal.style.display = 'flex';
+    }
+
+    async function performStudentLogin() {
+        const _t = Utils._t;
+        const email = Utils.$('studentLoginEmail')?.value.trim();
+        const pass = Utils.$('studentLoginPass')?.value;
+        const btn = document.querySelector('#loginSection .btn-modern-action')
+            || document.querySelector('#loginSection .btn-main');
+
+        const originalHtml = btn?.innerHTML || 'Sign In';
+        if (btn) {
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${_t('status_verifying', 'جاري التحقق...')}`;
+            btn.disabled = true;
+        }
+
+        if (!email || !pass) {
+            UI.showToast(_t('msg_enter_creds', '⚠️ أدخل الإيميل والباسورد'), 3000, '#f59e0b');
+            if (btn) { btn.innerHTML = originalHtml; btn.disabled = false; }
+            return;
+        }
+
+        try {
+            const cred = await signInWithEmailAndPassword(auth, email, pass);
+            const user = cred.user;
+            const snap = await getDoc(doc(db, 'user_registrations', user.uid));
+
+            const isManuallyVerified = snap.exists() && snap.data().status === 'verified';
+
+            if (!user.emailVerified && !isManuallyVerified) {
+                await signOut(auth);
+                const vModal = Utils.$('verificationModal');
+                if (vModal) { vModal.style.display = 'flex'; navigator.vibrate?.([200, 100, 200]); }
+                else UI.showToast(_t('msg_email_not_verified', '⛔ حساب غير مفعل! راجع الإيميل.'), 5000, '#ef4444');
+                return;
+            }
+
+            if (snap.exists()) {
+                const data = snap.data();
+                const info = data.registrationInfo || data;
+                _cacheProfile(user.uid, info, data);
+                await _syncDeviceBinding(user.uid);
+            }
+
+            UI.showToast(_t('msg_login_success', '🔓 تم تسجيل الدخول.. أهلاً بك'), 3000, '#10b981');
+            UI.closeAuthDrawer();
+
+        } catch (error) {
+            UI.showToast(_resolveAuthError(error.code), 5000, '#ef4444');
+            window.playBeep?.();
+        } finally {
+            if (btn) { btn.innerHTML = originalHtml; btn.disabled = false; }
+        }
+    }
+
+    function _cacheProfile(uid, info, data) {
+        const cache = {
+            fullName: info.fullName, email: info.email, studentID: info.studentID,
+            level: info.level, gender: info.gender, group: info.group || '',
+            avatarClass: data.avatarClass || info.avatarClass || 'fa-user-graduate',
+            status_message: data.status_message || '', uid, type: 'student',
+        };
+        localStorage.setItem('cached_profile_data', JSON.stringify(cache));
+    }
+
+    async function _syncDeviceBinding(uid) {
+        try {
+            const deviceId = await DeviceManager.getUniqueDeviceId();
+            await updateDoc(doc(db, 'user_registrations', uid), {
+                bound_device_id: deviceId,
+                device_bind_date: serverTimestamp(),
+                last_device_sync: serverTimestamp(),
+            });
+        } catch (e) { console.warn('Device sync warning:', e); }
+    }
+
+    function _resolveAuthError(code) {
+        const _t = Utils._t;
+        const map = {
+            'auth/user-not-found': _t('error_user_not_found', '❌ هذا البريد الإلكتروني غير مسجل لدينا!'),
+            'auth/wrong-password': _t('error_wrong_pass', '❌ كلمة المرور غير صحيحة!'),
+            'auth/invalid-credential': _t('error_invalid_cred', '❌ البريد الإلكتروني أو كلمة المرور غير صحيحة.'),
+            'auth/invalid-email': _t('error_invalid_email', '⚠️ صيغة البريد الإلكتروني غير سليمة!'),
+            'auth/user-disabled': _t('error_user_disabled', '⛔ تم تعطيل هذا الحساب من قبل الإدارة.'),
+            'auth/too-many-requests': _t('error_too_many', '⏳ محاولات كثيرة! تم إيقاف الدخول مؤقتاً.'),
+            'auth/network-request-failed': _t('error_network', '📡 فشل الاتصال! تأكد من الإنترنت.'),
+        };
+        return map[code] || `${_t('error_unknown', '❌ خطأ غير معروف')}: ${code}`;
+    }
+
+    return { onAuthChange, performStudentSignup, performStudentLogin };
+})();
+
+
+const SessionManager = (() => {
+    const db = window.db;
+    const auth = window.auth;
+
+    async function monitorMyParticipation() {
+        const user = auth.currentUser;
+        const mainBtn = Utils.$('mainActionBtn');
+        if (!user) return;
+
+        let targetDoctorUID = localStorage.getItem('TARGET_DOCTOR_UID');
+
+        if (!targetDoctorUID) {
+            if (mainBtn) {
+                mainBtn.innerHTML = '<i class="fa-solid fa-arrows-rotate fa-spin"></i> جاري المزامنة...';
+                mainBtn.style.opacity = '0.7';
+                mainBtn.style.pointerEvents = 'none';
+            }
+            targetDoctorUID = await _recoverActiveSession(user.uid);
+            if (!targetDoctorUID) { UI.setMainButton('register'); return; }
+        }
+
+        window.studentStatusListener?.();
+        window.sessionStatusListener?.();
+
+        window.sessionStatusListener = onSnapshot(
+            doc(db, 'active_sessions', targetDoctorUID),
+            snap => {
+                if (!snap.exists() || !snap.data().isActive) {
+                    localStorage.removeItem('TARGET_DOCTOR_UID');
+                    sessionStorage.removeItem('TARGET_DOCTOR_UID');
+                    UI.setMainButton('register');
+                    window.studentStatusListener?.();
+                    window.studentStatusListener = null;
+                }
+            },
+        );
+
+        window.studentStatusListener = onSnapshot(
+            doc(db, 'active_sessions', targetDoctorUID, 'participants', user.uid),
+            snap => _handleParticipantChange(snap, targetDoctorUID),
+            err => { console.warn('Listener error:', err); UI.setMainButton('register'); },
+        );
+    }
+
+    async function _recoverActiveSession(uid) {
+        try {
+            const q = query(collection(db, 'active_sessions'), where('isActive', '==', true), limit(20));
+            const snap = await getDocs(q);
+            for (const s of snap.docs) {
+                const pSnap = await getDoc(doc(db, 'active_sessions', s.id, 'participants', uid));
+                if (pSnap.exists() && pSnap.data().status === 'active') {
+                    localStorage.setItem('TARGET_DOCTOR_UID', s.id);
+                    return s.id;
+                }
+            }
+        } catch (e) { console.error('Session recovery error:', e); }
+        return null;
+    }
+
+    function _handleParticipantChange(snap, doctorUID) {
+        if (!snap.exists()) {
+            sessionStorage.removeItem('TARGET_DOCTOR_UID');
+            UI.setMainButton('register');
+            if (document.querySelector('.section.active')?.id === 'screenLiveSession') {
+                UI.showToast('⚠️ تم إغلاق الجلسة أو إخراجك منها', 4000, '#f59e0b');
+                window.goHome?.();
+            }
+            return;
+        }
+
+        const { status } = snap.data();
+
+        if (status === 'expelled') {
+            _handleExpulsion();
+            return;
+        }
+        if (status === 'on_break') {
+            _handleBreak();
+            return;
+        }
+        if (status === 'active') {
+            Utils.$('breakModal') && (Utils.$('breakModal').style.display = 'none');
+            sessionStorage.setItem('TARGET_DOCTOR_UID', doctorUID);
+            UI.setMainButton('enter');
+        }
+    }
+
+    function _handleExpulsion() {
+        const _t = Utils._t;
+        window.studentStatusListener?.();
+        window.studentStatusListener = null;
+        sessionStorage.removeItem('TARGET_DOCTOR_UID');
+        localStorage.removeItem('TARGET_DOCTOR_UID');
+        UI.setMainButton('register');
+
+        const liveScreen = Utils.$('screenLiveSession');
+        if (liveScreen) { liveScreen.style.setProperty('display', 'none', 'important'); liveScreen.classList.remove('active'); }
+        window.goHome?.();
+
+        const exModal = Utils.$('expulsionModal');
+        const exTitle = Utils.$('expelTitle');
+        const exBody = Utils.$('expelBody');
+        if (exTitle) exTitle.innerText = _t('modal_expel_title', '⛔ You have been expelled!');
+        if (exBody) exBody.innerHTML = _t('modal_expel_body', 'The instructor has removed you from this session.<br>You cannot rejoin.');
+        if (exModal) {
+            exModal.style.setProperty('display', 'flex', 'important');
+            const btn = exModal.querySelector('button') || exModal.querySelector('.btn-danger');
+            if (btn) { btn.innerHTML = _t('btn_leave_hall', 'Leave Hall ➜'); btn.onclick = () => { exModal.style.display = 'none'; window.location.reload(); }; }
+            navigator.vibrate?.([500, 200, 500]);
+        } else {
+            alert(_t('modal_expel_title', '⛔ You have been expelled!'));
+            window.location.reload();
+        }
+    }
+
+    function _handleBreak() {
+        sessionStorage.removeItem('TARGET_DOCTOR_UID');
+        UI.setMainButton('register');
+        window.unsubscribeLiveSnapshot?.();
+        window.unsubscribeLiveSnapshot = null;
+        const live = Utils.$('screenLiveSession');
+        if (live) { live.style.cssText = ''; live.style.setProperty('display', 'none', 'important'); }
+        UI.switchScreen('screenWelcome');
+        UI.showToast('⏸️ استراحة: يرجى تسجيل الدخول مجدداً عند الاستئناف', 4000, '#f59e0b');
+    }
+
+    async function searchForSession() {
+        const codeInput = Utils.$('attendanceCode');
+        const btn = Utils.$('btnSearchSession');
+        const code = codeInput?.value.trim();
+        if (!code) { UI.showToast('⚠️ Please enter session PIN', 3000, '#f59e0b'); return; }
+
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> SEARCHING...';
+        btn.style.pointerEvents = 'none';
+
+        try {
+            const q = query(collection(db, 'active_sessions'),
+                where('sessionCode', '==', code),
+                where('isActive', '==', true),
+                where('isDoorOpen', '==', true));
+            const snap = await getDocs(q);
+
+            if (snap.empty) {
+                const checkSnap = await getDocs(query(collection(db, 'active_sessions'), where('sessionCode', '==', code)));
+                UI.showToast(checkSnap.empty ? '❌ Invalid Session PIN' : '🔒 Session is currently CLOSED', 4000, '#ef4444');
+                return;
+            }
+
+            const sessionDoc = snap.docs[0];
+            const sessionData = sessionDoc.data();
+            const doctorUID = sessionDoc.id;
+            sessionStorage.setItem('TEMP_DR_UID', doctorUID);
+            window.stopCodeEntryIdleTimer?.();
+            _populateSessionUI(sessionData);
+
+            const noPassword = !sessionData.sessionPassword?.trim();
+            _showStep(2);
+            if (noPassword) {
+                setTimeout(() => joinSessionAction(), 300);
+            } else {
+                setTimeout(() => Utils.$('sessionPass')?.focus(), 400);
+            }
+
+            window.startAuthScreenTimer?.(doctorUID);
+        } catch (e) {
+            console.error('Search error:', e);
+            const isAr = Utils.lang() === 'ar';
+            UI.showToast(isAr ? '📡 لا يوجد اتصال، تأكد من النت' : '📡 No connection, check your network', 4000, '#ef4444');
+        } finally {
+            btn.innerHTML = originalHtml;
+            btn.style.pointerEvents = 'auto';
+        }
+    }
+
+    function _populateSessionUI(data) {
+        const docName = Utils.$('foundDocName');
+        const subName = Utils.$('foundSubjectName');
+        const avatar = Utils.$('foundDocAvatar');
+        if (docName) { docName.innerText = `Dr. ${data.doctorName || 'Unknown'}`; docName.style.fontFamily = "'Outfit', sans-serif"; }
+        if (subName) { subName.innerText = data.allowedSubject || '--'; subName.style.fontFamily = "'Outfit', sans-serif"; }
+        if (avatar && data.doctorAvatar) avatar.innerHTML = `<i class="fa-solid ${data.doctorAvatar}"></i>`;
+    }
+
+    function _showStep(step) {
+        Utils.$('step1_search')?.style.setProperty('display', step === 1 ? 'block' : 'none');
+        const step2 = Utils.$('step2_auth');
+        if (step2) {
+            step2.style.display = step === 2 ? 'block' : 'none';
+            if (step === 2) step2.classList.add('active');
+            else step2.classList.remove('active');
+        }
+    }
+
+    function resetSearchSession() {
+        _showStep(1);
+        Utils.$('step1_search').style.cssText = 'display:block;opacity:1;visibility:visible;';
+        const passInput = Utils.$('sessionPass');
+        const codeInput = Utils.$('attendanceCode');
+        if (passInput) passInput.value = '';
+        if (codeInput) codeInput.value = '';
+        Utils.$('screenError') && (Utils.$('screenError').style.display = 'none');
+        window.startCodeEntryIdleTimer?.();
+    }
+
+    async function joinSessionAction() {
+        const passInput = Utils.$('sessionPass')?.value.trim();
+        const btn = Utils.$('btnJoinFinal');
+        const doctorUID = sessionStorage.getItem('TEMP_DR_UID');
+        const user = auth.currentUser;
+
+        if (!user) { UI.showToast('❌ يجب تسجيل الدخول أولاً', 3000, '#ef4444'); return; }
+        if (!doctorUID) {
+            UI.showToast('⚠️ حدث خطأ في بيانات الجلسة، يرجى البحث مجدداً', 4000, '#f59e0b');
+            resetSearchSession();
+            return;
+        }
+
+        window.isJoiningProcessActive = true;
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Verifying & Joining...';
+        btn.style.pointerEvents = 'none';
+
+        try {
+            const [sessionSnap, gpsData, deviceFingerprint, idToken, sensSnap] = await Promise.all([
+                getDoc(doc(db, 'active_sessions', doctorUID)),
+                GPSManager.getGPSForJoin(),
+                DeviceManager.getUniqueDeviceId(),
+                user.getIdToken(),
+                getDoc(doc(db, 'user_registrations', user.uid, 'sensitive_info', 'main')),
+            ]);
+
+            if (!sessionSnap.exists()) throw new Error('⛔ الجلسة غير موجودة');
+            const sessionData = sessionSnap.data();
+            if (!sessionData.isActive || !sessionData.isDoorOpen) throw new Error('🔒 عذراً، الجلسة مغلقة حالياً.');
+            if (sessionData.sessionPassword?.trim() && passInput !== sessionData.sessionPassword)
+                throw new Error('❌ كلمة المرور غير صحيحة');
+
+            const isDeviceMatch = await _verifyOrBindDevice(sensSnap, deviceFingerprint, user.uid);
+
+            await AuditManager.sendSecretLog(db, user, sessionData, {
+                deviceFingerprint, isDeviceMatch,
+                userIP: NetworkManager.getIP(),
+                gpsData,
+            });
+
+            const res = await fetch(`${CFG.api.base}/joinSessionSecure`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+                body: JSON.stringify({
+                    studentUID: user.uid, sessionDocID: doctorUID,
+                    gpsLat: gpsData.lat || 0, gpsLng: gpsData.lng || 0,
+                    deviceFingerprint, isDeviceMatch, codeInput: sessionData.sessionCode,
+                }),
+            });
+            const result = await res.json();
+            if (!res.ok || !result.success) throw new Error(result.error || 'تم رفض الدخول من قبل النظام الأمني');
+
+            window.stopCodeEntryIdleTimer?.();
+            UI.showToast(`✅ ${result.message}`, 3000, '#10b981');
+
+            localStorage.setItem('TARGET_DOCTOR_UID', doctorUID);
+            sessionStorage.setItem('TARGET_DOCTOR_UID', doctorUID);
+            sessionStorage.removeItem('TEMP_DR_UID');
+
+            _incrementAttendanceCache(user.uid);
+            _populateLiveSessionUI(sessionData);
+
+            UI.setMainButton('enter');
+            setTimeout(() => window.monitorMyParticipation?.(), 100);
+            UI.switchScreen('screenLiveSession');
+            window.startLiveSnapshotListener?.();
+
+        } catch (e) {
+            console.error('Join session error:', e);
+            window.isJoiningProcessActive = false;
+            let msg = e.message;
+            if (msg.includes('Failed to fetch')) msg = 'فشل الاتصال بالسيرفر! تأكد من الإنترنت.';
+            UI.showToast(['❌', '⛔', '🔒'].some(p => msg.startsWith(p)) ? msg : `⚠️ ${msg}`, 4000, '#ef4444');
+            if (msg.includes('غير موجودة') || msg.includes('مغلقة')) setTimeout(() => location.reload(), 1500);
+        } finally {
+            if (document.querySelector('.section.active')?.id !== 'screenLiveSession') {
+                btn.innerHTML = originalHtml;
+                btn.style.pointerEvents = 'auto';
+            }
+        }
+    }
+
+    async function _verifyOrBindDevice(sensSnap, fingerprint, uid) {
+        try {
+            if (!sensSnap.exists()) return true;
+            const data = sensSnap.data();
+            let allowed = data.allowed_devices || (data.bound_device_id ? [data.bound_device_id] : []);
+            if (allowed.includes(fingerprint)) return true;
+            if (allowed.length < 2) {
+                allowed.push(fingerprint);
+                await setDoc(doc(db, 'user_registrations', uid, 'sensitive_info', 'main'),
+                    { allowed_devices: allowed, second_device_added_at: serverTimestamp() }, { merge: true });
+                return true;
+            }
+            return false;
+        } catch (e) { console.error('Device security sync error:', e); return true; }
+    }
+
+    function _incrementAttendanceCache(uid) {
+        try {
+            const raw = localStorage.getItem('cached_profile_data');
+            if (!raw) return;
+            const obj = JSON.parse(raw);
+            if (obj.uid === uid) {
+                obj.attendanceCount = (obj.attendanceCount || 0) + 1;
+                localStorage.setItem('cached_profile_data', JSON.stringify(obj));
+            }
+        } catch { /* non-critical */ }
+    }
+
+    function _populateLiveSessionUI(data) {
+        const name = Utils.$('liveDocName');
+        const subject = Utils.$('liveSubjectTag');
+        const avatar = Utils.$('liveDocAvatar');
+        if (name) name.innerText = data.doctorName || 'Professor';
+        if (subject) subject.innerText = data.allowedSubject || 'Subject';
+        if (avatar && data.doctorAvatar) avatar.innerHTML = `<i class="fa-solid ${data.doctorAvatar}"></i>`;
+    }
+
+    return { monitorMyParticipation, searchForSession, resetSearchSession, joinSessionAction };
+})();
+
+
+function startAuthScreenTimer(doctorUID) {
+    const db = window.db;
+    const display = Utils.$('authTimerDisplay');
+    const pill = document.querySelector('.auth-timer-pill');
+    const _t = Utils._t;
+
+    window.authUnsubscribe?.();
+    window.authUnsubscribe = null;
+    clearInterval(window.localTicker);
+    window.localTicker = null;
+
+    const sessionRef = doc(db, 'active_sessions', doctorUID);
+
+    window.authUnsubscribe = onSnapshot(sessionRef, snap => {
+        if (!snap.exists()) { _endSession(_t, '⛔ Session ended by instructor.'); return; }
+        const data = snap.data();
+        if (!data.isActive || !data.isDoorOpen) {
+            if (window.isJoiningProcessActive) return;
+            _endSession(_t, '🔒 Registration closed by lecturer.');
+            return;
+        }
+        if (data.duration === -1) {
+            clearInterval(window.localTicker);
+            _updateTimerUI(display, pill, 'OPEN', 'normal');
+            return;
+        }
+
+        const serverReadMs = snap.readTime ? snap.readTime.toMillis() : Date.now();
+        const offset = serverReadMs - Date.now();
+        const startMs = data.startTime ? data.startTime.toMillis() : serverReadMs;
+        const deadline = startMs + data.duration * 1000;
+
+        clearInterval(window.localTicker);
+        _runTick(deadline, offset, display, pill, _t);
+        window.localTicker = setInterval(() => _runTick(deadline, offset, display, pill, _t), 1000);
+    }, err => console.error('Timer listener error:', err));
+
+    function _runTick(deadline, offset, display, pill, _t) {
+        const remaining = Math.floor((deadline - (Date.now() + offset)) / 1000);
+        if (remaining <= 0) {
+            clearInterval(window.localTicker);
+            if (window.isJoiningProcessActive) return;
+            _updateTimerUI(display, pill, '0s', 'urgent');
+            window.authUnsubscribe?.();
+            window.authUnsubscribe = null;
+            UI.showToast(_t('toast_session_timer_ended', '⏰ Time is up! Entrance period has ended.'), 4000, '#ef4444');
+            setTimeout(() => location.reload(), 3000);
+            return;
+        }
+        _updateTimerUI(display, pill, `${remaining}s`, remaining <= 10 ? 'urgent' : 'normal');
+    }
+
+    function _updateTimerUI(display, pill, text, mode) {
+        if (display) display.innerText = text;
+        if (!pill) return;
+        pill.classList.remove('urgent-mode');
+        pill.style.cssText = '';
+        if (mode === 'urgent') { pill.classList.add('urgent-mode'); }
+        else if (text === 'OPEN') {
+            pill.style.background = '#ecfdf5';
+            pill.style.color = '#10b981';
+            pill.style.borderColor = '#a7f3d0';
+        }
+    }
+
+    function _endSession(_t, msg) {
+        window.authUnsubscribe?.();
+        clearInterval(window.localTicker);
+        UI.showToast(_t('toast_session_closed_manual', msg), 4000, '#ef4444');
+        setTimeout(() => location.reload(), 2500);
+    }
+}
+
+
+const ProfileManager = (() => {
+    const db = window.db;
+    const auth = window.auth;
+
+    async function openStudentProfile(forceRefresh = false) {
+        const user = auth.currentUser;
+        Utils.$('infoBtn') && (Utils.$('infoBtn').style.display = 'none');
+        if (!user) { UI.showToast('⚠️ يرجى تسجيل الدخول أولاً', 3000, '#f59e0b'); return; }
+
+        const modal = Utils.$('studentProfileModal');
+        if (modal) { modal.style.display = 'flex'; setTimeout(() => modal.classList.add('active'), 10); }
+
+        _renderFromCache(user.uid);
+
+        const statsCacheKey = `stats_cache_${user.uid}`;
+        const cachedStats = Utils.safeJsonParse(localStorage.getItem(statsCacheKey));
+        if (cachedStats && !forceRefresh && (Date.now() - cachedStats.timestamp) < CFG.ui.statsCacheTTL) {
+            _renderStats(cachedStats); return;
+        }
+
+        _showStatsLoading();
+        try {
+            const snap = await getDoc(doc(db, 'user_registrations', user.uid));
+            if (!snap.exists()) return;
+            const data = snap.data();
+            const info = data.registrationInfo || data;
+            _renderProfileInfo(user, info, data);
+            const stats = await _computeStats(user.uid, info.group);
+            _renderStats(stats);
+            localStorage.setItem(statsCacheKey, JSON.stringify({ ...stats, timestamp: Date.now() }));
+        } catch (e) {
+            console.error('Profile load error:', e);
+            Utils.$('profAttendanceVal').innerText = '?';
+            Utils.$('profAbsenceVal').innerText = '?';
+        }
+    }
+
+    function _renderFromCache(uid) {
+        const raw = localStorage.getItem('cached_profile_data');
+        if (!raw) return;
+        const d = Utils.safeJsonParse(raw);
+        if (!d || d.uid !== uid) return;
+        Utils.$('profFullName').innerText = d.fullName || '--';
+        Utils.$('profStudentID').innerText = d.studentID || '--';
+        Utils.$('profLevel').innerText = `الفرقة ${d.level || '?'}`;
+        Utils.$('profGender').innerText = d.gender || '--';
+        Utils.$('profEmail').innerText = d.email || '--';
+        _setCollegeRole(d.group, d.college);
+        const av = Utils.$('currentAvatar');
+        if (av) { av.innerHTML = `<i class="fa-solid ${d.avatarClass || 'fa-user-graduate'}"></i>`; av.style.color = 'var(--primary-dark)'; }
+    }
+
+    function _renderProfileInfo(user, info, data) {
+        Utils.$('profFullName').innerText = info.fullName || '--';
+        Utils.$('profStudentID').innerText = info.studentID || '--';
+        Utils.$('profLevel').innerText = `الفرقة ${info.level || '?'}`;
+        Utils.$('profGender').innerText = info.gender || '--';
+        Utils.$('profEmail').innerText = info.email || user.email || '--';
+        _setCollegeRole(info.group, data.college || info.college);
+        const av = Utils.$('currentAvatar');
+        if (av) { av.innerHTML = `<i class="fa-solid ${data.avatarClass || info.avatarClass || 'fa-user-graduate'}"></i>`; av.style.color = 'var(--primary-dark)'; }
+    }
+
+    function _setCollegeRole(group = '', collegeCode = '') {
+        const letter = collegeCode
+            ? (CFG.colleges.codeMap[collegeCode] || group[1]?.toUpperCase() || 'N')
+            : (group.length >= 2 ? group[1].toUpperCase() : 'N');
+        const roleEl = document.querySelector('.pro-role');
+        if (roleEl) roleEl.innerHTML =
+            `<span style="font-size:13px;font-weight:800;">${CFG.colleges.nameMap[letter] || 'Nursing'} Student</span><br>` +
+            `<span style="font-size:13px;color:#0ea5e9;font-weight:900;background:#e0f2fe;padding:2px 10px;border-radius:20px;display:inline-block;margin-top:4px;">${group || '--'}</span>`;
+    }
+
+    async function _computeStats(uid, rawGroup) {
+        const group = rawGroup?.trim() || 'General';
+        const normalizeStr = s => s.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '').toLowerCase();
+
+        const q = query(collection(db, 'course_counters'), where('targetGroups', 'array-contains', group));
+        const [myStatsSnap, countersSnap] = await Promise.all([
+            getDoc(doc(db, 'student_stats', uid)),
+            getDocs(q),
+        ]);
+
+        let attended = {};
+        let discipline = 'good';
+        if (myStatsSnap.exists()) {
+            const d = myStatsSnap.data();
+            attended = d.attended || {};
+            if (d.cumulative_unruly >= 3) discipline = 'bad';
+            else if (d.cumulative_unruly > 0) discipline = 'warning';
+        }
+
+        const heldMap = {};
+        countersSnap.forEach(d => {
+            const s = d.data().subject.trim();
+            heldMap[s] = (heldMap[s] || 0) + 1;
+        });
+
+        let totalAttendance = 0, totalAbsence = 0;
+        for (const [subject, heldCount] of Object.entries(heldMap)) {
+            let studentCount = 0;
+            const tNorm = normalizeStr(subject);
+            for (const [k, v] of Object.entries(attended)) {
+                if (normalizeStr(k) === tNorm) { studentCount = v; break; }
+            }
+            totalAttendance += studentCount;
+            totalAbsence += Math.max(0, heldCount - studentCount);
+        }
+        return { attendance: totalAttendance, absence: totalAbsence, discipline };
+    }
+
+    function _showStatsLoading() {
+        Utils.$('profAttendanceVal').innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" style="font-size:14px"></i>';
+        Utils.$('profAbsenceVal').innerHTML = '-';
+        Utils.$('profDisciplineVal').innerHTML = '-';
+    }
+
+    function _renderStats({ attendance, absence, discipline }) {
+        Utils.$('profAttendanceVal').innerText = attendance;
+        Utils.$('profAbsenceVal').innerText = absence;
+        const el = Utils.$('profDisciplineVal');
+        if (!el) return;
+        const map = { bad: ['مشاغب', '#ef4444'], warning: ['تنبيه', '#f59e0b'], good: ['ملتزم', '#10b981'] };
+        const [text, color] = map[discipline] || map.good;
+        el.innerText = text;
+        el.style.color = color;
+    }
+
+    async function openAvatarSelector() {
+        const user = auth.currentUser;
+        if (!user) return;
+        const grid = Utils.$('avatarsGrid');
+        if (!grid) return;
+
+        let gender = 'Male';
+        try {
+            const snap = await getDoc(doc(db, 'user_registrations', user.uid));
+            if (snap.exists()) gender = snap.data().registrationInfo?.gender || snap.data().gender || 'Male';
+        } catch { /* use default */ }
+
+        grid.innerHTML = '';
+        const icons = CFG.avatars[gender] || CFG.avatars.Male;
+        icons.forEach((iconClass, i) => {
+            const color = CFG.avatarColors[i % CFG.avatarColors.length];
+            const item = Object.assign(document.createElement('div'), { className: 'avatar-option-modern' });
+            item.innerHTML = `<i class="fa-solid ${iconClass}"></i>`;
+            Object.assign(item.style, { color, borderColor: `${color}40`, backgroundColor: `${color}10` });
+            item.onclick = () => saveNewAvatar(iconClass, color);
+            grid.appendChild(item);
+        });
+
+        const modal = Utils.$('avatarSelectorModal');
+        if (modal) { modal.style.zIndex = '2147483647'; modal.style.display = 'flex'; setTimeout(() => modal.classList.add('active'), 10); }
+    }
+
+    async function saveNewAvatar(iconClass, color) {
+        const user = auth.currentUser;
+        if (!user) return;
+
+        const el = Utils.$('currentAvatar');
+        if (el) {
+            el.innerHTML = `<i class="fa-solid ${iconClass}"></i>`;
+            if (color) { el.style.color = color; el.style.borderColor = color; el.style.backgroundColor = `${color}10`; }
+        }
+        Utils.$('avatarSelectorModal').style.display = 'none';
+
+        try {
+            await setDoc(doc(db, 'user_registrations', user.uid), { avatarClass: iconClass }, { merge: true });
+            const raw = localStorage.getItem('cached_profile_data');
+            if (raw) {
+                const obj = JSON.parse(raw);
+                if (obj.uid === user.uid) { obj.avatarClass = iconClass; localStorage.setItem('cached_profile_data', JSON.stringify(obj)); }
+            }
+            UI.showToast('✅ تم تحديث صورتك بنجاح', 2000, '#10b981');
+        } catch (e) { UI.showToast('❌ فشل حفظ التغييرات', 3000, '#ef4444'); }
+    }
+
+    async function autoFetchName(studentId) {
+        const nameInput = Utils.$('regFullName');
+        const signupBtn = Utils.$('btnDoSignup');
+        if (!nameInput) return;
+
+        nameInput.value = '';
+        nameInput.placeholder = 'جاري التحقق أمنياً...';
+        const cleanId = studentId.toString().trim();
+        if (!cleanId || cleanId.length < 4) { nameInput.placeholder = 'Full Name'; return; }
+
+        try {
+            const lockSnap = await getDoc(doc(db, 'taken_student_ids', cleanId));
+            if (lockSnap.exists()) {
+                nameInput.value = '⚠️ الكود محجوز لحساب آخر';
+                nameInput.style.color = '#ef4444';
+                if (signupBtn) signupBtn.disabled = true;
+                return;
+            }
+            const stdSnap = await getDoc(doc(db, 'students', cleanId));
+            if (stdSnap.exists()) {
+                nameInput.value = stdSnap.data().name;
+                nameInput.style.color = '#0f172a';
+                nameInput.placeholder = '';
+            } else {
+                nameInput.value = '❌ كود غير مسجل';
+                nameInput.style.color = '#b91c1c';
+            }
+        } catch { nameInput.value = '⚠️ اعد المحاولة'; }
+        finally { UI.validateSignupForm(); }
+    }
+
+    return { openStudentProfile, openAvatarSelector, saveNewAvatar, autoFetchName };
+})();
+
+
+const FeedbackManager = (() => {
+    const db = window.db;
+    const auth = window.auth;
+
+    async function checkForPendingSurveys() {
+        const user = auth.currentUser;
+        if (!user || user.uid === CFG.firebase.excludedUID) return;
+
+        try {
+            const userDoc = await getDoc(doc(db, 'user_registrations', user.uid));
+            const studentCode = userDoc.data()?.registrationInfo?.studentID || userDoc.data()?.studentID;
+            if (!studentCode) return;
+
+            const q = query(collection(db, 'attendance'),
+                where('id', '==', studentCode),
+                where('feedback_status', '==', 'pending'),
+                limit(1));
+            const snap = await getDocs(q);
+            if (snap.empty) return;
+
+            const pending = snap.docs[0];
+            const localKey = `fd_${pending.id}`;
+
+            if (localStorage.getItem(localKey)) {
+                try {
+                    await updateDoc(doc(db, 'attendance', pending.id), {
+                        feedback_status: 'dismissed',
+                        dismissed_at: serverTimestamp(),
+                    });
+                } catch { /* retry next time */ }
+                return;
+            }
+
+            _showFeedbackModal(pending.id, pending.data());
+        } catch (e) { console.error('Survey check error:', e); }
+    }
+
+    function _showFeedbackModal(docId, data) {
+        Utils.$('feedbackSubjectName').innerText = data.subject || 'محاضرة';
+        Utils.$('feedbackDocName').innerText = data.doctorName || 'الكلية';
+        Utils.$('targetAttendanceDocId').value = docId;
+        selectStar(0);
+        Utils.$('feedbackModal').style.display = 'flex';
+        _injectSkipButton();
+    }
+
+    function _injectSkipButton() {
+        const modal = Utils.$('feedbackModal');
+        if (!modal || modal.querySelector('.btn-skip-feedback')) return;
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn-skip-feedback';
+        Object.assign(btn.style, {
+            display: 'block', margin: '10px auto 0', background: 'none',
+            border: 'none', color: '#94a3b8', fontSize: '12px', cursor: 'pointer',
+            padding: '6px 12px', borderRadius: '8px', transition: 'color 0.2s',
+            borderBottom: '0.5px solid #cbd5e1',
+        });
+        btn.innerText = Utils.lang() === 'ar' ? 'لا شكراً، ربما لاحقاً' : 'No thanks, maybe later';
+        btn.onmouseenter = () => { btn.style.color = 'var(--color-text-secondary)'; };
+        btn.onmouseleave = () => { btn.style.color = '#94a3b8'; };
+        btn.onclick = dismissFeedback;
+
+        const submitBtn = modal.querySelector('.btn-main');
+        submitBtn?.parentNode?.insertBefore(btn, submitBtn.nextSibling) ?? modal.appendChild(btn);
+    }
+
+    async function dismissFeedback() {
+        const docId = Utils.$('targetAttendanceDocId')?.value;
+        UI.closeModal('feedbackModal');
+        if (!docId) return;
+
+        UI.showToast('تم تخطي التقييم', 2000, '#64748b');
+
+        try {
+            const uid = auth.currentUser?.uid || 'unknown';
+            const token = await Utils.hashString(`${docId}${uid}dismiss_v1`);
+            localStorage.setItem(`fd_${docId}`, JSON.stringify({ ts: Date.now(), token }));
+        } catch {
+            localStorage.setItem(`fd_${docId}`, JSON.stringify({ ts: Date.now() }));
+        }
+
+        try {
+            await updateDoc(doc(db, 'attendance', docId), {
+                feedback_status: 'dismissed',
+                dismissed_at: serverTimestamp(),
+            });
+        } catch (e) {
+            console.warn('Dismiss Firestore sync failed — local cache active:', e.code || e.message);
+        }
+
+        setTimeout(() => checkForPendingSurveys(), 600);
+    }
+
+    function selectStar(val) {
+        const dict = i18n[Utils.lang()] || {};
+        const texts = ['', dict.rate_bad, dict.rate_poor, dict.rate_fair, dict.rate_good, dict.rate_excellent];
+        document.querySelectorAll('.star-btn').forEach(star => {
+            star.classList.toggle('active', parseInt(star.getAttribute('data-value')) <= val);
+        });
+        const textEl = Utils.$('ratingText');
+        if (textEl) {
+            textEl.innerText = texts[val] || '';
+            textEl.style.animation = 'none';
+            setTimeout(() => { textEl.style.animation = 'fadeIn 0.3s'; }, 10);
+        }
+        Utils.$('selectedRating').value = val;
+        navigator.vibrate?.(20);
+    }
+
+    async function submitFeedback() {
+        const rating = Utils.$('selectedRating')?.value;
+        const docId = Utils.$('targetAttendanceDocId')?.value;
+        const btn = document.querySelector('#feedbackModal .btn-main');
+
+        if (!rating || rating === '0') { UI.showToast('⚠️ من فضلك قيم بعدد النجوم', 2000, '#f59e0b'); return; }
+
+        btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> جاري التوثيق...';
+        btn.style.pointerEvents = 'none';
+
+        try {
+            const attRef = doc(db, 'attendance', docId);
+            const attSnap = await getDoc(attRef);
+            if (!attSnap.exists()) throw new Error('بيانات الحضور غير موجودة');
+            const room = attSnap.data();
+
+            const batch = writeBatch(db);
+            batch.update(attRef, { feedback_status: 'submitted', feedback_timestamp: serverTimestamp() });
+            batch.set(doc(collection(db, 'feedback_reports')), {
+                rating: parseInt(rating), comment: '', timestamp: serverTimestamp(),
+                doctorName: room.doctorName, doctorUID: room.doctorUID, subject: room.subject,
+                hall: room.hall || 'Unknown', date: room.date, studentId: room.id, studentLevel: 'General',
+            });
+            await batch.commit();
+
+            try { localStorage.removeItem(`fd_${docId}`); } catch { /* non-critical */ }
+
+            UI.closeModal('feedbackModal');
+            UI.showToast('✅ تم وصول تقييمك للإدارة بخصوصية تامة.', 3000, '#10b981');
+            setTimeout(() => checkForPendingSurveys(), 1000);
+        } catch (e) {
+            console.error('Feedback submit error:', e);
+            UI.showToast('❌ تعذر الإرسال، حاول مرة أخرى', 3000, '#ef4444');
+        } finally {
+            btn.innerHTML = 'إرسال التقييم <i class="fa-solid fa-paper-plane"></i>';
+            btn.style.pointerEvents = 'auto';
+        }
+    }
+
+    return { checkForPendingSurveys, selectStar, submitFeedback, dismissFeedback };
+})();
+
+
+const SmartSearch = (() => {
+    const db = window.db;
+
+    async function startSmartSearch() {
+        const rawInput = Utils.$('makaniInput')?.value.trim();
+        const content = Utils.$('makaniContent');
+        const modal = Utils.$('makaniResultsModal');
+        const btn = Utils.$('btnMakani');
+        const _t = Utils._t;
         if (!rawInput) return;
 
-        const queryNormal = smartNormalize(rawInput);
+        const q = Utils.smartNormalize(rawInput);
         btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
-        content.innerHTML = `<div style="padding:30px;text-align:center;"><i class="fa-solid fa-wand-magic-sparkles fa-bounce" style="font-size:40px;color:#0ea5e9;"></i><p>${_t('processing_text', 'جاري البحث في الكلية...')}</p></div>`;
+        content.innerHTML = `<div style="padding:30px;text-align:center;">
+            <i class="fa-solid fa-wand-magic-sparkles fa-bounce" style="font-size:40px;color:#0ea5e9;"></i>
+            <p>${_t('processing_text', 'جاري البحث في الكلية...')}</p>
+        </div>`;
         modal.style.display = 'flex';
 
         try {
-            let resultsFound = [];
-            const sessionQ = query(collection(db, "active_sessions"), where("isActive", "==", true));
-            const sessionSnap = await getDocs(sessionQ);
+            const results = [];
+            const sessions = await getDocs(query(collection(db, 'active_sessions'), where('isActive', '==', true)));
 
-            for (const sessionDoc of sessionSnap.docs) {
+            for (const sessionDoc of sessions.docs) {
                 const data = { ...sessionDoc.data() };
-                const doctorId = sessionDoc.id;
-                const dbSubject = smartNormalize(data.allowedSubject || "");
-                const dbGroups = Array.isArray(data.targetGroups) ? data.targetGroups : [];
-                const isGroupMatch = dbGroups.some(g => smartNormalize(g).includes(queryNormal));
+                const docId = sessionDoc.id;
+                const normSub = Utils.smartNormalize(data.allowedSubject || '');
+                const groups = Array.isArray(data.targetGroups) ? data.targetGroups : [];
+                const groupHit = groups.some(g => Utils.smartNormalize(g).includes(q));
+                let matchType = null;
 
-                let isMatch = false;
-                let matchType = "session";
-
-                if (dbSubject.includes(queryNormal) || isGroupMatch) {
-                    isMatch = true;
+                if (normSub.includes(q) || groupHit) {
+                    matchType = 'session';
                 } else if (!isNaN(rawInput) && rawInput.length >= 3) {
-                    const participantsRef = collection(db, "active_sessions", doctorId, "participants");
-                    const q = query(participantsRef, where("id", "==", rawInput), where("status", "==", "active"));
-                    const querySnap = await getDocs(q);
-                    if (!querySnap.empty) { isMatch = true; matchType = "student"; data.friendName = querySnap.docs[0].data().name; }
+                    const pSnap = await getDocs(query(
+                        collection(db, 'active_sessions', docId, 'participants'),
+                        where('id', '==', rawInput), where('status', '==', 'active')));
+                    if (!pSnap.empty) { matchType = 'student'; data.friendName = pSnap.docs[0].data().name; }
                 }
 
-                if (isMatch) {
-                    try {
-                        const countQ = query(collection(db, "active_sessions", doctorId, "participants"), where("status", "==", "active"));
-                        const countSnap = await getCountFromServer(countQ);
-                        data.liveCount = countSnap.data().count;
-                    } catch { data.liveCount = "?"; }
-                    data.matchType = matchType;
-                    data.doctorId = doctorId;
-                    resultsFound.push(data);
-                }
+                if (!matchType) continue;
+
+                try {
+                    const cnt = await getCountFromServer(query(
+                        collection(db, 'active_sessions', docId, 'participants'),
+                        where('status', '==', 'active')));
+                    data.liveCount = cnt.data().count;
+                } catch { data.liveCount = '?'; }
+
+                results.push({ ...data, matchType, doctorId: docId });
             }
 
-            if (resultsFound.length === 0) {
-                content.innerHTML = `<div class="empty-state-modern"><div class="empty-icon-bg"><i class="fa-solid fa-magnifying-glass-minus" style="font-size:30px;color:#94a3b8;"></i></div><h3 style="margin-top:10px;font-size:14px;color:#64748b;">${_t('search_no_results_custom', 'لم يتم العثور على نتائج')}</h3><p style="font-size:11px;color:#cbd5e1;">"${rawInput}"</p></div>`;
-            } else {
-                content.innerHTML = '';
-                resultsFound.forEach(res => {
-                    const card = document.createElement('div');
-                    const docName = res.doctorName || "";
-                    const isEngName = /^[A-Za-z]/.test(docName);
-                    const prefix = isEngName ? "Dr." : "د.";
-                    const dirStyle = isEngName ? "ltr" : "rtl";
-                    const alignStyle = isEngName ? "left" : "right";
-
-                    if (res.matchType === 'session') {
-                        card.className = 'makani-card no-hover';
-                        card.innerHTML = `
-                            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
-                                <div style="flex:1;">
-                                    <div style="font-weight:900;font-size:16px;color:#0f172a;margin-bottom:4px;">${res.allowedSubject}</div>
-                                    <div style="font-size:13px;color:#64748b;cursor:default;direction:${dirStyle};text-align:${alignStyle};width:100%;">${prefix} ${docName}</div>
-                                </div>
-                                <div style="text-align:center;background:#dcfce7;color:#166534;padding:5px 10px;border-radius:10px;font-size:12px;font-weight:bold;margin-right:5px;">
-                                    <span class="blink-dot" style="background:#16a34a;"></span> LIVE (${res.liveCount})
-                                </div>
-                            </div>
-                            <div class="hall-badge-formal">
-                                <div style="font-size:10px;color:#94a3b8;">${_t('formal_direction', 'المكان الحالي')}</div>
-                                <div style="font-size:20px;font-weight:900;color:#fff;">HALL: ${res.hall}</div>
-                            </div>`;
-                    } else if (res.matchType === 'student') {
-                        const stdName = res.friendName || "";
-                        const isEngStd = /^[A-Za-z]/.test(stdName);
-                        const dirAttr = isEngStd ? "ltr" : "rtl";
-                        const alignAttr = isEngStd ? "left" : "right";
-                        card.className = 'makani-card no-hover';
-                        card.innerHTML = `
-                            <div style="width:100%;direction:${dirAttr};">
-                                <div style="display:flex;align-items:center;gap:15px;margin-bottom:20px;">
-                                    <div style="background:#f0f9ff;min-width:55px;height:55px;border-radius:50%;color:#0ea5e9;display:flex;align-items:center;justify-content:center;border:2px solid #bae6fd;flex-shrink:0;">
-                                        <i class="fa-solid fa-user-graduate" style="font-size:24px;"></i>
-                                    </div>
-                                    <div style="flex:1;text-align:${alignAttr};">
-                                        <div style="font-weight:900;font-size:16px;color:#0f172a;margin-bottom:5px;">${stdName}</div>
-                                        <div style="font-size:13px;color:#64748b;font-weight:600;">${isEngStd ? "Attending:" : "يحضر الآن:"} <span style="color:#0ea5e9;font-weight:800;">${res.allowedSubject}</span></div>
-                                    </div>
-                                </div>
-                                <div class="hall-badge-formal" style="background:linear-gradient(135deg,#6366f1,#4f46e5);border-radius:16px;padding:15px;text-align:center;direction:ltr;">
-                                    <div style="font-size:12px;color:#e0e7ff;margin-bottom:2px;font-weight:bold;opacity:0.9;">${_t('radar_current_location', 'الموقع الحالي')}</div>
-                                    <div style="font-size:28px;font-weight:900;color:#fff;font-family:'Outfit',sans-serif;letter-spacing:1px;">HALL: ${res.hall}</div>
-                                </div>
-                            </div>`;
-                    }
-                    content.appendChild(card);
-                });
+            content.innerHTML = '';
+            if (!results.length) {
+                content.innerHTML = `<div class="empty-state-modern">
+                    <div class="empty-icon-bg"><i class="fa-solid fa-magnifying-glass-minus" style="font-size:30px;color:#94a3b8;"></i></div>
+                    <h3 style="margin-top:10px;font-size:14px;color:#64748b;">${_t('search_no_results_custom', 'لم يتم العثور على نتائج')}</h3>
+                    <p style="font-size:11px;color:#cbd5e1;">"${rawInput}"</p>
+                </div>`;
+                return;
             }
+
+            results.forEach(res => content.appendChild(_buildResultCard(res, _t)));
         } catch (e) {
-            console.error("Search Error:", e);
-            content.innerHTML = `<div style="color:#ef4444;text-align:center;padding:20px;">حدث خطأ أثناء البحث</div>`;
+            console.error('Smart search error:', e);
+            content.innerHTML = '<div style="color:#ef4444;text-align:center;padding:20px;">حدث خطأ أثناء البحث</div>';
         } finally {
             btn.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i>';
         }
-    };
-
-    window.handleProfileIconClick = function () {
-        const user = auth.currentUser;
-        const adminToken = sessionStorage.getItem("secure_admin_session_token_v99");
-        if (!user) { if (typeof openAuthDrawer === 'function') openAuthDrawer(); }
-        else { if (typeof openStudentProfile === 'function') openStudentProfile(); }
-    };
-
-    window.autoFetchName = async function (studentId) {
-        const nameInput = document.getElementById('regFullName');
-        const signupBtn = document.getElementById('btnDoSignup');
-        if (!nameInput) return;
-
-        nameInput.value = "";
-        nameInput.placeholder = "جاري التحقق أمنياً...";
-        const cleanId = studentId.toString().trim();
-        if (!cleanId || cleanId.length < 4) { nameInput.placeholder = "Full Name"; return; }
-
-        try {
-            const lockSnap = await getDoc(doc(db, "taken_student_ids", cleanId));
-            if (lockSnap.exists()) { nameInput.value = "⚠️ الكود محجوز لحساب آخر"; nameInput.style.color = "#ef4444"; if (signupBtn) signupBtn.disabled = true; return; }
-
-            const studentSnap = await getDoc(doc(db, "students", cleanId));
-            if (studentSnap.exists()) { nameInput.value = studentSnap.data().name; nameInput.style.color = "#0f172a"; nameInput.placeholder = ""; }
-            else { nameInput.value = "❌ كود غير مسجل "; nameInput.style.color = "#b91c1c"; }
-        } catch (error) {
-            console.error("Fetch Error:", error);
-            nameInput.value = "⚠️ اعد المحاولة   ";
-        } finally { if (typeof validateSignupForm === 'function') validateSignupForm(); }
-    };
-
-    window.expandAvatar = function () {
-        const avatarEl = document.getElementById('publicAvatar');
-        const iconClass = avatarEl.getAttribute('data-icon');
-        const color = avatarEl.getAttribute('data-color');
-        if (!iconClass) return;
-        const container = document.getElementById('zoomedAvatarContainer');
-        container.innerHTML = `<i class="fa-solid ${iconClass}"></i>`;
-        container.querySelector('i').style.color = color;
-        document.getElementById('imageZoomModal').style.display = 'flex';
-    };
-
-    window.showInfoModal = function () {
-        if (typeof playClick === 'function') playClick();
-        const modal = document.getElementById('infoModal');
-        if (modal) modal.style.display = 'flex';
-    };
-
-    window.closeSetupModal = function () {
-        document.getElementById('customTimeModal').style.display = 'none';
-        document.body.style.overflow = 'auto';
-    };
-
-    window.stopCameraSafely = async function () { if (typeof releaseWakeLock === 'function') releaseWakeLock(); return true; };
-    window.startQrScanner = function () { showToast("تم إلغاء خاصية الباركود.", 3000, "#f59e0b"); };
-    window.html5QrCode = null;
-
-    async function goBackToWelcome() {
-        await window.stopCameraSafely();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        if (geo_watch_id) navigator.geolocation.clearWatch(geo_watch_id);
-        if (countdownInterval) clearInterval(countdownInterval);
-        sessionStorage.removeItem("temp_student_name");
-        sessionStorage.removeItem("temp_student_id");
-        switchScreen('screenWelcome');
     }
 
-    window.goBackToWelcome = goBackToWelcome;
-    window.hideConnectionLostModal = hideConnectionLostModal;
-    window.triggerAppInstall = triggerAppInstall;
-    window.safeClick = safeClick;
-    window.openMapsToRefreshGPS = openMapsToRefreshGPS;
+    function _buildResultCard(res, _t) {
+        const card = document.createElement('div');
+        card.className = 'makani-card no-hover';
+        const docName = res.doctorName || '';
+        const isEng = /^[A-Za-z]/.test(docName);
+        const prefix = isEng ? 'Dr.' : 'د.';
 
-    window.playClick = function () { };
-
-    window.filterModalSubjects = function () {
-        const input = document.getElementById('subjectSearchInput');
-        const select = document.getElementById('modalSubjectSelect');
-        if (!input || !select) return;
-        const query = (typeof normalizeArabic === 'function') ? normalizeArabic(input.value) : input.value;
-        select.innerHTML = '';
-        if (typeof subjectsData === 'undefined' || !subjectsData) return;
-        let hasResults = false;
-        for (const [year, subjects] of Object.entries(subjectsData)) {
-            const matchedSubjects = subjects.filter(sub => (typeof normalizeArabic === 'function' ? normalizeArabic(sub) : sub).includes(query));
-            if (matchedSubjects.length > 0) {
-                hasResults = true;
-                const group = document.createElement('optgroup');
-                const labelMap = { first_year: "First Year", "1": "First Year", second_year: "Second Year", "2": "Second Year", third_year: "Third Year", "3": "Third Year", fourth_year: "Fourth Year", "4": "Fourth Year" };
-                group.label = labelMap[year] || year;
-                matchedSubjects.forEach(sub => { const opt = document.createElement('option'); opt.value = sub; opt.text = sub; group.appendChild(opt); });
-                select.appendChild(group);
-            }
+        if (res.matchType === 'session') {
+            card.innerHTML = `
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+                    <div style="flex:1;">
+                        <div style="font-weight:900;font-size:16px;color:#0f172a;margin-bottom:4px;">${res.allowedSubject}</div>
+                        <div style="font-size:13px;color:#64748b;direction:${isEng ? 'ltr' : 'rtl'};text-align:${isEng ? 'left' : 'right'};">${prefix} ${docName}</div>
+                    </div>
+                    <div style="text-align:center;background:#dcfce7;color:#166534;padding:5px 10px;border-radius:10px;font-size:12px;font-weight:bold;margin-right:5px;">
+                        <span class="blink-dot" style="background:#16a34a;"></span> LIVE (${res.liveCount})
+                    </div>
+                </div>
+                <div class="hall-badge-formal">
+                    <div style="font-size:10px;color:#94a3b8;">${_t('formal_direction', 'المكان الحالي')}</div>
+                    <div style="font-size:20px;font-weight:900;color:#fff;">HALL: ${res.hall}</div>
+                </div>`;
+        } else {
+            const stdName = res.friendName || '';
+            const isEngStd = /^[A-Za-z]/.test(stdName);
+            card.innerHTML = `
+                <div style="width:100%;direction:${isEngStd ? 'ltr' : 'rtl'};">
+                    <div style="display:flex;align-items:center;gap:15px;margin-bottom:20px;">
+                        <div style="background:#f0f9ff;min-width:55px;height:55px;border-radius:50%;color:#0ea5e9;display:flex;align-items:center;justify-content:center;border:2px solid #bae6fd;flex-shrink:0;">
+                            <i class="fa-solid fa-user-graduate" style="font-size:24px;"></i>
+                        </div>
+                        <div style="flex:1;text-align:${isEngStd ? 'left' : 'right'};">
+                            <div style="font-weight:900;font-size:16px;color:#0f172a;margin-bottom:5px;">${stdName}</div>
+                            <div style="font-size:13px;color:#64748b;font-weight:600;">${isEngStd ? 'Attending:' : 'يحضر الآن:'} <span style="color:#0ea5e9;font-weight:800;">${res.allowedSubject}</span></div>
+                        </div>
+                    </div>
+                    <div class="hall-badge-formal" style="background:linear-gradient(135deg,#6366f1,#4f46e5);border-radius:16px;padding:15px;text-align:center;direction:ltr;">
+                        <div style="font-size:12px;color:#e0e7ff;margin-bottom:2px;font-weight:bold;opacity:0.9;">${_t('radar_current_location', 'الموقع الحالي')}</div>
+                        <div style="font-size:28px;font-weight:900;color:#fff;font-family:'Outfit',sans-serif;letter-spacing:1px;">HALL: ${res.hall}</div>
+                    </div>
+                </div>`;
         }
-        if (!hasResults) { const opt = document.createElement('option'); opt.text = (localStorage.getItem('sys_lang') === 'ar') ? "لا توجد نتائج" : "No results found"; opt.disabled = true; select.appendChild(opt); }
+        return card;
+    }
+
+    return { startSmartSearch };
+})();
+
+
+const IdleTimer = (() => {
+    let _ticker = null;
+    let _elapsed = 0;
+    let _isTyping = false;
+
+    function start() {
+        stop();
+        _elapsed = _isTyping = false;
+        _ticker = setInterval(() => {
+            if (_isTyping) return;
+            if (++_elapsed >= CFG.ui.idleTimeoutSec) {
+                stop();
+                UI.switchScreen('screenWelcome');
+                UI.showToast('⚠️ كن سريعا في المرة القادمة', 3000, '#f59e0b');
+            }
+        }, 1000);
+    }
+
+    function stop() {
+        clearInterval(_ticker);
+        _ticker = _elapsed = 0;
+        _isTyping = false;
+        const input = Utils.$('attendanceCode');
+        if (input) input.value = '';
+    }
+
+    function onKeyDown() { _isTyping = true; _elapsed = 0; }
+    function onKeyUp() { _isTyping = false; }
+
+    return { start, stop, onKeyDown, onKeyUp };
+})();
+
+
+const WakeLock = (() => {
+    let _lock = null;
+    async function request() {
+        try { if ('wakeLock' in navigator) _lock = await navigator.wakeLock.request('screen'); } catch { /* silently fail */ }
+    }
+    function release() { _lock?.release().then(() => { _lock = null; }); }
+    return { request, release };
+})();
+
+
+const PWAManager = (() => {
+    let _deferred = null;
+
+    function init() {
+        const box = Utils.$('installAppPrompt');
+        window.addEventListener('beforeinstallprompt', e => {
+            e.preventDefault();
+            _deferred = e;
+            if (box) box.style.display = 'flex';
+        });
+        window.addEventListener('appinstalled', () => {
+            if (box) box.style.display = 'none';
+            _deferred = null;
+            UI.showToast('شكراً لتثبيت التطبيق! 🚀', 4000, '#10b981');
+        });
+    }
+
+    function triggerInstall() {
+        if (!_deferred) return;
+        _deferred.prompt();
+        _deferred.userChoice.then(r => {
+            if (r.outcome === 'accepted') Utils.$('installAppPrompt').style.display = 'none';
+            _deferred = null;
+        });
+    }
+
+    return { init, triggerInstall };
+})();
+
+
+function initSecurityLayer() {
+    const blocked = ['contextmenu', 'copy', 'cut', 'paste'];
+    const msgs = {
+        contextmenu: 'إجراء محظور لأسباب أمنية.',
+        copy: 'النسخ محظور لأسباب أمنية.',
+        cut: 'القص محظور لأسباب أمنية.',
+        paste: 'اللصق محظور لأسباب أمنية.',
     };
+    blocked.forEach(evt => {
+        document.addEventListener(evt, e => { e.preventDefault(); UI.showToast(msgs[evt], 2000, '#ef4444'); });
+    });
 
-    window.portalClicks = 0;
-    window.portalTimer = null;
+    window.history.pushState(null, null, window.location.href);
+    window.onpopstate = () => {
+        if (window.processIsActive) window.history.pushState(null, null, window.location.href);
+    };
+}
 
-    window.handleAdminTripleClick = function (btn) {
-        if (typeof playClick === 'function') playClick();
+
+function startClock() {
+    setInterval(() => {
+        const now = new Date();
+        const timeEl = Utils.$('currentTime');
+        const dateEl = Utils.$('currentDate');
+        if (timeEl) timeEl.innerText = now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' });
+        if (dateEl) dateEl.innerText = now.toLocaleDateString('en-GB');
+    }, 1000);
+}
+
+
+Object.assign(window, {
+    getUniqueDeviceId: DeviceManager.getUniqueDeviceId,
+
+    switchScreen: UI.switchScreen,
+    openAuthDrawer: UI.openAuthDrawer,
+    closeAuthDrawer: UI.closeAuthDrawer,
+    toggleAuthMode: UI.toggleAuthMode,
+    togglePass: UI.togglePass,
+    toggleDropdown: UI.toggleDropdown,
+    selectOption: UI.selectOption,
+    validateSignupForm: UI.validateSignupForm,
+    filterModalSubjects: UI.filterModalSubjects,
+    showToast: UI.showToast,
+    resetMainButtonUI: () => {
+        const uid = sessionStorage.getItem('TARGET_DOCTOR_UID');
+        UI.setMainButton(uid ? 'enter' : 'register');
+    },
+
+    performStudentSignup: AuthManager.performStudentSignup,
+    performStudentLogin: AuthManager.performStudentLogin,
+
+    monitorMyParticipation: SessionManager.monitorMyParticipation,
+    searchForSession: SessionManager.searchForSession,
+    resetSearchSession: SessionManager.resetSearchSession,
+    joinSessionAction: SessionManager.joinSessionAction,
+    startAuthScreenTimer,
+
+    openStudentProfile: ProfileManager.openStudentProfile,
+    openAvatarSelector: ProfileManager.openAvatarSelector,
+    saveNewAvatar: ProfileManager.saveNewAvatar,
+    autoFetchName: ProfileManager.autoFetchName,
+
+    checkForPendingSurveys: FeedbackManager.checkForPendingSurveys,
+    selectStar: FeedbackManager.selectStar,
+    submitFeedback: FeedbackManager.submitFeedback,
+    dismissFeedback: FeedbackManager.dismissFeedback,
+
+    startSmartSearch: SmartSearch.startSmartSearch,
+
+    startCodeEntryIdleTimer: IdleTimer.start,
+    stopCodeEntryIdleTimer: IdleTimer.stop,
+
+    triggerAppInstall: PWAManager.triggerInstall,
+
+    getGPSForJoin: GPSManager.getGPSForJoin,
+    openMapsToRefreshGPS: GPSManager.openMapsToCollegeLocation,
+    getDistanceFromLatLonInKm: Utils.haversineKm,
+
+    changeLanguage: UI.applyLanguage,
+    toggleSystemLanguage: async () => {
+        const auth = window.auth;
+        const db = window.db;
+        const current = Utils.lang();
+        const next = current === 'ar' ? 'en' : 'ar';
+        UI.applyLanguage(next);
+        document.querySelectorAll('.active-lang-text-pro').forEach(s => { s.innerText = next === 'ar' ? 'EN' : 'عربي'; });
+        const user = auth.currentUser;
+        if (user) {
+            try { await setDoc(doc(db, 'user_registrations', user.uid), { preferredLanguage: next }, { merge: true }); }
+            catch (e) { console.warn('Language sync skipped:', e.message); }
+        }
+    },
+
+    handleProfileIconClick: () => {
+        const user = window.auth.currentUser;
+        if (!user) UI.openAuthDrawer();
+        else ProfileManager.openStudentProfile();
+    },
+    showSmartWelcome: name => {
+        const today = new Date().toLocaleDateString('en-GB');
+        if (localStorage.getItem('last_welcome_date') === today) return;
+        const modal = Utils.$('dailyWelcomeModal');
+        const nameSpan = Utils.$('welcomeUserName');
+        if (modal && nameSpan) {
+            nameSpan.innerText = name.split(' ')[0];
+            modal.style.display = 'flex';
+            modal.style.opacity = '1';
+            localStorage.setItem('last_welcome_date', today);
+        }
+    },
+    closeDailyWelcome: () => {
+        const modal = Utils.$('dailyWelcomeModal');
+        if (!modal) return;
+        modal.style.transition = '0.3s ease';
+        modal.style.opacity = '0';
+        setTimeout(() => { modal.style.display = 'none'; }, 300);
+    },
+    goHome: () => {
+        const live = Utils.$('screenLiveSession');
+        if (live) { live.style.cssText = ''; live.style.setProperty('display', 'none', 'important'); }
+        UI.switchScreen('screenWelcome');
+        Utils.$('infoBtn') && (Utils.$('infoBtn').style.display = 'flex');
+        document.body.classList.add('on-welcome-screen');
+        document.body.classList.remove('hide-main-icons');
+        document.body.style.overflow = 'auto';
+    },
+    showInfoModal: () => { window.playClick?.(); UI.openModal('infoModal'); },
+    closeSetupModal: () => { UI.closeModal('customTimeModal'); document.body.style.overflow = 'auto'; },
+    goBackToWelcome: async () => {
+        await window.stopCameraSafely?.();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        GPSManager.stopWatcher?.();
+        UI.switchScreen('screenWelcome');
+    },
+    stopCameraSafely: async () => { WakeLock.release(); return true; },
+    startQrScanner: () => UI.showToast('تم إلغاء خاصية الباركود.', 3000, '#f59e0b'),
+    safeClick: btn => { if (btn) { btn.style.opacity = '0.7'; btn.style.pointerEvents = 'none'; } },
+    hideConnectionLostModal: NetworkManager.hideLostModal,
+    expandAvatar: () => {
+        const av = Utils.$('publicAvatar');
+        const icon = av?.getAttribute('data-icon');
+        const color = av?.getAttribute('data-color');
+        if (!icon) return;
+        const container = Utils.$('zoomedAvatarContainer');
+        if (container) { container.innerHTML = `<i class="fa-solid ${icon}"></i>`; container.querySelector('i').style.color = color; }
+        UI.openModal('imageZoomModal');
+    },
+
+    portalClicks: 0,
+    portalTimer: null,
+    handleAdminTripleClick: btn => {
+        window.playClick?.();
         window.portalClicks++;
         clearTimeout(window.portalTimer);
         window.portalTimer = setTimeout(() => { window.portalClicks = 0; }, 2000);
-        if (window.portalClicks === 3 && navigator.vibrate) navigator.vibrate([50, 50]);
-    };
-
-    window.handleReportClick = function () {
+        if (window.portalClicks === 3) navigator.vibrate?.([50, 50]);
+    },
+    handleReportClick: () => {
         window.portalClicks = 0;
-        showToast("🔐 القسم محمي", 3000, "#ef4444");
-        if (navigator.vibrate) navigator.vibrate(200);
-    };
+        UI.showToast('🔐 القسم محمي', 3000, '#ef4444');
+        navigator.vibrate?.(200);
+    },
 
-})();
+    updateUIForMode: () => {
+        const auth = window.auth;
+        document.body.classList.remove('is-dean', 'is-doctor', 'is-student');
+        document.body.classList.add('is-student');
+
+        ['btnToggleSession', 'btnQuickMode', 'btnToolsRequest', 'deanPrivateZone',
+            'btnDataEntry', 'facultyProfileBtn', 'btnLiveFeedback'].forEach(id => {
+                Utils.$(id)?.style.setProperty('display', 'none', 'important');
+            });
+
+        Utils.$('btnViewReport')?.classList.add('locked');
+        Utils.$('mainActionBtn') && (Utils.$('mainActionBtn').style.display = 'flex');
+        Utils.$('makaniSearchBar') && (Utils.$('makaniSearchBar').style.display = 'block');
+        Utils.$('studentProfileBtn') && (Utils.$('studentProfileBtn').style.display = 'flex');
+
+        UI.applyLanguage(Utils.lang());
+    },
+
+    startProcess: async isRetry => {
+        window.playClick?.();
+        const user = window.auth.currentUser;
+        if (!user) { UI.openAuthDrawer(); return; }
+        if (sessionStorage.getItem('TARGET_DOCTOR_UID')) {
+            UI.switchScreen('screenLiveSession');
+            window.startLiveSnapshotListener?.();
+            return;
+        }
+        UI.switchScreen('screenDataEntry');
+        Utils.$('step2_auth')?.style.setProperty('display', 'none', 'important');
+        const errEl = Utils.$('screenError');
+        if (errEl) errEl.style.display = 'none';
+        const step1 = Utils.$('step1_search');
+        if (step1) step1.style.cssText = 'display:block !important;visibility:visible !important;';
+        setTimeout(() => Utils.$('attendanceCode')?.focus(), 150);
+        IdleTimer.start();
+    },
+
+    forceOpenPinScreen: () => {
+        const user = window.auth.currentUser;
+        if (!user) { UI.showToast('⚠️ عذراً، يجب تسجيل الدخول أولاً', 3000, '#f59e0b'); UI.openAuthDrawer(); return; }
+        UI.switchScreen('screenDataEntry');
+        Utils.$('step2_auth')?.style.setProperty('display', 'none', 'important');
+        const errEl = Utils.$('screenError');
+        if (errEl) errEl.style.display = 'none';
+        const step1 = Utils.$('step1_search');
+        if (step1) step1.style.cssText = 'display:block !important;opacity:1 !important;visibility:visible !important;width:100%;';
+        setTimeout(() => Utils.$('attendanceCode')?.focus(), 150);
+        IdleTimer.start();
+    },
+
+    playClick: () => { },
+    subjectsData: MASTER_SUBJECTS,
+
+    isJoiningProcessActive: false,
+    isProcessingClick: false,
+    studentStatusListener: null,
+    sessionStatusListener: null,
+    HARDWARE_ID: null,
+});
+
+
+document.addEventListener('DOMContentLoaded', async () => {
+    try { await DeviceManager.getUniqueDeviceId(); } catch (e) { console.warn('Fingerprint pre-load warning:', e); }
+});
+
+onAuthStateChanged(window.auth, AuthManager.onAuthChange);
+
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+        if (!window._isOpeningMaps && window.processIsActive) location.reload();
+        WakeLock.release();
+    } else {
+        if (window._isOpeningMaps) window._isOpeningMaps = false;
+        if (window.processIsActive) WakeLock.request();
+    }
+});
+
+window.onload = () => {
+    const pinInput = Utils.$('attendanceCode');
+    if (pinInput) {
+        pinInput.value = '';
+        pinInput.setAttribute('autocomplete', 'off');
+        pinInput.setAttribute('inputmode', 'numeric');
+        pinInput.addEventListener('keydown', IdleTimer.onKeyDown);
+        pinInput.addEventListener('keyup', IdleTimer.onKeyUp);
+        pinInput.addEventListener('input', e => {
+            IdleTimer.onKeyUp();
+            if (e.target.value.trim().length === 6) SessionManager.searchForSession();
+        });
+    }
+
+    Utils.$('sessionPass')?.addEventListener('keypress', e => {
+        if (e.key === 'Enter') SessionManager.joinSessionAction();
+    });
+
+    const savedUID = localStorage.getItem('TARGET_DOCTOR_UID');
+    if (savedUID) {
+        sessionStorage.setItem('TARGET_DOCTOR_UID', savedUID);
+        window.resetMainButtonUI();
+    }
+
+    NetworkManager.initGlobalGuard();
+    window.updateUIForMode();
+    GPSManager.startWatcher();
+    UI.renderHallOptions();
+    NetworkManager.fetchIP();
+    PWAManager.init();
+    startClock();
+
+    Utils.$('hallSearchInput')?.addEventListener('input', e => UI.renderHallOptions(e.target.value));
+
+    const groupInput = Utils.$('regGroup');
+    groupInput?.addEventListener('input', function () {
+        this.value = this.value.toUpperCase().replace(/[^0-9GPNCDTBH]/g, '');
+        UI.validateSignupForm();
+    });
+    Utils.$('regLevel')?.addEventListener('change', UI.validateSignupForm);
+
+    const savedLang = Utils.lang();
+    UI.applyLanguage(savedLang);
+    document.querySelectorAll('.active-lang-text-pro').forEach(s => { s.innerText = savedLang === 'ar' ? 'EN' : 'عربي'; });
+
+    window.listenToSessionState?.();
+};
+
+document.addEventListener('click', e => {
+    if (!e.target.closest('.custom-dropdown'))
+        document.querySelectorAll('.dropdown-list').forEach(el => el.classList.remove('show'));
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    ['regEmail', 'regEmailConfirm', 'regPass', 'regPassConfirm', 'regGender', 'regLevel', 'regGroup',
+        'regStudentID', 'regFullName'].forEach(id => {
+            Utils.$(id)?.addEventListener('input', UI.validateSignupForm);
+            Utils.$(id)?.addEventListener('change', UI.validateSignupForm);
+        });
+
+    window.addEventListener('pageshow', () => {
+        const pin = Utils.$('attendanceCode');
+        if (pin) pin.value = '';
+    });
+});
+
+initSecurityLayer();
+
+NetworkManager.initNetworkIndicator();
 
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js?v=3', { scope: './' })
-            .then(() => { console.log('ServiceWorker registration successful'); })
-            .catch(err => { console.error('ServiceWorker registration failed:', err); });
+            .then(() => console.log('ServiceWorker registered'))
+            .catch(err => console.error('ServiceWorker registration failed:', err));
     });
 }
-
-window.addEventListener('pageshow', () => {
-    const pinInput = document.getElementById('attendanceCode');
-    if (pinInput) pinInput.value = '';
-});
-
-var idleTimer = null;
-var elapsedTime = 0;
-var isTyping = false;
-var tickInterval = null;
-
-window.startCodeEntryIdleTimer = function () {
-    window.stopCodeEntryIdleTimer();
-    elapsedTime = 0;
-    isTyping = false;
-
-    tickInterval = setInterval(() => {
-        if (!isTyping) {
-            elapsedTime++;
-            if (elapsedTime >= 60) {
-                window.stopCodeEntryIdleTimer();
-                window.switchScreen('screenWelcome');
-                if (typeof window.showToast === 'function') window.showToast("⚠️ كن سريعا في المرة القادمة", 3000, "#f59e0b");
-            }
-        }
-    }, 1000);
-};
-
-window.stopCodeEntryIdleTimer = function () {
-    clearInterval(tickInterval);
-    tickInterval = null;
-    elapsedTime = 0;
-    isTyping = false;
-    const input = document.getElementById('attendanceCode');
-    if (input) input.value = '';
-};
-
-window.cachedGPSData = null;
-window.gpsPreFetchDone = false;
-window.gpsPreFetchTime = 0;
-
-(function () {
-    const indicator = document.getElementById('superWifiIndicator');
-    if (!indicator) return;
-    const statusText = indicator.querySelector('.wifi-text');
-    let pingInterval = null;
-
-    const PING_URL = 'https://cp.cloudflare.com/generate_204';
-    const PING_INTERVAL_MS = 60000;
-    const TIMEOUT_MS = 3000;
-    const STATE = { ONLINE: 'ONLINE', OFFLINE: 'OFFLINE', WEAK: 'WEAK', LOADING: 'LOADING' };
-
-    function updateUI(state) {
-        indicator.classList.remove('state-loading', 'state-weak', 'wifi-status-hidden');
-        const iconBox = indicator.querySelector('.wifi-icon-box');
-        if (state !== STATE.LOADING && !iconBox.querySelector('.fa-wifi'))
-            iconBox.innerHTML = '<i class="fa-solid fa-wifi fa-fade"></i><i class="fa-solid fa-slash wifi-slash" id="wifiSlashIcon"></i>';
-        const slashIcon = document.getElementById('wifiSlashIcon');
-        switch (state) {
-            case STATE.ONLINE:
-                if (document.readyState === 'complete') indicator.classList.add('wifi-status-hidden');
-                if (slashIcon) slashIcon.style.display = 'none';
-                break;
-            case STATE.OFFLINE:
-                statusText.innerText = "CONNECTION LOST";
-                if (slashIcon) slashIcon.style.display = 'block';
-                break;
-            case STATE.WEAK:
-                indicator.classList.add('state-weak');
-                statusText.innerText = "UNSTABLE NETWORK";
-                if (slashIcon) slashIcon.style.display = 'none';
-                break;
-            case STATE.LOADING:
-                indicator.classList.add('state-loading');
-                statusText.innerText = "CONNECTING...";
-                iconBox.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" style="font-size:16px;"></i>';
-                break;
-        }
-    }
-
-    async function performNetworkDiagnostic() {
-        if (document.readyState !== 'complete') updateUI(STATE.LOADING);
-        if (!navigator.onLine) { updateUI(STATE.OFFLINE); return; }
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
-            await fetch(PING_URL + '?' + Date.now(), { mode: 'no-cors', signal: controller.signal });
-            clearTimeout(timeoutId);
-            const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-            if (conn && (conn.effectiveType === 'slow-2g' || conn.effectiveType === '2g' || conn.rtt > 1000)) updateUI(STATE.WEAK);
-            else updateUI(STATE.ONLINE);
-        } catch (error) { updateUI(STATE.OFFLINE); }
-    }
-
-    window.addEventListener('online', performNetworkDiagnostic);
-    window.addEventListener('offline', () => updateUI(STATE.OFFLINE));
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'hidden') { clearInterval(pingInterval); pingInterval = null; }
-        else { performNetworkDiagnostic(); pingInterval = setInterval(performNetworkDiagnostic, PING_INTERVAL_MS); }
-    });
-    if (document.readyState !== 'complete') updateUI(STATE.LOADING);
-    window.addEventListener('load', () => performNetworkDiagnostic());
-    pingInterval = setInterval(performNetworkDiagnostic, PING_INTERVAL_MS);
-    performNetworkDiagnostic();
-})();
