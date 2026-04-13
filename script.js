@@ -734,7 +734,7 @@ const AuthManager = (() => {
         const _t = Utils._t;
         const fields = {
             email: Utils.$('regEmail')?.value.trim(),
-            pass: Utils.$('regPass')?.value,
+            password: Utils.$('regPass')?.value,
             fullName: Utils.$('regFullName')?.value.trim(),
             studentID: Utils.$('regStudentID')?.value.trim(),
             level: Utils.$('regLevel')?.value,
@@ -742,11 +742,11 @@ const AuthManager = (() => {
             group: Utils.$('regGroup')?.value || 'عام',
         };
 
-        if (!fields.email || !fields.pass || !fields.fullName || !fields.studentID) {
-            UI.showToast(_t('msg_missing_data', '⚠️ بيانات ناقصة! يرجى ملء كل الحقول'), 3000, '#f59e0b');
+        if (!fields.email || !fields.password || !fields.fullName || !fields.studentID || !fields.level || !fields.gender) {
+            UI.showToast(_t('msg_missing_data', '⚠️ بيانات ناقصة! يرجى ملء كل الحقول واختيار الفرقة والنوع'), 3000, '#f59e0b');
             return;
         }
-        if (fields.pass.length < 6) {
+        if (fields.password.length < 6) {
             UI.showToast(_t('msg_weak_pass', '⚠️ كلمة المرور ضعيفة (6 أحرف على الأقل)'), 3000, '#f59e0b');
             return;
         }
@@ -772,7 +772,7 @@ const AuthManager = (() => {
             if (btn) btn.innerHTML = `<i class="fa-regular fa-envelope fa-bounce"></i> ${_t('status_sending_email', 'إرسال رابط التفعيل...')}`;
 
             try {
-                const cred = await signInWithEmailAndPassword(auth, fields.email, fields.pass);
+                const cred = await signInWithEmailAndPassword(auth, fields.email, fields.password); // غيرنا fields.pass إلى fields.password
                 await sendEmailVerification(cred.user);
                 await signOut(auth);
             } catch (emailErr) {
