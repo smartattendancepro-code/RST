@@ -1,28 +1,28 @@
 'use strict';
 
 const OA = {
-    STORAGE_KEY:      "nursing_offline_queue_v3",
-    QUARANTINE_KEY:   "nursing_offline_quarantine_v3",
-    RATE_KEY:         "nursing_pin_rate_v1",
-    FIRESTORE_CDN:    "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js",
-    PIN_LENGTH:       6,
-    COUNTDOWN_SEC:    3,
-    SYNC_BOOT_DELAY:  5000,
-    MAX_RETRIES:      3,
-    RETRY_BASE_MS:    1500,
-    MAX_QUEUE_SIZE:   200,
+    STORAGE_KEY: "nursing_offline_queue_v3",
+    QUARANTINE_KEY: "nursing_offline_quarantine_v3",
+    RATE_KEY: "nursing_pin_rate_v1",
+    FIRESTORE_CDN: "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js",
+    PIN_LENGTH: 6,
+    COUNTDOWN_SEC: 3,
+    SYNC_BOOT_DELAY: 5000,
+    MAX_RETRIES: 3,
+    RETRY_BASE_MS: 1500,
+    MAX_QUEUE_SIZE: 200,
     MAX_PIN_ATTEMPTS: 5,
-    LOCKOUT_MS:       5 * 60 * 1000,  
-    CRYPTO_ALGO:      "AES-GCM",
-    KEY_LENGTH:       256,
+    LOCKOUT_MS: 5 * 60 * 1000,
+    CRYPTO_ALGO: "AES-GCM",
+    KEY_LENGTH: 256,
 };
 
 let _firestoreCache = null;
-let _syncPromise    = null;   
+let _syncPromise = null;
 let _countdownTimer = null;
 
 const lang = () => localStorage.getItem('sys_lang') || 'ar';
-const t    = (ar, en) => lang() === 'ar' ? ar : en;
+const t = (ar, en) => lang() === 'ar' ? ar : en;
 
 function toast(msg, ms = 4000, color = "#1e293b") {
     if (window.showToast) window.showToast(msg, ms, color);
@@ -34,7 +34,9 @@ function beep() {
 
 function log(level, ...args) {
     const prefix = `[NursingOffline][${new Date().toISOString()}]`;
-    console[level](prefix, ...args);
+    // إذا كان المستوى غير معروف للمتصفح (مثل critical)، استخدم 'error' كبديل
+    const method = (console[level] && typeof console[level] === 'function') ? level : 'error';
+    console[method](prefix, ...args);
 }
 
 const _keyCache = new Map();
@@ -83,7 +85,7 @@ async function _getHmacKey(uid) {
 async function _encryptQueue(arr, uid) {
     try {
         const key = await _getAesKey(uid);
-        const iv  = crypto.getRandomValues(new Uint8Array(12));
+        const iv = crypto.getRandomValues(new Uint8Array(12));
         const plain = new TextEncoder().encode(JSON.stringify(arr));
 
         const cipher = await crypto.subtle.encrypt(
@@ -105,8 +107,8 @@ async function _encryptQueue(arr, uid) {
 
 async function _decryptQueue(raw, uid) {
     try {
-        const combined  = Uint8Array.from(atob(raw), c => c.charCodeAt(0));
-        const iv        = combined.slice(0, 12);
+        const combined = Uint8Array.from(atob(raw), c => c.charCodeAt(0));
+        const iv = combined.slice(0, 12);
         const cipherBuf = combined.slice(12);
 
         const key = await _getAesKey(uid);
@@ -135,8 +137,8 @@ async function _signEntry(entry, uid) {
     try {
         const key = await _getHmacKey(uid);
         const payload = JSON.stringify({
-            studentID:      entry.studentID,
-            sessionPin:     entry.sessionPin,
+            studentID: entry.studentID,
+            sessionPin: entry.sessionPin,
             submissionTime: entry.submissionTime,
         });
 
@@ -181,7 +183,7 @@ async function queueLoad() {
 async function queueSave(arr) {
     try {
         const safe = arr.slice(-OA.MAX_QUEUE_SIZE);
-        const uid  = _getUidForCrypto();
+        const uid = _getUidForCrypto();
         const encrypted = await _encryptQueue(safe, uid);
         localStorage.setItem(OA.STORAGE_KEY, encrypted);
         _updateBadge(safe.length);
@@ -196,7 +198,7 @@ function quarantineEntry(entry) {
         q.push({ ...entry, _sig: undefined, quarantinedAt: Date.now() });
         localStorage.setItem(OA.QUARANTINE_KEY, JSON.stringify(q));
         log('warn', 'Entry quarantined:', entry.sessionPin);
-    } catch {  }
+    } catch { }
 }
 
 function entryKey(studentID, sessionPin) {
@@ -241,7 +243,7 @@ function _checkRateLimit() {
         return true;
 
     } catch {
-        return true; 
+        return true;
     }
 }
 
@@ -299,7 +301,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
 window.openOfflineRegistrationModal = function () {
-    const modal    = document.getElementById('offlineRegModal');
+    const modal = document.getElementById('offlineRegModal');
     const pinInput = document.getElementById('offSessionPin');
     if (!modal) return;
 
@@ -333,7 +335,7 @@ window.processOfflineQueue = async function () {
     if (!_checkRateLimit()) return;
 
     const queue = await queueLoad();
-    const key   = entryKey(studentData.id, sessionPin);
+    const key = entryKey(studentData.id, sessionPin);
 
     if (queue.some(item => entryKey(item.studentID, item.sessionPin) === key)) {
         alert(t("⚠️ لقد سجّلت هذه الجلسة بالفعل", "⚠️ You already registered this session offline"));
@@ -357,13 +359,13 @@ async function _saveEntry(studentData, sessionPin) {
     const submissionTime = Date.now();
 
     const offlineEntry = {
-        studentID:      studentData.id,
-        studentName:    studentData.name,
-        avatarClass:    studentData.avatar,
-        sessionPin:     sessionPin,
+        studentID: studentData.id,
+        studentName: studentData.name,
+        avatarClass: studentData.avatar,
+        sessionPin: sessionPin,
         submissionTime: submissionTime,
-        deviceId:       window.HARDWARE_ID || "DEVICE_OFFLINE",
-        appVersion:     window.APP_VERSION || "3.0",
+        deviceId: window.HARDWARE_ID || "DEVICE_OFFLINE",
+        appVersion: window.APP_VERSION || "3.0",
     };
 
     offlineEntry._sig = await _signEntry(offlineEntry, studentData.uid || _getUidForCrypto());
@@ -376,7 +378,7 @@ async function _saveEntry(studentData, sessionPin) {
 
     toast(
         t("✅ تم الحفظ أوفلاين.. سيتم التأكيد فور عودة النت",
-          "✅ Saved Offline.. Will sync on reconnect"),
+            "✅ Saved Offline.. Will sync on reconnect"),
         5000, "#1e293b"
     );
     beep();
@@ -428,8 +430,8 @@ async function _doSync(queue, user) {
         const remainingQueue = [];
 
         for (const entry of queue) {
-            const uid         = user.uid;
-            const isValid     = await _verifyEntry(entry, uid);
+            const uid = user.uid;
+            const isValid = await _verifyEntry(entry, uid);
 
             if (!isValid) {
                 log('warn', 'Tampered entry detected, quarantining:', entry.sessionPin);
@@ -438,7 +440,7 @@ async function _doSync(queue, user) {
                     5000, "#ef4444"
                 );
                 quarantineEntry(entry);
-                continue;  
+                continue;
             }
 
             const result = await _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db, user });
@@ -462,7 +464,7 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
         try {
             const codeRef = doc(db, "issued_codes_logs", entry.sessionPin);
             let codeSnap;
-            
+
             try {
                 codeSnap = await getDoc(codeRef);
             } catch (networkErr) {
@@ -474,7 +476,7 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
                 log('warn', `PIN ${entry.sessionPin} is invalid.`);
                 toast(t(`❌ كود غير صحيح (${entry.sessionPin})`, `❌ Invalid PIN`), 5000, "#ef4444");
                 quarantineEntry(entry);
-                return false; 
+                return false;
             }
 
             const codeData = codeSnap.data();
@@ -482,19 +484,19 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
             const college = codeData.college || "NURS";
             const rawSubject = codeData.subject;
 
-            const openedAtMs  = _toMs(codeData.openedAt);
+            const openedAtMs = _toMs(codeData.openedAt);
             const expiresAtMs = codeData.expiresAt === -1 ? Infinity : _toMs(codeData.expiresAt);
-            const submitted   = entry.submissionTime;
-            const LOOSE_DRIFT = 4000; 
+            const submitted = entry.submissionTime;
+            const LOOSE_DRIFT = 4000;
 
             if (submitted < (openedAtMs - LOOSE_DRIFT) || submitted > (expiresAtMs + LOOSE_DRIFT)) {
                 log('warn', 'Strict Reject: Outside allowed time window.');
                 toast(
                     t(`❌ فشل: سجلت الكود خارج الوقت المسموح للمحاضرة`,
-                      `❌ Failed: Code expired (Outside allowed window)`),
+                        `❌ Failed: Code expired (Outside allowed window)`),
                     6000, "#ef4444"
                 );
-                return false; 
+                return false;
             }
 
             const sessionRef = doc(db, "active_sessions", doctorUID);
@@ -504,24 +506,68 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
                 sessionSnap = await getDoc(sessionRef);
             } catch (e) {
                 log('warn', 'Failed to verify session status due to network.');
-                return 'retry'; 
+                return 'retry';
             }
 
             if (!sessionSnap.exists()) {
                 log('info', 'Session doc invisible, retrying...');
-                return 'retry'; 
+                return 'retry';
             }
 
             const sessionData = sessionSnap.data();
 
             if (sessionData.isActive === false) {
-                log('info', 'Sync Rejected: Instructor officially ended session.');
+                log('info', 'Session closed — saving offline attendance as post-session record.');
+
+                const subDate = new Date(entry.submissionTime);
+                const d = String(subDate.getDate()).padStart(2, '0');
+                const m = String(subDate.getMonth() + 1).padStart(2, '0');
+                const y = subDate.getFullYear();
+                const dateKey = `${d}-${m}-${y}`;
+                const fixedDateStr = `${d}/${m}/${y}`;
+                const cleanSubKey = rawSubject.trim()
+                    .replace(/\s+/g, '_')
+                    .replace(/[^\w\u0600-\u06FF]/g, '');
+                const recID = `${entry.studentID}_${dateKey}_${cleanSubKey}`;
+
+                const postPayload = {
+                    id: entry.studentID,
+                    sessionPin: entry.sessionPin, // 👈 أضف هذا السطر هنا (مهم جداً للـ Rules)
+                    name: entry.studentName,
+                    subject: rawSubject,
+                    college: college,
+                    hall: codeData.hall || "Hall",
+                    group: "GENERAL",
+                    date: fixedDateStr,
+                    time_str: subDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+                    timestamp: serverTimestamp(),
+                    status: "ATTENDED",
+                    doctorUID: doctorUID,
+                    doctorName: codeData.doctorName,
+                    notes: "منضبط (أوفلاين - بعد إغلاق الجلسة)",
+                    isOfflineSync: true,
+                    isPostSession: true,
+                };
+
+                const postBatch = writeBatch(db);
+                postBatch.set(doc(db, `attendance_${college}`, recID), postPayload);
+                postBatch.set(doc(db, "attendance", recID), postPayload);
+                postBatch.set(doc(db, "offline_attendance_log", recID), {
+                    ...entry,
+                    syncTimestamp: serverTimestamp(),
+                    syncStatus: "SUCCESS_POST_SESSION_v3.2",
+                    attempts: attempt,
+                });
+                await postBatch.commit();
+
                 toast(
-                    t(`❌ لم يتم تسجيلك: المحاضر قام بإنهاء الجلسة وحفظ الغياب بالفعل`,
-                      `❌ Registration Failed: Instructor has already closed this session`),
-                    7000, "#ef4444"
+                    t(`✅ تم تسجيل حضورك (الجلسة كانت مغلقة)`,
+                        `✅ Attendance recorded (session was closed)`),
+                    5000, "#10b981"
                 );
-                return false; 
+                beep();
+                log('info', `✅ Post-session offline sync complete: ${recID}`);
+                return true;   // ✅ يُحذف من الـ queue
             }
 
             const subDate = new Date(entry.submissionTime);
@@ -529,49 +575,50 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
             const m = String(subDate.getMonth() + 1).padStart(2, '0');
             const y = subDate.getFullYear();
 
-            const dateKey      = `${d}-${m}-${y}`;
+            const dateKey = `${d}-${m}-${y}`;
             const fixedDateStr = `${d}/${m}/${y}`;
-            const cleanSubKey  = rawSubject.trim().replace(/\s+/g, '_').replace(/[^\w\u0600-\u06FF]/g, '');
-            const recID        = `${entry.studentID}_${dateKey}_${cleanSubKey}`;
+            const cleanSubKey = rawSubject.trim().replace(/\s+/g, '_').replace(/[^\w\u0600-\u06FF]/g, '');
+            const recID = `${entry.studentID}_${dateKey}_${cleanSubKey}`;
 
             const batch = writeBatch(db);
 
             const payload = {
-                id:             entry.studentID,
-                name:           entry.studentName,
-                subject:        rawSubject,
-                college:        college,
-                hall:           codeData.hall || "Hall",
-                group:          "GENERAL",
-                date:           fixedDateStr,
-                time_str:       subDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-                timestamp:      serverTimestamp(),
-                status:         "ATTENDED",
-                doctorUID:      doctorUID,
-                doctorName:     codeData.doctorName,
-                notes:          "منضبط (مزامنة ذكية v3.2)",
-                isOfflineSync:  true
+                id: entry.studentID,
+                sessionPin: entry.sessionPin, 
+                name: entry.studentName,
+                subject: rawSubject,
+                college: college,
+                hall: codeData.hall || "Hall",
+                group: "GENERAL",
+                date: fixedDateStr,
+                time_str: subDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+                timestamp: serverTimestamp(),
+                status: "ATTENDED",
+                doctorUID: doctorUID,
+                doctorName: codeData.doctorName,
+                notes: "منضبط (مزامنة ذكية v3.2)",
+                isOfflineSync: true
             };
 
             batch.set(doc(db, `attendance_${college}`, recID), payload);
             batch.set(doc(db, "attendance", recID), payload);
 
             batch.set(doc(db, "active_sessions", doctorUID, "participants", user.uid), {
-                id:             entry.studentID,
-                uid:            user.uid,
-                name:           entry.studentName,
-                avatarClass:    entry.avatarClass,
-                status:         "active",
-                timestamp:      serverTimestamp(),
-                isOfflineSync:  true,
+                id: entry.studentID,
+                uid: user.uid,
+                name: entry.studentName,
+                avatarClass: entry.avatarClass,
+                status: "active",
+                timestamp: serverTimestamp(),
+                isOfflineSync: true,
                 submissionTime: entry.submissionTime
             });
 
             batch.set(doc(db, "offline_attendance_log", recID), {
                 ...entry,
-                syncTimestamp:  serverTimestamp(),
-                syncStatus:     "SUCCESS_RESILIENT_v3.2",
-                attempts:       attempt
+                syncTimestamp: serverTimestamp(),
+                syncStatus: "SUCCESS_RESILIENT_v3.2",
+                attempts: attempt
             });
 
             await batch.commit();
@@ -592,16 +639,16 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
 
         } catch (err) {
             log('error', `Sync fatal error on attempt ${attempt}:`, err.message);
-            
+
             if (err.code === 'permission-denied') {
                 log('critical', 'Firebase Rules blocking write. Check StudentID/UID mapping.');
-                return 'retry'; 
+                return 'retry';
             }
 
             if (attempt < OA.MAX_RETRIES) {
                 await _sleep(OA.RETRY_BASE_MS * Math.pow(2, attempt - 1));
             } else {
-                return 'retry'; 
+                return 'retry';
             }
         }
     }
@@ -644,10 +691,10 @@ function _getStudentFromCache() {
         }
 
         return {
-            id:     String(p.studentID).trim(),
-            name:   p.fullName || "Student",
+            id: String(p.studentID).trim(),
+            name: p.fullName || "Student",
             avatar: p.avatarClass || "fa-user-graduate",
-            uid:    p.uid,
+            uid: p.uid,
         };
 
     } catch (e) {
@@ -657,18 +704,18 @@ function _getStudentFromCache() {
 }
 
 function _setView(view) {
-    const inputView   = document.getElementById('offlineInputView');
+    const inputView = document.getElementById('offlineInputView');
     const processView = document.getElementById('offlineProcessView');
-    const cancelBtn   = document.getElementById('btnCancelOffline');
+    const cancelBtn = document.getElementById('btnCancelOffline');
 
     if (view === 'input') {
-        if (inputView)   inputView.style.display   = 'block';
-        if (processView) processView.style.display  = 'none';
-        if (cancelBtn)   cancelBtn.style.display    = 'block';
+        if (inputView) inputView.style.display = 'block';
+        if (processView) processView.style.display = 'none';
+        if (cancelBtn) cancelBtn.style.display = 'block';
     } else {
-        if (inputView)   inputView.style.display   = 'none';
-        if (processView) processView.style.display  = 'block';
-        if (cancelBtn)   cancelBtn.style.display    = 'none';
+        if (inputView) inputView.style.display = 'none';
+        if (processView) processView.style.display = 'block';
+        if (cancelBtn) cancelBtn.style.display = 'none';
     }
 }
 
@@ -720,11 +767,11 @@ window.inspectOfflineQueue = async function () {
         }
     }
 
-    const queue      = await queueLoad();
+    const queue = await queueLoad();
     const quarantine = JSON.parse(localStorage.getItem(OA.QUARANTINE_KEY) || '[]');
-    const rateInfo   = JSON.parse(localStorage.getItem(OA.RATE_KEY) || '{}');
+    const rateInfo = JSON.parse(localStorage.getItem(OA.RATE_KEY) || '{}');
 
-    console.table(queue.map(e => ({ ...e, _sig: e._sig ? `${e._sig.slice(0,12)}…` : 'none' })));
+    console.table(queue.map(e => ({ ...e, _sig: e._sig ? `${e._sig.slice(0, 12)}…` : 'none' })));
     console.info(`Pending: ${queue.length} | Quarantined: ${quarantine.length}`);
     console.info('Rate limit:', rateInfo);
 
