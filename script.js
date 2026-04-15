@@ -1,4 +1,3 @@
-
 import { MASTER_HALLS, MASTER_SUBJECTS } from './config.js';
 import {
     getFirestore, collection, doc, addDoc, setDoc, getDoc,
@@ -62,6 +61,154 @@ const CFG = Object.freeze({
         codeMap: { NURS: 'N', PT: 'P', PHARM: 'C', DENT: 'D', CS: 'T', BA: 'B', HS: 'H' },
     }),
 });
+
+const PersistentStore = (() => {
+    const DB_NAME = 'nursing_app_db';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'session_store';
+    let _db = null;
+
+    function _open() {
+        if (_db) return Promise.resolve(_db);
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(DB_NAME, DB_VERSION);
+            req.onupgradeneeded = e => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    db.createObjectStore(STORE_NAME, { keyPath: 'key' });
+                }
+            };
+            req.onsuccess = e => { _db = e.target.result; resolve(_db); };
+            req.onerror = () => reject(req.error);
+        });
+    }
+
+    async function set(key, value) {
+        try {
+            const db = await _open();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE_NAME, 'readwrite');
+                tx.objectStore(STORE_NAME).put({ key, value, ts: Date.now() });
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = () => reject(tx.error);
+            });
+        } catch (e) { console.warn('PersistentStore.set error:', e); return false; }
+    }
+
+    async function get(key) {
+        try {
+            const db = await _open();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE_NAME, 'readonly');
+                const req = tx.objectStore(STORE_NAME).get(key);
+                req.onsuccess = () => resolve(req.result?.value ?? null);
+                req.onerror = () => reject(req.error);
+            });
+        } catch (e) { console.warn('PersistentStore.get error:', e); return null; }
+    }
+
+    async function remove(key) {
+        try {
+            const db = await _open();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE_NAME, 'readwrite');
+                tx.objectStore(STORE_NAME).delete(key);
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = () => reject(tx.error);
+            });
+        } catch (e) { console.warn('PersistentStore.remove error:', e); return false; }
+    }
+
+    async function syncToLocal(key) {
+        const val = await get(key);
+        if (val !== null) {
+            try { localStorage.setItem(key, val); } catch { /* quota */ }
+        }
+        return val;
+    }
+
+    async function setWithSync(key, value) {
+        await set(key, value);
+        try { localStorage.setItem(key, value); } catch { /* quota */ }
+        try { sessionStorage.setItem(key, value); } catch { /* quota */ }
+    }
+
+    async function getWithFallback(key) {
+        let val = await get(key);
+        if (val !== null) return val;
+        // ثم localStorage
+        val = localStorage.getItem(key);
+        if (val !== null) { await set(key, val); return val; }
+        // أخيراً sessionStorage
+        val = sessionStorage.getItem(key);
+        if (val !== null) { await set(key, val); return val; }
+        return null;
+    }
+
+    async function removeWithSync(key) {
+        await remove(key);
+        try { localStorage.removeItem(key); } catch { /* ignore */ }
+        try { sessionStorage.removeItem(key); } catch { /* ignore */ }
+    }
+
+    return { set, get, remove, setWithSync, getWithFallback, removeWithSync, syncToLocal };
+})();
+
+
+const SessionGuard = (() => {
+    let _resolved = false;
+    let _authReadyCallbacks = [];
+
+    function lockScreen() {
+        const style = document.getElementById('_session_guard_style') || document.createElement('style');
+        style.id = '_session_guard_style';
+        style.textContent = `
+            #studentAuthDrawer { display: none !important; opacity: 0 !important; pointer-events: none !important; }
+        `;
+        document.head.appendChild(style);
+    }
+
+    function unlock() {
+        const style = document.getElementById('_session_guard_style');
+        if (style) style.remove();
+    }
+
+    function onAuthReady(cb) {
+        if (_resolved) { cb(); return; }
+        _authReadyCallbacks.push(cb);
+    }
+
+    function markResolved() {
+        if (_resolved) return;
+        _resolved = true;
+        unlock();
+        _authReadyCallbacks.forEach(cb => { try { cb(); } catch (e) { console.warn(e); } });
+        _authReadyCallbacks = [];
+    }
+
+    async function quickCheck() {
+        lockScreen();
+        const uid = await PersistentStore.getWithFallback('LOGGED_IN_UID');
+        const sessionId = await PersistentStore.getWithFallback('CURRENT_SESSION_ID');
+        const cached = await PersistentStore.getWithFallback('nursing_user_verified_v2');
+
+        if (uid && sessionId && cached) {
+            try {
+                const data = JSON.parse(cached);
+                if (data?.uid === uid && (Date.now() - data.ts) < CFG.device.verifiedTTL) {
+                    try { localStorage.setItem('LOGGED_IN_UID', uid); } catch {  }
+                    try { localStorage.setItem('CURRENT_SESSION_ID', sessionId); } catch { }
+                    return { uid, sessionId, valid: true };
+                }
+            } catch {  }
+        }
+        return { valid: false };
+    }
+
+    return { lockScreen, unlock, onAuthReady, markResolved, quickCheck };
+})();
+
+SessionGuard.lockScreen();
 
 
 const Utils = (() => {
@@ -160,6 +307,7 @@ const UI = (() => {
     }
 
     function openAuthDrawer() {
+        if (window._authStateLoading) return;
         const drawer = Utils.$('studentAuthDrawer');
         if (!drawer) return;
         drawer.style.display = 'flex';
@@ -419,8 +567,15 @@ const DeviceManager = (() => {
     async function getUniqueDeviceId() {
         if (_cachedId) return _cachedId;
 
+        const storedIDB = await PersistentStore.get(CFG.device.cacheKey);
+        if (storedIDB) { _cachedId = storedIDB; return storedIDB; }
+
         const stored = localStorage.getItem(CFG.device.cacheKey);
-        if (stored) { _cachedId = stored; return stored; }
+        if (stored) {
+            _cachedId = stored;
+            await PersistentStore.set(CFG.device.cacheKey, stored);
+            return stored;
+        }
 
         const extras = [
             navigator.hardwareConcurrency || 0,
@@ -448,11 +603,14 @@ const DeviceManager = (() => {
         const finalId = await Utils.hashString(`${fpId}|${extras}`);
         _cachedId = finalId;
         localStorage.setItem(CFG.device.cacheKey, finalId);
+        await PersistentStore.set(CFG.device.cacheKey, finalId);
         return finalId;
     }
 
     function saveVerifiedCache(uid) {
-        localStorage.setItem(CFG.device.verifiedCacheKey, JSON.stringify({ uid, ts: Date.now() }));
+        const data = JSON.stringify({ uid, ts: Date.now() });
+        localStorage.setItem(CFG.device.verifiedCacheKey, data);
+        PersistentStore.set(CFG.device.verifiedCacheKey, data).catch(() => { });
     }
 
     function readVerifiedCache(uid) {
@@ -462,11 +620,25 @@ const DeviceManager = (() => {
         return data?.uid === uid && (Date.now() - data.ts) < CFG.device.verifiedTTL;
     }
 
-    function clearVerifiedCache() {
-        localStorage.removeItem(CFG.device.verifiedCacheKey);
+    async function readVerifiedCacheAsync(uid) {
+        let raw = localStorage.getItem(CFG.device.verifiedCacheKey);
+        if (!raw) {
+            raw = await PersistentStore.get(CFG.device.verifiedCacheKey);
+            if (raw) {
+                try { localStorage.setItem(CFG.device.verifiedCacheKey, raw); } catch { /* ignore */ }
+            }
+        }
+        if (!raw) return false;
+        const data = Utils.safeJsonParse(raw);
+        return data?.uid === uid && (Date.now() - data.ts) < CFG.device.verifiedTTL;
     }
 
-    return { getUniqueDeviceId, saveVerifiedCache, readVerifiedCache, clearVerifiedCache };
+    function clearVerifiedCache() {
+        localStorage.removeItem(CFG.device.verifiedCacheKey);
+        PersistentStore.remove(CFG.device.verifiedCacheKey).catch(() => { });
+    }
+
+    return { getUniqueDeviceId, saveVerifiedCache, readVerifiedCache, readVerifiedCacheAsync, clearVerifiedCache };
 })();
 
 
@@ -555,7 +727,6 @@ const NetworkManager = (() => {
         diagnose();
     }
 
-    // ── Global guard (connection polling + mobile check) ───────
     function initGlobalGuard() {
         setInterval(async () => {
             // بعد
@@ -626,8 +797,26 @@ const AuthManager = (() => {
         const profileIcon = Utils.$('profileIconImg');
         const statusDot = Utils.$('userStatusDot');
 
+        window._authStateLoading = false;
+
         if (!user) {
+            const savedUID = await PersistentStore.getWithFallback('LOGGED_IN_UID');
+            const savedSession = await PersistentStore.getWithFallback('CURRENT_SESSION_ID');
+            const verifiedRaw = await PersistentStore.get(CFG.device.verifiedCacheKey);
+
+            if (savedUID && savedSession && verifiedRaw) {
+                try {
+                    const verifiedData = Utils.safeJsonParse(verifiedRaw);
+                    if (verifiedData?.uid === savedUID && (Date.now() - verifiedData.ts) < CFG.device.verifiedTTL) {
+                        console.log('Session restored from persistent store, waiting for Firebase...');
+                        SessionGuard.markResolved();
+                        return; 
+                    }
+                } catch {  }
+            }
+
             await _handleSignedOut({ drawerEl, profileWrap, profileIcon, statusDot });
+            SessionGuard.markResolved();
             return;
         }
 
@@ -653,6 +842,7 @@ const AuthManager = (() => {
         }
 
         window.updateUIForMode?.();
+        SessionGuard.markResolved();
     }
 
     async function _handleVerifiedUser(user, els) {
@@ -671,7 +861,8 @@ const AuthManager = (() => {
 
             const name = data.registrationInfo?.fullName || data.fullName || 'Student';
 
-            const alreadyTracked = localStorage.getItem('CURRENT_SESSION_ID');
+            const alreadyTracked = localStorage.getItem('CURRENT_SESSION_ID')
+                || await PersistentStore.get('CURRENT_SESSION_ID');
             const sessionId = user.uid;
             const sessionRef = doc(db, 'active_users', user.uid, 'sessions', sessionId);
             if (!alreadyTracked) {
@@ -686,15 +877,22 @@ const AuthManager = (() => {
                         studentID: data.registrationInfo?.studentID || data.studentID || '',
                         ipAddress: NetworkManager.getIP(),
                     }, { merge: true });
-                    localStorage.setItem('CURRENT_SESSION_ID', sessionId);
-                    localStorage.setItem('LOGGED_IN_UID', user.uid);
+                    await PersistentStore.setWithSync('CURRENT_SESSION_ID', sessionId);
+                    await PersistentStore.setWithSync('LOGGED_IN_UID', user.uid);
                 }
+            } else {
+                try { localStorage.setItem('CURRENT_SESSION_ID', sessionId); } catch { /* ignore */ }
+                try { localStorage.setItem('LOGGED_IN_UID', user.uid); } catch { /* ignore */ }
             }
 
             window.listenToSessionState?.();
 
-            const savedUID = localStorage.getItem('TARGET_DOCTOR_UID');
-            if (savedUID) sessionStorage.setItem('TARGET_DOCTOR_UID', savedUID);
+            const savedUID = localStorage.getItem('TARGET_DOCTOR_UID')
+                || await PersistentStore.get('TARGET_DOCTOR_UID');
+            if (savedUID) {
+                sessionStorage.setItem('TARGET_DOCTOR_UID', savedUID);
+                localStorage.setItem('TARGET_DOCTOR_UID', savedUID);
+            }
 
             window.monitorMyParticipation?.();
             window.showSmartWelcome?.(name);
@@ -726,7 +924,8 @@ const AuthManager = (() => {
 
     async function _handleSignedOut({ drawerEl, profileWrap, profileIcon, statusDot }) {
         const uid = auth.currentUser?.uid;
-        const sessionId = localStorage.getItem('CURRENT_SESSION_ID');
+        const sessionId = localStorage.getItem('CURRENT_SESSION_ID')
+            || await PersistentStore.get('CURRENT_SESSION_ID');
 
         if (uid && sessionId) {
             try {
@@ -738,8 +937,8 @@ const AuthManager = (() => {
             } catch (e) { console.warn('Session clear warning:', e); }
         }
 
-        localStorage.removeItem('CURRENT_SESSION_ID');
-        localStorage.removeItem('LOGGED_IN_UID');
+        await PersistentStore.removeWithSync('CURRENT_SESSION_ID');
+        await PersistentStore.removeWithSync('LOGGED_IN_UID');
 
         sessionStorage.clear();
         DeviceManager.clearVerifiedCache();
@@ -883,15 +1082,95 @@ const AuthManager = (() => {
             );
             if (!sessionsSnap.empty) {
                 await signOut(auth);
-                UI.showToast('⛔ إجراء محظور', 4000, '#ef4444');
-                navigator.vibrate?.([200, 100, 200]);
+                navigator.vibrate?.([300, 100, 300, 100, 300]);
+
+                const activeSession = sessionsSnap.docs[0].data();
+                const loginTime = activeSession.loginAt?.toDate?.();
+                const timeStr = loginTime
+                    ? loginTime.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
+                    : '--:--';
+
+                try {
+                    const deviceId = await DeviceManager.getUniqueDeviceId();
+                    await addDoc(collection(db, 'security_violations'), {
+                        uid: user.uid,
+                        email,
+                        type: 'multi_login_attempt',
+                        attemptAt: serverTimestamp(),
+                        deviceFingerprint: deviceId,
+                        ipAddress: NetworkManager.getIP(),
+                        deviceInfo: {
+                            userAgent: navigator.userAgent,
+                            platform: navigator.platform || 'Unknown',
+                            screenSize: `${screen.width}x${screen.height}`,
+                            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                        },
+                    });
+                } catch (e) { console.warn('Violation log failed:', e); }
+
+                const existingModal = document.getElementById('_multiLoginModal');
+                if (existingModal) existingModal.remove();
+
+                const modal = document.createElement('div');
+                modal.id = '_multiLoginModal';
+                modal.style.cssText = `
+        position:fixed;inset:0;z-index:999999;
+        background:rgba(0,0,0,0.5);
+        display:flex;align-items:center;justify-content:center;
+        padding:20px;
+    `;
+                modal.innerHTML = `
+        <div style="
+            background:var(--card-bg, #1e293b);
+            border:1px solid #334155;
+            border-radius:20px;
+            padding:28px 24px;
+            max-width:340px;
+            width:100%;
+            text-align:center;
+            box-shadow:0 20px 60px rgba(0,0,0,0.4);
+            direction:rtl;
+        ">
+            <i class="fa-solid fa-circle-exclamation"
+               style="font-size:36px;color:#ef4444;margin-bottom:16px;display:block;"></i>
+
+            <div style="
+                color:var(--text-primary,#f1f5f9);
+                font-size:16px;font-weight:800;
+                margin-bottom:12px;
+                font-family:'Outfit',sans-serif;
+            ">الحساب مسجّل مسبقاً</div>
+
+            <div style="
+                color:var(--text-secondary,#94a3b8);
+                font-size:13px;line-height:2;
+                margin-bottom:6px;
+            ">هذا الحساب مفتوح حالياً على جهاز أو متصفح آخر</div>
+
+            <div style="
+                color:#64748b;
+                font-size:12px;
+                margin-bottom:24px;
+                direction:ltr;
+            ">This account is active on another device or browser</div>
+
+            <button onclick="document.getElementById('_multiLoginModal').remove()" style="
+                width:100%;padding:13px;border:none;
+                background:linear-gradient(135deg,#3b82f6,#2563eb);
+                color:#fff;font-size:14px;font-weight:700;
+                border-radius:12px;cursor:pointer;
+                font-family:'Outfit',sans-serif;
+            ">حسناً</button>
+        </div>
+    `;
+                document.body.appendChild(modal);
+
                 if (btn) { btn.innerHTML = originalHtml; btn.disabled = false; }
                 return;
             }
-
             const sessionId = user.uid;
-            localStorage.setItem('CURRENT_SESSION_ID', sessionId);
-            localStorage.setItem('LOGGED_IN_UID', user.uid);
+            await PersistentStore.setWithSync('CURRENT_SESSION_ID', sessionId);
+            await PersistentStore.setWithSync('LOGGED_IN_UID', user.uid);
 
             const deviceId = await DeviceManager.getUniqueDeviceId();
             await setDoc(doc(db, 'active_users', user.uid, 'sessions', sessionId), {
@@ -937,7 +1216,9 @@ const AuthManager = (() => {
             avatarClass: data.avatarClass || info.avatarClass || 'fa-user-graduate',
             status_message: data.status_message || '', uid, type: 'student',
         };
-        localStorage.setItem('cached_profile_data', JSON.stringify(cache));
+        const cacheStr = JSON.stringify(cache);
+        localStorage.setItem('cached_profile_data', cacheStr);
+        PersistentStore.set('cached_profile_data', cacheStr).catch(() => { });
     }
 
     async function _syncDeviceBinding(uid) {
@@ -980,9 +1261,9 @@ const AuthManager = (() => {
 
                     await signOut(auth);
                     sessionStorage.clear();
-                    localStorage.removeItem('CURRENT_SESSION_ID');
-                    localStorage.removeItem('LOGGED_IN_UID');
-                    localStorage.removeItem('TARGET_DOCTOR_UID');
+                    await PersistentStore.removeWithSync('CURRENT_SESSION_ID');
+                    await PersistentStore.removeWithSync('LOGGED_IN_UID');
+                    await PersistentStore.removeWithSync('TARGET_DOCTOR_UID');
                     DeviceManager.clearVerifiedCache();
 
                     UI.showToast('⛔تم تسجيل خروجك ', 5000, '#ef4444');
@@ -996,7 +1277,8 @@ const AuthManager = (() => {
 
     async function performStudentLogout() {
         const uid = auth.currentUser?.uid;
-        const sessionId = localStorage.getItem('CURRENT_SESSION_ID');
+        const sessionId = localStorage.getItem('CURRENT_SESSION_ID')
+            || await PersistentStore.get('CURRENT_SESSION_ID');
 
         if (uid && sessionId) {
             try {
@@ -1010,9 +1292,9 @@ const AuthManager = (() => {
 
         window.sessionWatcherUnsubscribe?.();
         window.sessionWatcherUnsubscribe = null;
-        localStorage.removeItem('CURRENT_SESSION_ID');
-        localStorage.removeItem('LOGGED_IN_UID');
-        localStorage.removeItem('TARGET_DOCTOR_UID');
+        await PersistentStore.removeWithSync('CURRENT_SESSION_ID');
+        await PersistentStore.removeWithSync('LOGGED_IN_UID');
+        await PersistentStore.removeWithSync('TARGET_DOCTOR_UID');
         await signOut(auth);
     }
 
@@ -1029,7 +1311,8 @@ const SessionManager = (() => {
         const mainBtn = Utils.$('mainActionBtn');
         if (!user) return;
 
-        let targetDoctorUID = localStorage.getItem('TARGET_DOCTOR_UID');
+        let targetDoctorUID = localStorage.getItem('TARGET_DOCTOR_UID')
+            || await PersistentStore.get('TARGET_DOCTOR_UID');
 
         if (!targetDoctorUID) {
             if (mainBtn) {
@@ -1041,6 +1324,9 @@ const SessionManager = (() => {
             if (!targetDoctorUID) { UI.setMainButton('register'); return; }
         }
 
+        localStorage.setItem('TARGET_DOCTOR_UID', targetDoctorUID);
+        sessionStorage.setItem('TARGET_DOCTOR_UID', targetDoctorUID);
+
         window.studentStatusListener?.();
         window.sessionStatusListener?.();
 
@@ -1048,8 +1334,7 @@ const SessionManager = (() => {
             doc(db, 'active_sessions', targetDoctorUID),
             snap => {
                 if (!snap.exists() || !snap.data().isActive) {
-                    localStorage.removeItem('TARGET_DOCTOR_UID');
-                    sessionStorage.removeItem('TARGET_DOCTOR_UID');
+                    PersistentStore.removeWithSync('TARGET_DOCTOR_UID');
                     UI.setMainButton('register');
                     window.studentStatusListener?.();
                     window.studentStatusListener = null;
@@ -1071,7 +1356,7 @@ const SessionManager = (() => {
             for (const s of snap.docs) {
                 const pSnap = await getDoc(doc(db, 'active_sessions', s.id, 'participants', uid));
                 if (pSnap.exists() && pSnap.data().status === 'active') {
-                    localStorage.setItem('TARGET_DOCTOR_UID', s.id);
+                    await PersistentStore.setWithSync('TARGET_DOCTOR_UID', s.id);
                     return s.id;
                 }
             }
@@ -1112,7 +1397,7 @@ const SessionManager = (() => {
         window.studentStatusListener?.();
         window.studentStatusListener = null;
         sessionStorage.removeItem('TARGET_DOCTOR_UID');
-        localStorage.removeItem('TARGET_DOCTOR_UID');
+        PersistentStore.removeWithSync('TARGET_DOCTOR_UID');
         UI.setMainButton('register');
 
         const liveScreen = Utils.$('screenLiveSession');
@@ -1281,8 +1566,8 @@ const SessionManager = (() => {
             window.stopCodeEntryIdleTimer?.();
             UI.showToast(`✅ ${result.message}`, 3000, '#10b981');
 
-            localStorage.setItem('TARGET_DOCTOR_UID', doctorUID);
-            sessionStorage.setItem('TARGET_DOCTOR_UID', doctorUID);
+            await PersistentStore.setWithSync('TARGET_DOCTOR_UID', doctorUID);
+            sessionStorage.setItem('TEMP_DR_UID', '');
             sessionStorage.removeItem('TEMP_DR_UID');
 
             _incrementAttendanceCache(user.uid);
@@ -1331,9 +1616,11 @@ const SessionManager = (() => {
             const obj = JSON.parse(raw);
             if (obj.uid === uid) {
                 obj.attendanceCount = (obj.attendanceCount || 0) + 1;
-                localStorage.setItem('cached_profile_data', JSON.stringify(obj));
+                const updated = JSON.stringify(obj);
+                localStorage.setItem('cached_profile_data', updated);
+                PersistentStore.set('cached_profile_data', updated).catch(() => { });
             }
-        } catch { /* non-critical */ }
+        } catch { }
     }
 
     function _populateLiveSessionUI(data) {
@@ -1561,7 +1848,7 @@ const ProfileManager = (() => {
         try {
             const snap = await getDoc(doc(db, 'user_registrations', user.uid));
             if (snap.exists()) gender = snap.data().registrationInfo?.gender || snap.data().gender || 'Male';
-        } catch { /* use default */ }
+        } catch {  }
 
         grid.innerHTML = '';
         const icons = CFG.avatars[gender] || CFG.avatars.Male;
@@ -1594,7 +1881,12 @@ const ProfileManager = (() => {
             const raw = localStorage.getItem('cached_profile_data');
             if (raw) {
                 const obj = JSON.parse(raw);
-                if (obj.uid === user.uid) { obj.avatarClass = iconClass; localStorage.setItem('cached_profile_data', JSON.stringify(obj)); }
+                if (obj.uid === user.uid) {
+                    obj.avatarClass = iconClass;
+                    const updated = JSON.stringify(obj);
+                    localStorage.setItem('cached_profile_data', updated);
+                    PersistentStore.set('cached_profile_data', updated).catch(() => { });
+                }
             }
             UI.showToast('✅ تم تحديث صورتك بنجاح', 2000, '#10b981');
         } catch (e) { UI.showToast('❌ فشل حفظ التغييرات', 3000, '#ef4444'); }
@@ -1664,7 +1956,7 @@ const FeedbackManager = (() => {
                         feedback_status: 'dismissed',
                         dismissed_at: serverTimestamp(),
                     });
-                } catch { /* retry next time */ }
+                } catch {  }
                 return;
             }
 
@@ -2026,7 +2318,7 @@ Object.assign(window, {
     filterModalSubjects: UI.filterModalSubjects,
     showToast: UI.showToast,
     resetMainButtonUI: () => {
-        const uid = sessionStorage.getItem('TARGET_DOCTOR_UID');
+        const uid = sessionStorage.getItem('TARGET_DOCTOR_UID') || localStorage.getItem('TARGET_DOCTOR_UID');
         UI.setMainButton(uid ? 'enter' : 'register');
     },
 
@@ -2169,7 +2461,7 @@ Object.assign(window, {
         window.playClick?.();
         const user = window.auth.currentUser;
         if (!user) { UI.openAuthDrawer(); return; }
-        if (sessionStorage.getItem('TARGET_DOCTOR_UID')) {
+        if (sessionStorage.getItem('TARGET_DOCTOR_UID') || localStorage.getItem('TARGET_DOCTOR_UID')) {
             UI.switchScreen('screenLiveSession');
             window.startLiveSnapshotListener?.();
             return;
@@ -2205,14 +2497,51 @@ Object.assign(window, {
     studentStatusListener: null,
     sessionStatusListener: null,
     HARDWARE_ID: null,
+
+    _authStateLoading: true,
 });
+
+
+async function _initPersistentSync() {
+    const keysToSync = [
+        'LOGGED_IN_UID',
+        'CURRENT_SESSION_ID',
+        'TARGET_DOCTOR_UID',
+        CFG.device.cacheKey,
+        CFG.device.verifiedCacheKey,
+        'cached_profile_data',
+    ];
+
+    for (const key of keysToSync) {
+        try {
+            const idbVal = await PersistentStore.get(key);
+            if (idbVal !== null && !localStorage.getItem(key)) {
+                localStorage.setItem(key, idbVal);
+            }
+        } catch {  }
+    }
+}
 
 
 document.addEventListener('DOMContentLoaded', async () => {
+    await _initPersistentSync();
+
     try { await DeviceManager.getUniqueDeviceId(); } catch (e) { console.warn('Fingerprint pre-load warning:', e); }
+
+    const quickResult = await SessionGuard.quickCheck();
+    if (quickResult.valid) {
+        console.log('Quick session check passed, restoring session...');
+    }
 });
 
 onAuthStateChanged(window.auth, AuthManager.onAuthChange);
+
+setTimeout(() => {
+    if (window._authStateLoading) {
+        window._authStateLoading = false;
+        SessionGuard.markResolved();
+    }
+}, 3000);
 
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
@@ -2221,6 +2550,7 @@ document.addEventListener('visibilitychange', () => {
     } else {
         if (window._isOpeningMaps) window._isOpeningMaps = false;
         if (window.processIsActive) WakeLock.request();
+        _initPersistentSync().catch(() => { });
     }
 });
 
@@ -2246,12 +2576,29 @@ window.onload = () => {
     if (savedUID) {
         sessionStorage.setItem('TARGET_DOCTOR_UID', savedUID);
         window.resetMainButtonUI();
+    } else {
+        PersistentStore.get('TARGET_DOCTOR_UID').then(uid => {
+            if (uid) {
+                localStorage.setItem('TARGET_DOCTOR_UID', uid);
+                sessionStorage.setItem('TARGET_DOCTOR_UID', uid);
+                window.resetMainButtonUI();
+            }
+        }).catch(() => { });
     }
 
     const savedSessionId = localStorage.getItem('CURRENT_SESSION_ID');
     const savedLoggedUID = localStorage.getItem('LOGGED_IN_UID');
     if (savedSessionId && savedLoggedUID) {
         AuthManager.startSessionWatcher(savedLoggedUID, savedSessionId);
+    } else {
+        Promise.all([
+            PersistentStore.get('CURRENT_SESSION_ID'),
+            PersistentStore.get('LOGGED_IN_UID'),
+        ]).then(([sid, luid]) => {
+            if (sid && luid) {
+                AuthManager.startSessionWatcher(luid, sid);
+            }
+        }).catch(() => { });
     }
 
     NetworkManager.initGlobalGuard();
