@@ -196,11 +196,11 @@ const SessionGuard = (() => {
             try {
                 const data = JSON.parse(cached);
                 if (data?.uid === uid && (Date.now() - data.ts) < CFG.device.verifiedTTL) {
-                    try { localStorage.setItem('LOGGED_IN_UID', uid); } catch {  }
+                    try { localStorage.setItem('LOGGED_IN_UID', uid); } catch { }
                     try { localStorage.setItem('CURRENT_SESSION_ID', sessionId); } catch { }
                     return { uid, sessionId, valid: true };
                 }
-            } catch {  }
+            } catch { }
         }
         return { valid: false };
     }
@@ -799,23 +799,50 @@ const AuthManager = (() => {
 
         window._authStateLoading = false;
 
+        // [MODERN & GLOBAL SESSION RECOVERY LOGIC]
         if (!user) {
-            const savedUID = await PersistentStore.getWithFallback('LOGGED_IN_UID');
-            const savedSession = await PersistentStore.getWithFallback('CURRENT_SESSION_ID');
-            const verifiedRaw = await PersistentStore.get(CFG.device.verifiedCacheKey);
+            console.log('[Auth] No active Firebase user detected. Analyzing persistent storage...');
 
+            // 1. جلب البيانات من المخزن الدائم (IndexedDB / LocalStorage) بشكل متوازي للسرعة
+            const [savedUID, savedSession, verifiedRaw] = await Promise.all([
+                PersistentStore.getWithFallback('LOGGED_IN_UID'),
+                PersistentStore.getWithFallback('CURRENT_SESSION_ID'),
+                PersistentStore.get(CFG.device.verifiedCacheKey)
+            ]);
+
+            // 2. التحقق مما إذا كان هناك "أثر" لمستخدم مسجل سابقاً
             if (savedUID && savedSession && verifiedRaw) {
-                try {
-                    const verifiedData = Utils.safeJsonParse(verifiedRaw);
-                    if (verifiedData?.uid === savedUID && (Date.now() - verifiedData.ts) < CFG.device.verifiedTTL) {
-                        console.log('Session restored from persistent store, waiting for Firebase...');
-                        SessionGuard.markResolved();
-                        return; 
+                const verifiedData = Utils.safeJsonParse(verifiedRaw);
+                const isTTValid = verifiedData && (Date.now() - verifiedData.ts) < CFG.device.verifiedTTL;
+
+                // [الذكاء الصناعي للنت الضعيف]: إذا كانت البيانات موجودة وصالحة
+                if (verifiedData?.uid === savedUID && isTTValid) {
+
+                    // إذا كنا لا نزال في مرحلة التحميل الأولية (النت ضعيف)، لا تفعل شيئاً وانتظر Firebase
+                    if (window._authStateLoading) {
+                        console.warn('[Security] Weak network detected. Holding session integrity...');
+                        // نحن لا نستدعي markResolved هنا لترك الشاشة مقفولة (Loading) بدلاً من إظهار نافذة تسجيل الدخول
+                        return;
                     }
-                } catch {  }
+
+                    // إذا انتهى التحميل تماماً وفايربيز لا يزال يصر أنه لا يوجد مستخدم
+                    console.log('[Auth] Persistent session found but Firebase is empty. Restoring UI state...');
+                    SessionGuard.markResolved();
+                    return;
+                }
             }
 
+            // 3. [حماية المستخدم]: إذا وصلنا هنا، فهذا يعني إما مستخدم جديد أو جلسة منتهية الصلاحية تماماً
+            // لكن مهلاً! لا تمسح البيانات أبداً طالما أن الـ Loading لا يزال يعمل (حماية ضد الـ Network Glitch)
+            if (window._authStateLoading) {
+                return; // ابقَ صامتاً وانتظر الرد النهائي
+            }
+
+            // 4. [القرار النهائي]: مسح الجلسة فقط عند التأكد 100% من عدم وجود مستخدم
+            console.error('[Auth] Hard logout triggered: No valid credentials or session expired.');
             await _handleSignedOut({ drawerEl, profileWrap, profileIcon, statusDot });
+
+            // فتح التطبيق للزوار (Guest Mode)
             SessionGuard.markResolved();
             return;
         }
@@ -1848,7 +1875,7 @@ const ProfileManager = (() => {
         try {
             const snap = await getDoc(doc(db, 'user_registrations', user.uid));
             if (snap.exists()) gender = snap.data().registrationInfo?.gender || snap.data().gender || 'Male';
-        } catch {  }
+        } catch { }
 
         grid.innerHTML = '';
         const icons = CFG.avatars[gender] || CFG.avatars.Male;
@@ -1956,7 +1983,7 @@ const FeedbackManager = (() => {
                         feedback_status: 'dismissed',
                         dismissed_at: serverTimestamp(),
                     });
-                } catch {  }
+                } catch { }
                 return;
             }
 
@@ -2518,7 +2545,7 @@ async function _initPersistentSync() {
             if (idbVal !== null && !localStorage.getItem(key)) {
                 localStorage.setItem(key, idbVal);
             }
-        } catch {  }
+        } catch { }
     }
 }
 
@@ -2536,12 +2563,34 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 onAuthStateChanged(window.auth, AuthManager.onAuthChange);
 
-setTimeout(() => {
+setTimeout(async () => {
     if (window._authStateLoading) {
+        console.warn('[System] Firebase is taking too long (Slow Network). Triggering Adaptive Recovery...');
+
+        const cachedUID = await PersistentStore.get('LOGGED_IN_UID');
+        const verifiedRaw = await PersistentStore.get(CFG.device.verifiedCacheKey);
+        const verifiedData = Utils.safeJsonParse(verifiedRaw);
+        const isSessionValid = verifiedData && (Date.now() - verifiedData.ts) < CFG.device.verifiedTTL;
+
         window._authStateLoading = false;
+
         SessionGuard.markResolved();
+
+        if (!cachedUID || !isSessionValid) {
+            console.log('[System] No local session found after timeout. Prompting login...');
+
+            setTimeout(() => {
+                if (!window.auth.currentUser) {
+                    UI.openAuthDrawer();
+                }
+            }, 500);
+        } else {
+            console.info('[System] Local session detected. Keeping UI silent for background sync.');
+
+            window.updateUIForMode?.();
+        }
     }
-}, 3000);
+}, 10000); 
 
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
