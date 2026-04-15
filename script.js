@@ -2505,7 +2505,7 @@ Object.assign(window, {
 
     forceOpenPinScreen: () => {
         const user = window.auth.currentUser;
-        if (!user) { UI.showToast('⚠️ عذراً، يجب تسجيل الدخول أولاً', 3000, '#f59e0b'); UI.openAuthDrawer(); return; }
+        if (!user) { UI.showToast('⚠️ عذراً، انتظر', 3000, '#f59e0b'); UI.openAuthDrawer(); return; }
         UI.switchScreen('screenDataEntry');
         Utils.$('step2_auth')?.style.setProperty('display', 'none', 'important');
         const errEl = Utils.$('screenError');
