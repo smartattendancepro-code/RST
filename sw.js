@@ -1,18 +1,17 @@
-const CACHE_NAME = 'proattend-v2'; 
+const CACHE_NAME = 'proattend-v3.2';
 
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './style.css',
   './script.js',
-  './offline-handler.js',
   './manifest.json',
-  './icon-192.png', 
+  './icon-192.png',
   './icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {
-  self.skipWaiting(); 
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       console.log('✅ ProAttend: Caching assets...');
@@ -35,23 +34,34 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
-  if (event.request.url.includes('firestore.googleapis.com') || 
-      event.request.url.startsWith('chrome-extension')) return;
+
+  const isDynamicData =
+    event.request.url.includes('firestore.googleapis.com') ||
+    event.request.url.includes('firebase') ||
+    event.request.url.includes('google-analytics') ||
+    event.request.url.startsWith('chrome-extension');
+
+  if (isDynamicData) return;
 
   event.respondWith(
-    fetch(event.request)
-      .then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
-        }
-        return networkResponse;
-      })
-      .catch(() => {
-        return caches.match(event.request);
-      })
+    caches.match(event.request).then((cachedResponse) => {
+
+      const networkFetch = fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          console.log('[SW] Network failed, serving from offline fallback/cache');
+        });
+
+      return cachedResponse || networkFetch;
+    })
   );
 });
 
@@ -68,7 +78,7 @@ self.addEventListener('push', (event) => {
   const title = data.notification?.title || data.title || 'ProAttend';
   const options = {
     body: data.notification?.body || data.body || 'لديك تنبيه جديد من النظام',
-    icon: './icon-192.png', 
+    icon: './icon-192.png',
     badge: './icon-192.png',
     vibrate: [100, 50, 100],
     data: {
