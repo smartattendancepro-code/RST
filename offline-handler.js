@@ -34,7 +34,6 @@ function beep() {
 
 function log(level, ...args) {
     const prefix = `[NursingOffline][${new Date().toISOString()}]`;
-    // إذا كان المستوى غير معروف للمتصفح (مثل critical)، استخدم 'error' كبديل
     const method = (console[level] && typeof console[level] === 'function') ? level : 'error';
     console[method](prefix, ...args);
 }
@@ -43,6 +42,11 @@ const _keyCache = new Map();
 
 async function _getAesKey(uid) {
     if (_keyCache.has(uid)) return _keyCache.get(uid);
+
+    if (_keyCache.size >= 10) {
+        const oldest = _keyCache.keys().next().value;
+        _keyCache.delete(oldest);
+    }
 
     const rawMaterial = await crypto.subtle.importKey(
         'raw',
@@ -110,25 +114,40 @@ async function _decryptQueue(raw, uid) {
         const combined = Uint8Array.from(atob(raw), c => c.charCodeAt(0));
         const iv = combined.slice(0, 12);
         const cipherBuf = combined.slice(12);
-
         const key = await _getAesKey(uid);
-
         const plain = await crypto.subtle.decrypt(
             { name: OA.CRYPTO_ALGO, iv },
             key,
             cipherBuf
         );
-
         const parsed = JSON.parse(new TextDecoder().decode(plain));
         return Array.isArray(parsed) ? parsed : [];
-
     } catch {
         try {
-            const legacyDecoded = decodeURIComponent(escape(atob(raw)));
-            const parsed = JSON.parse(legacyDecoded);
+            const fallbackUid = window.HARDWARE_ID || 'ANONYMOUS_DEVICE';
+            if (fallbackUid === uid) throw new Error('same uid');
+
+            const combined = Uint8Array.from(atob(raw), c => c.charCodeAt(0));
+            const iv = combined.slice(0, 12);
+            const cipherBuf = combined.slice(12);
+            const key = await _getAesKey(fallbackUid);
+            const plain = await crypto.subtle.decrypt(
+                { name: OA.CRYPTO_ALGO, iv },
+                key,
+                cipherBuf
+            );
+            const parsed = JSON.parse(new TextDecoder().decode(plain));
+            log('warn', 'Queue decrypted with ANONYMOUS_DEVICE fallback');
             return Array.isArray(parsed) ? parsed : [];
         } catch {
-            return [];
+            // legacy fallback
+            try {
+                const legacyDecoded = decodeURIComponent(escape(atob(raw)));
+                const parsed = JSON.parse(legacyDecoded);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch {
+                return [];
+            }
         }
     }
 }
@@ -428,6 +447,8 @@ async function _doSync(queue, user) {
         if (!db) { log('error', 'window.db not available'); return; }
 
         const remainingQueue = [];
+        let successCount = 0;
+        let failCount = 0;
 
         for (const entry of queue) {
             const uid = user.uid;
@@ -440,20 +461,52 @@ async function _doSync(queue, user) {
                     5000, "#ef4444"
                 );
                 quarantineEntry(entry);
+                failCount++;
                 continue;
             }
 
             const result = await _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db, user });
+
             if (result === 'retry') {
                 remainingQueue.push(entry);
+                failCount++;
+            } else if (result === true) {
+                successCount++;
+            } else {
+                failCount++;
             }
         }
 
         await queueSave(remainingQueue);
         log('info', `Sync complete. Remaining: ${remainingQueue.length}`);
 
+        if (remainingQueue.length > 0 && successCount === 0) {
+            toast(
+                t(
+                    `⚠️ فشلت مزامنة ${remainingQueue.length} تسجيل — سيتم إعادة المحاولة تلقائياً`,
+                    `⚠️ ${remainingQueue.length} registration(s) pending — will retry automatically`
+                ),
+                6000, "#f59e0b"
+            );
+        } else if (remainingQueue.length > 0 && successCount > 0) {
+            toast(
+                t(
+                    `✅ تم تأكيد ${successCount} تسجيل | ⏳ ${remainingQueue.length} لسه في الانتظار`,
+                    `✅ ${successCount} confirmed | ⏳ ${remainingQueue.length} still pending`
+                ),
+                6000, "#f59e0b"
+            );
+        }
+
     } catch (criticalError) {
         log('error', 'Critical sync failure:', criticalError);
+        toast(
+            t(
+                '❌ خطأ غير متوقع أثناء المزامنة — تواصل مع الدعم',
+                '❌ Unexpected sync error — contact support'
+            ),
+            8000, "#ef4444"
+        );
     }
 }
 
@@ -584,7 +637,7 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
 
             const payload = {
                 id: entry.studentID,
-                sessionPin: entry.sessionPin, 
+                sessionPin: entry.sessionPin,
                 name: entry.studentName,
                 subject: rawSubject,
                 college: college,
@@ -641,8 +694,14 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
             log('error', `Sync fatal error on attempt ${attempt}:`, err.message);
 
             if (err.code === 'permission-denied') {
-                log('critical', 'Firebase Rules blocking write. Check StudentID/UID mapping.');
-                return 'retry';
+                log('critical', 'Firebase Rules blocking write. Quarantining entry.');
+                toast(
+                    t('❌ خطأ في الصلاحيات - تواصل مع الدعم الفني',
+                        '❌ Permission error - contact support'),
+                    8000, "#ef4444"
+                );
+                quarantineEntry({ ...entry, quarantineReason: 'permission-denied' });
+                return false;
             }
 
             if (attempt < OA.MAX_RETRIES) {
