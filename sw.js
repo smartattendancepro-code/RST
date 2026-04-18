@@ -79,7 +79,7 @@ self.addEventListener('push', (event) => {
   const options = {
     body: data.notification?.body || data.body || 'لديك تنبيه جديد من النظام',
     icon: './icon-192.png',
-    badge: './icon-192.png',
+    badge: './badge-icon.png',
     vibrate: [100, 50, 100],
     data: {
       url: data.data?.url || './index.html'
