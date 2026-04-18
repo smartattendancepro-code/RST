@@ -10,7 +10,9 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { i18n, t, changeLanguage } from './i18n.js';
 import { AuditManager } from './AuditManager.js';
-import { initPushNotifications, refreshPushSubscription } from './PushManager.js';
+import { initPushNotifications, refreshPushSubscription, unsubscribePush, SAP_PUSH_VERSION } from './PushManager.js';
+
+console.info(`🔔 ${SAP_PUSH_VERSION.platform} | Push Manager v${SAP_PUSH_VERSION.version}`);
 
 
 
@@ -1320,6 +1322,9 @@ const AuthManager = (() => {
                 );
             } catch (e) { console.warn('Logout write failed:', e); }
         }
+
+        try { await unsubscribePush(uid); } catch { /* non-critical */ }
+
 
         window.sessionWatcherUnsubscribe?.();
         window.sessionWatcherUnsubscribe = null;
