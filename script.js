@@ -10,6 +10,8 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { i18n, t, changeLanguage } from './i18n.js';
 import { AuditManager } from './AuditManager.js';
+import { initPushNotifications, refreshPushSubscription } from './PushManager.js';
+
 
 
 const CFG = Object.freeze({
@@ -922,6 +924,8 @@ const AuthManager = (() => {
             }
 
             window.monitorMyParticipation?.();
+            setTimeout(() => initPushNotifications(user.uid), 3000);
+            setTimeout(() => refreshPushSubscription(user.uid), 5000);
             window.showSmartWelcome?.(name);
             setTimeout(() => window.checkForPendingSurveys?.(), 2500);
 
@@ -2590,7 +2594,7 @@ setTimeout(async () => {
             window.updateUIForMode?.();
         }
     }
-}, 10000); 
+}, 10000);
 
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
