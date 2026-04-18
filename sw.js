@@ -420,5 +420,3 @@ async function unsubscribePush(uid) {
     console.warn('[SAP] Push unsubscribe warning:', e.message);
   }
 }
-
-export { initPushNotifications, refreshPushSubscription, unsubscribePush };
