@@ -1495,15 +1495,20 @@ const SessionManager = (() => {
             const doctorUID = sessionDoc.id;
 
             if (sessionData.startTime) {
-                const codeDeadlineMs = sessionData.startTime.toMillis() + 16_000;
-                if (Date.now() > codeDeadlineMs) {
+                const doorOpenMs = sessionData.startTime.toMillis();
+                const codeDeadlineMs = doorOpenMs + 10_000;
+                const entryStarted = window._codeEntryStarted;
+
+                if (!entryStarted || entryStarted > codeDeadlineMs) {
                     UI.showToast('⏰ انتهى وقت إدخال الكود', 4000, '#ef4444');
                     navigator.vibrate?.([300, 100, 300]);
                     btn.innerHTML = originalHtml;
                     btn.style.pointerEvents = 'auto';
+                    window._codeEntryStarted = null;
                     return;
                 }
             }
+            window._codeEntryStarted = null;
 
             sessionStorage.setItem('TEMP_DR_UID', doctorUID);
             window.stopCodeEntryIdleTimer?.();
@@ -1548,6 +1553,7 @@ const SessionManager = (() => {
     }
 
     function resetSearchSession() {
+        window._codeEntryStarted = null;
         _showStep(1);
         Utils.$('step1_search').style.cssText = 'display:block;opacity:1;visibility:visible;';
         const passInput = Utils.$('sessionPass');
@@ -2634,6 +2640,12 @@ window.onload = () => {
         pinInput.addEventListener('keyup', IdleTimer.onKeyUp);
         pinInput.addEventListener('input', e => {
             IdleTimer.onKeyUp();
+            if (e.target.value.length === 1 && !window._codeEntryStarted) {
+                window._codeEntryStarted = Date.now();
+            }
+            if (e.target.value.length === 0) {
+                window._codeEntryStarted = null;
+            }
             if (e.target.value.trim().length === 6) SessionManager.searchForSession();
         });
     }
