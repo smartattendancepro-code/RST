@@ -11,11 +11,32 @@ const db = window.db;
 const auth = window.auth;
 
 
-window.startLiveSnapshotListener = function () {
+window.startLiveSnapshotListener = async function () {
     const user = auth.currentUser;
     if (!user) {
         setTimeout(window.startLiveSnapshotListener, 500);
         return;
+    }
+
+    const targetRoomUID = sessionStorage.getItem('TARGET_DOCTOR_UID')
+        || localStorage.getItem('TARGET_DOCTOR_UID');
+
+    if (!targetRoomUID) { window.goHome?.(); return; }
+
+    try {
+        const sessionSnap = await getDoc(doc(db, 'active_sessions', targetRoomUID));
+        if (!sessionSnap.exists() || !sessionSnap.data().isActive) {
+            await Promise.all([
+                PersistentStore.removeWithSync('TARGET_DOCTOR_UID'),
+            ]);
+            localStorage.removeItem('TARGET_DOCTOR_UID');
+            sessionStorage.removeItem('TARGET_DOCTOR_UID');
+            showToast('⚠️ انتهت الجلسة', 3000, '#f59e0b');
+            window.goHome?.();
+            return;
+        }
+    } catch (e) {
+        console.warn('Session pre-check failed:', e);
     }
 
     const grid = document.getElementById('liveStudentsGrid');
@@ -24,36 +45,34 @@ window.startLiveSnapshotListener = function () {
         grid.style.display = 'block';
     }
 
-    const countEl  = document.getElementById('livePresentCount');
-    const extraEl  = document.getElementById('liveExtraCount');
+    const countEl = document.getElementById('livePresentCount');
+    const extraEl = document.getElementById('liveExtraCount');
 
-    const targetRoomUID = sessionStorage.getItem('TARGET_DOCTOR_UID');
-    if (!targetRoomUID) return;
 
     const adminFab = document.getElementById('adminFabControls');
     if (adminFab) adminFab.style.setProperty('display', 'none', 'important');
     document.body.classList.remove('admin-mode');
 
-    let maxLimit    = 9999;
+    let maxLimit = 9999;
     let currentCount = 0;
 
     const updateCapacityUI = () => {
         if (!extraEl) return;
-        const limit     = parseInt(maxLimit);
-        const count     = parseInt(currentCount);
+        const limit = parseInt(maxLimit);
+        const count = parseInt(currentCount);
 
         if (limit >= 9999 || isNaN(limit)) {
-            extraEl.innerHTML  = `<span style="font-size:24px;">∞</span> <span style="font-size:11px;opacity:0.8;font-weight:normal;">OPEN</span>`;
+            extraEl.innerHTML = `<span style="font-size:24px;">∞</span> <span style="font-size:11px;opacity:0.8;font-weight:normal;">OPEN</span>`;
             extraEl.style.color = "#3b82f6";
         } else {
             const remaining = limit - count;
             let remainingHtml = remaining;
             if (remaining < 0) {
-                extraEl.style.color      = "#ef4444";
+                extraEl.style.color = "#ef4444";
                 extraEl.style.textShadow = "0 0 15px rgba(239,68,68,0.2)";
                 remainingHtml = `<i class="fa-solid fa-triangle-exclamation" style="font-size:12px;"></i> ${remaining}`;
             } else {
-                extraEl.style.color      = "#10b981";
+                extraEl.style.color = "#10b981";
                 extraEl.style.textShadow = "none";
             }
             extraEl.innerHTML = `
@@ -68,23 +87,23 @@ window.startLiveSnapshotListener = function () {
         if (!docSnap.exists()) return;
         const data = docSnap.data();
 
-        if (document.getElementById('liveDocName'))     document.getElementById('liveDocName').innerText     = data.doctorName     || "Professor";
-        if (document.getElementById('liveSubjectTag'))  document.getElementById('liveSubjectTag').innerText  = data.allowedSubject || "Subject";
-        if (document.getElementById('liveHallTag'))     document.getElementById('liveHallTag').innerHTML     = `<i class="fa-solid fa-building-columns"></i> ${data.hall || "Hall"}`;
-        if (document.getElementById('liveGroupTag'))    document.getElementById('liveGroupTag').innerText    = `GROUPS: ${(data.targetGroups || []).join(', ')}`;
+        if (document.getElementById('liveDocName')) document.getElementById('liveDocName').innerText = data.doctorName || "Professor";
+        if (document.getElementById('liveSubjectTag')) document.getElementById('liveSubjectTag').innerText = data.allowedSubject || "Subject";
+        if (document.getElementById('liveHallTag')) document.getElementById('liveHallTag').innerHTML = `<i class="fa-solid fa-building-columns"></i> ${data.hall || "Hall"}`;
+        if (document.getElementById('liveGroupTag')) document.getElementById('liveGroupTag').innerText = `GROUPS: ${(data.targetGroups || []).join(', ')}`;
 
         const avatarLink = document.getElementById('liveDocAvatar');
         if (avatarLink) {
-            avatarLink.innerHTML       = `<i class="fa-solid ${data.doctorAvatar || 'fa-user-doctor'}"></i>`;
-            avatarLink.onclick         = null;
-            avatarLink.style.cursor    = "default";
+            avatarLink.innerHTML = `<i class="fa-solid ${data.doctorAvatar || 'fa-user-doctor'}"></i>`;
+            avatarLink.onclick = null;
+            avatarLink.style.cursor = "default";
             avatarLink.style.pointerEvents = "none";
         }
 
         const nameLink = document.getElementById('liveDocName');
         if (nameLink) {
-            nameLink.onclick           = null;
-            nameLink.style.cursor      = "default";
+            nameLink.onclick = null;
+            nameLink.style.cursor = "default";
             nameLink.style.pointerEvents = "none";
         }
 
@@ -94,17 +113,17 @@ window.startLiveSnapshotListener = function () {
         const doorStatus = document.getElementById('doorStatusText');
         if (doorStatus) {
             if (data.sessionCode === "PAUSED") {
-                doorStatus.innerHTML   = '<i class="fa-solid fa-mug-hot fa-bounce"></i> PAUSED';
+                doorStatus.innerHTML = '<i class="fa-solid fa-mug-hot fa-bounce"></i> PAUSED';
                 doorStatus.style.color = "#f59e0b";
             } else {
-                doorStatus.innerHTML   = data.isDoorOpen
+                doorStatus.innerHTML = data.isDoorOpen
                     ? '<i class="fa-solid fa-door-open fa-fade"></i> OPEN'
                     : '<i class="fa-solid fa-door-closed"></i> CLOSED';
                 doorStatus.style.color = data.isDoorOpen ? "#10b981" : "#ef4444";
             }
         }
 
-        maxLimit     = (data.maxStudents !== undefined && data.maxStudents !== null && data.maxStudents !== "")
+        maxLimit = (data.maxStudents !== undefined && data.maxStudents !== null && data.maxStudents !== "")
             ? parseInt(data.maxStudents) : 9999;
         currentCount = data.active_count || 0;
         if (countEl) countEl.innerText = currentCount;
@@ -128,16 +147,16 @@ window.startLiveSnapshotListener = function () {
 
     window.unsubscribeLiveSnapshot = onSnapshot(q, (snapshot) => {
         if (!grid) return;
-        grid.innerHTML = '';   
+        grid.innerHTML = '';
 
         snapshot.forEach((docSnap) => {
             const s = docSnap.data();
             if (s.status === 'expelled') return;
 
             const isOnBreak = s.status === 'on_break';
-            const isLeft    = s.status === 'left';
-            const opacityVal   = (isLeft || isOnBreak) ? '0.5' : '1';
-            const borderStyle  = isOnBreak ? '2px dashed #f59e0b' : '1px solid #e2e8f0';
+            const isLeft = s.status === 'left';
+            const opacityVal = (isLeft || isOnBreak) ? '0.5' : '1';
+            const borderStyle = isOnBreak ? '2px dashed #f59e0b' : '1px solid #e2e8f0';
 
             const rawCount = s.segment_count;
             const segCount = (rawCount && !isNaN(rawCount)) ? parseInt(rawCount) : 1;
@@ -148,12 +167,12 @@ window.startLiveSnapshotListener = function () {
             }
 
             let statusColor = isLeft ? "#94a3b8" : (s.isUnruly ? "#ef4444" : (s.isUniformViolation ? "#f97316" : "#10b981"));
-            let statusText  = isLeft ? "مغادر"   : (s.isUnruly ? "مشاغب"  : (s.isUniformViolation ? "مخالف"   : "حاضر"));
+            let statusText = isLeft ? "مغادر" : (s.isUnruly ? "مشاغب" : (s.isUniformViolation ? "مخالف" : "حاضر"));
 
             const card = document.createElement('div');
-            card.className  = 'live-st-card student-view-card is-me-card';
+            card.className = 'live-st-card student-view-card is-me-card';
             card.style.cssText = `background:white;border-radius:15px;padding:20px;display:flex;flex-direction:column;align-items:center;opacity:${opacityVal};transition:0.3s;width:100%;max-width:320px;margin:0 auto;border:${borderStyle};position:relative;overflow:visible !important;`;
-            card.innerHTML  = `
+            card.innerHTML = `
                 <div class="me-badge">أنت</div>
                 ${countBadge}
                 <div style="width:70px;height:70px;border-radius:50%;background:#f8fafc;border:3.5px solid ${statusColor};display:flex;align-items:center;justify-content:center;font-size:30px;color:#0284c7;margin-bottom:10px;z-index:2;">
@@ -172,9 +191,9 @@ window.startLiveSnapshotListener = function () {
 
         if (grid.children.length > 0 && !grid.querySelector('.wait-note')) {
             const noteDiv = document.createElement('div');
-            noteDiv.className  = 'wait-note';
+            noteDiv.className = 'wait-note';
             noteDiv.style.cssText = `margin-top:50px;text-align:center;color:#070707;font-size:15px;width:100%;font-family:'Tajawal',sans-serif;opacity:1;`;
-            noteDiv.innerHTML  = `<i class="fa-solid fa-circle-info" style="margin-left:5px;"></i> سيتم إتاحة عرض قائمة الحضور الكاملة في التحديث القادم`;
+            noteDiv.innerHTML = `<i class="fa-solid fa-circle-info" style="margin-left:5px;"></i> سيتم إتاحة عرض قائمة الحضور الكاملة في التحديث القادم`;
             grid.appendChild(noteDiv);
         }
     });
