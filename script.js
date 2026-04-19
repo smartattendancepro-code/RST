@@ -1493,6 +1493,18 @@ const SessionManager = (() => {
             const sessionDoc = snap.docs[0];
             const sessionData = sessionDoc.data();
             const doctorUID = sessionDoc.id;
+
+            if (sessionData.startTime) {
+                const codeDeadlineMs = sessionData.startTime.toMillis() + 16_000;
+                if (Date.now() > codeDeadlineMs) {
+                    UI.showToast('⏰ انتهى وقت إدخال الكود', 4000, '#ef4444');
+                    navigator.vibrate?.([300, 100, 300]);
+                    btn.innerHTML = originalHtml;
+                    btn.style.pointerEvents = 'auto';
+                    return;
+                }
+            }
+
             sessionStorage.setItem('TEMP_DR_UID', doctorUID);
             window.stopCodeEntryIdleTimer?.();
             _populateSessionUI(sessionData);
