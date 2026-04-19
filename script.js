@@ -1496,7 +1496,7 @@ const SessionManager = (() => {
 
             if (sessionData.startTime) {
                 const doorOpenMs = sessionData.startTime.toMillis();
-                const codeDeadlineMs = doorOpenMs + 10_000;
+                const codeDeadlineMs = doorOpenMs + 15_000;
                 const entryStarted = window._codeEntryStarted;
 
                 if (!entryStarted || entryStarted > codeDeadlineMs) {
