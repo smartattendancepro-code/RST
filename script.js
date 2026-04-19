@@ -1371,9 +1371,15 @@ const SessionManager = (() => {
             snap => {
                 if (!snap.exists() || !snap.data().isActive) {
                     PersistentStore.removeWithSync('TARGET_DOCTOR_UID');
+                    localStorage.removeItem('TARGET_DOCTOR_UID');
+                    sessionStorage.removeItem('TARGET_DOCTOR_UID');
                     UI.setMainButton('register');
                     window.studentStatusListener?.();
                     window.studentStatusListener = null;
+                    const activeScreen = document.querySelector('.section.active')?.id;
+                    if (activeScreen === 'screenLiveSession') {
+                        window.goHome?.();
+                    }
                 }
             },
         );
@@ -2515,10 +2521,21 @@ Object.assign(window, {
         window.playClick?.();
         const user = window.auth.currentUser;
         if (!user) { UI.openAuthDrawer(); return; }
-        if (sessionStorage.getItem('TARGET_DOCTOR_UID') || localStorage.getItem('TARGET_DOCTOR_UID')) {
-            UI.switchScreen('screenLiveSession');
-            window.startLiveSnapshotListener?.();
-            return;
+        const savedUID = sessionStorage.getItem('TARGET_DOCTOR_UID') || localStorage.getItem('TARGET_DOCTOR_UID');
+        if (savedUID) {
+            try {
+                const { doc: _doc, getDoc: _getDoc } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+                const snap = await _getDoc(_doc(window.db, 'active_sessions', savedUID));
+                if (snap.exists() && snap.data().isActive) {
+                    UI.switchScreen('screenLiveSession');
+                    window.startLiveSnapshotListener?.();
+                    return;
+                }
+            } catch (e) { console.warn('Session check failed:', e); }
+            await PersistentStore.removeWithSync('TARGET_DOCTOR_UID');
+            localStorage.removeItem('TARGET_DOCTOR_UID');
+            sessionStorage.removeItem('TARGET_DOCTOR_UID');
+            UI.setMainButton('register');
         }
         UI.switchScreen('screenDataEntry');
         Utils.$('step2_auth')?.style.setProperty('display', 'none', 'important');
