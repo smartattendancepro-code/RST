@@ -1515,12 +1515,15 @@ const SessionManager = (() => {
             _populateSessionUI(sessionData);
 
             const noPassword = !sessionData.sessionPassword?.trim();
-            _showStep(2);
-            if (noPassword) {
-                setTimeout(() => joinSessionAction(), 300);
-            } else {
-                setTimeout(() => Utils.$('sessionPass')?.focus(), 400);
-            }
+
+            window.showDragChallenge(() => {
+                _showStep(2);
+                if (noPassword) {
+                    setTimeout(() => joinSessionAction(), 300);
+                } else {
+                    setTimeout(() => Utils.$('sessionPass')?.focus(), 400);
+                }
+            });
 
             window.startAuthScreenTimer?.(doctorUID);
         } catch (e) {
@@ -2724,6 +2727,245 @@ document.addEventListener('DOMContentLoaded', () => {
         if (pin) pin.value = '';
     });
 });
+
+window.showDragChallenge = function (onSuccess) {
+    const SHAPES = [
+        { id: 'circle', clr: '#E24B4A', d: (s, c) => `<circle cx="${s / 2}" cy="${s / 2}" r="${s / 2 - 2}" fill="${c}"/>` },
+        { id: 'square', clr: '#378ADD', d: (s, c) => `<rect x="2" y="2" width="${s - 4}" height="${s - 4}" rx="3" fill="${c}"/>` },
+        { id: 'triangle', clr: '#EF9F27', d: (s, c) => `<polygon points="${s / 2},3 ${s - 3},${s - 3} 3,${s - 3}" fill="${c}"/>` },
+        { id: 'star', clr: '#639922', d: (s, c) => { const h = s / 2, r1 = h - 2, r2 = r1 * .42; const pts = Array.from({ length: 10 }, (_, i) => { const a = i * Math.PI / 5 - Math.PI / 2, r = i % 2 ? r2 : r1; return `${(h + r * Math.cos(a)).toFixed(1)},${(h + r * Math.sin(a)).toFixed(1)}`; }).join(' '); return `<polygon points="${pts}" fill="${c}"/>`; } },
+        { id: 'diamond', clr: '#7F77DD', d: (s, c) => `<polygon points="${s / 2},2 ${s - 2},${s / 2} ${s / 2},${s - 2} 2,${s / 2}" fill="${c}"/>` },
+        { id: 'cross', clr: '#D4537E', d: (s, c) => { const t = Math.round(s * .3), m = (s - t) / 2; return `<rect x="${m}" y="2" width="${t}" height="${s - 4}" rx="2" fill="${c}"/><rect x="2" y="${m}" width="${s - 4}" height="${t}" rx="2" fill="${c}"/>`; } },
+    ];
+
+    const shuffled = [...SHAPES].sort(() => Math.random() - 0.5);
+    const target1 = shuffled[0];
+    const target2 = shuffled[1];
+
+    const gridShapes = shuffled.slice(0, 6).sort(() => Math.random() - 0.5);
+    const mkSvg = (sh, sz) => `<svg width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}">${sh.d(sz, sh.clr)}</svg>`;
+
+    let completedTargets = []; 
+
+    const ov = document.createElement('div');
+    ov.id = '_dragChallengeOverlay';
+    ov.style.cssText = `position:fixed;inset:0;z-index:2147483647;background:rgba(10, 15, 29, 0.95);backdrop-filter:blur(8px);display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:32px 20px 36px;font-family:'Outfit',sans-serif;overflow:hidden;user-select:none;touch-action:none;`;
+
+    ov.innerHTML = `
+    <style>
+      @keyframes _dot-blink{0%,100%{opacity:1}50%{opacity:.25}}
+      @keyframes _shake-dz{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+      @keyframes _pop-in { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+      ._ch-shape {transition:opacity .1s,transform .08s;cursor:grab;}
+      ._ch-shape:active {cursor:grabbing; transform:scale(0.95);}
+      ._req-shape {transition: all 0.3s ease; position: relative;}
+      ._req-shape.done {opacity: 0.3; filter: grayscale(100%); transform: scale(0.9);}
+      ._req-shape.done::after {content:'✔'; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:24px; color:#10b981; font-weight:bold; text-shadow:0 0 5px #000; animation: _pop-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);}
+    </style>
+    
+    <div style="text-align:center;width:100%;">
+      <span style="display:inline-flex;align-items:center;gap:6px;background:rgba(226,75,74,.1);border:.5px solid rgba(226,75,74,.3);color:#ef4444;font-size:11px;font-weight:700;letter-spacing:1px;padding:5px 16px;border-radius:20px;">
+        <span style="width:6px;height:6px;border-radius:50%;background:#E24B4A;display:inline-block;animation:_dot-blink .9s infinite;box-shadow:0 0 5px #E24B4A;"></span>
+        تحقق أمني · Security Check
+      </span>
+      <div style="color:#dde4ee;font-size:18px;font-weight:800;margin-top:14px;">اسحب الشكلين إلى الصندوق</div>
+      <div style="color:#94a3b8;font-size:13px;margin-top:4px;font-weight:600;">لديك 7 ثوانٍ فقط لإنجاز المهمة</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;align-items:center;gap:16px;">
+      <div style="position:relative;width:80px;height:80px;">
+        <svg width="80" height="80" viewBox="0 0 80 80" style="transform:rotate(-90deg);">
+          <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(255,255,255,.05)" stroke-width="6"/>
+          <circle id="_timerRing" cx="40" cy="40" r="34" fill="none" stroke="#10b981" stroke-width="6"
+            stroke-dasharray="${2 * Math.PI * 34}" stroke-dashoffset="0" stroke-linecap="round" style="transition:stroke .5s;"/>
+        </svg>
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+          <span id="_timerNum" style="color:#dde4ee;font-size:24px;font-weight:800;line-height:1;">7</span>
+        </div>
+      </div>
+      
+      <div style="text-align:center; background:rgba(255,255,255,0.03); padding:12px 20px; border-radius:16px; border:1px solid rgba(255,255,255,0.05);">
+        <div style="color:#64748b;font-size:11px;letter-spacing:.5px;margin-bottom:10px;font-weight:700;">الأشكال المطلوبة</div>
+        <div style="display:flex; gap:15px; justify-content:center;">
+          <div id="req_${target1.id}" class="_req-shape" style="width:50px;height:50px;background:rgba(255,255,255,.05);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+            ${mkSvg(target1, 35)}
+          </div>
+          <div id="req_${target2.id}" class="_req-shape" style="width:50px;height:50px;background:rgba(255,255,255,.05);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+            ${mkSvg(target2, 35)}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="_shapesGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:100%;max-width:320px;">
+      ${gridShapes.map(s => `
+        <div class="_ch-shape" data-sid="${s.id}" style="height:76px;border-radius:14px;background:rgba(255,255,255,.04);border:.5px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 10px rgba(255,255,255,0.02);">
+          ${mkSvg(s, 40)}
+        </div>`).join('')}
+    </div>
+
+    <div id="_dropZone" style="width:100%;max-width:320px;height:80px;border-radius:18px;border:2px dashed rgba(255,255,255,.15);background:rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;gap:10px;color:#94a3b8;font-size:15px;font-weight:600;transition:all .2s;">
+      <svg width="20" height="20" viewBox="0 0 16 16" fill="none">
+        <path d="M8 1v10M3 8l5 4 5-4" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span id="_dzText">أسقط الشكلين هنا</span>
+    </div>`;
+
+    document.body.appendChild(ov);
+
+    const FULL_CIRC = 2 * Math.PI * 34;
+    const ring = document.getElementById('_timerRing');
+    const numEl = document.getElementById('_timerNum');
+    let done = false;
+
+    const t0 = Date.now(), DUR = 6000; 
+    const interval = setInterval(() => {
+        if (done) return;
+        const el = Date.now() - t0, p = Math.min(el / DUR, 1);
+        ring.style.strokeDashoffset = FULL_CIRC * p;
+        numEl.textContent = Math.max(0, Math.ceil((DUR - el) / 1000));
+
+        if (p > .75) ring.style.stroke = '#E24B4A';
+        else if (p > .40) ring.style.stroke = '#EF9F27';
+
+        if (el >= DUR) fail();
+    }, 50);
+
+    function clearSecurityEvents() {
+        if (done) return;
+        done = true;
+        clearInterval(interval);
+        document.removeEventListener('touchmove', handleTouchMove, { passive: false });
+        document.removeEventListener('touchend', handleTouchEnd);
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+    }
+
+    function fail() {
+        clearSecurityEvents();
+        ov.style.background = '#1a0505';
+        navigator.vibrate?.([200, 100, 200]);
+        setTimeout(() => {
+            ov.remove();
+            window.goHome?.();
+            UI.showToast('⛔ انتهى الوقت! جرب مرة أخرى وكن أسرع.', 3000, '#ef4444');
+        }, 700);
+    }
+
+    function success() {
+        clearSecurityEvents();
+        ov.style.background = '#051a0d';
+        navigator.vibrate?.([50, 30, 100, 30, 50]);
+        setTimeout(() => { ov.remove(); onSuccess(); }, 600);
+    }
+
+    let dragging = null, clone = null, sx, sy, ox, oy, mdown = false;
+
+    function isOverDZ() {
+        if (!clone) return false;
+        const dz = document.getElementById('_dropZone');
+        if (!dz) return false;
+        const cRect = clone.getBoundingClientRect();
+        const dzRect = dz.getBoundingClientRect();
+        const centerX = cRect.left + (cRect.width / 2);
+        const centerY = cRect.top + (cRect.height / 2);
+        return (centerX >= dzRect.left && centerX <= dzRect.right && centerY >= dzRect.top && centerY <= dzRect.bottom);
+    }
+
+    function startDrag(item, cx, cy) {
+        if (item.style.visibility === 'hidden') return;
+
+        const ir = item.getBoundingClientRect();
+        dragging = item.getAttribute('data-sid');
+        sx = cx; sy = cy; ox = ir.left; oy = ir.top;
+        clone = item.cloneNode(true);
+        clone.style.cssText = `position:fixed;width:${ir.width}px;height:${ir.height}px;left:${ir.left}px;top:${ir.top}px;pointer-events:none;z-index:2147483648;border-radius:14px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;transform:scale(1.15);opacity:0.95;box-shadow:0 10px 25px rgba(0,0,0,0.4);`;
+        document.body.appendChild(clone);
+        item.style.opacity = '0.1';
+        navigator.vibrate?.(10);
+    }
+
+    function moveDrag(cx, cy) {
+        if (!clone || done) return;
+        clone.style.left = `${ox + (cx - sx)}px`;
+        clone.style.top = `${oy + (cy - sy)}px`;
+        const dz = document.getElementById('_dropZone');
+        if (!dz) return;
+
+        if (isOverDZ()) {
+            dz.style.borderColor = '#3b82f6';
+            dz.style.background = 'rgba(59,130,246,0.15)';
+            dz.style.transform = 'scale(1.02)';
+        } else {
+            dz.style.borderColor = 'rgba(255,255,255,.15)';
+            dz.style.background = 'rgba(0,0,0,0.2)';
+            dz.style.transform = 'scale(1)';
+        }
+    }
+
+    function endDrag() {
+        if (!clone || done) return;
+        const droppedInside = isOverDZ();
+        clone.remove(); clone = null;
+
+        document.querySelectorAll('._ch-shape').forEach(e => {
+            if (e.style.visibility !== 'hidden') e.style.opacity = '1';
+        });
+
+        const dz = document.getElementById('_dropZone');
+        if (dz) { dz.style.transform = 'scale(1)'; dz.style.borderColor = 'rgba(255,255,255,.15)'; dz.style.background = 'rgba(0,0,0,0.2)'; }
+
+        if (droppedInside) {
+            if ((dragging === target1.id || dragging === target2.id) && !completedTargets.includes(dragging)) {
+
+                completedTargets.push(dragging);
+
+                const originalItem = document.querySelector(`._ch-shape[data-sid="${dragging}"]`);
+                if (originalItem) {
+                    originalItem.style.visibility = 'hidden';
+                }
+
+                const reqItem = document.getElementById(`req_${dragging}`);
+                if (reqItem) reqItem.classList.add('done');
+
+                if (completedTargets.length === 2) {
+                    if (dz) { dz.style.borderColor = '#10b981'; dz.style.background = 'rgba(16,185,129,0.2)'; document.getElementById('_dzText').innerText = 'تم التحقق بنجاح!'; document.getElementById('_dzText').style.color = '#10b981'; }
+                    success();
+                } else {
+                    if (dz) {
+                        dz.style.borderColor = '#10b981'; dz.style.background = 'rgba(16,185,129,0.2)';
+                        setTimeout(() => { dz.style.borderColor = 'rgba(255,255,255,.15)'; dz.style.background = 'rgba(0,0,0,0.2)'; }, 300);
+                    }
+                    navigator.vibrate?.([50]);
+                }
+
+            } else {
+                if (dz) {
+                    dz.style.borderColor = '#ef4444'; dz.style.background = 'rgba(239,68,68,0.15)';
+                    dz.style.animation = '_shake-dz .35s';
+                    setTimeout(() => { dz.style.borderColor = 'rgba(255,255,255,.15)'; dz.style.background = 'rgba(0,0,0,0.2)'; dz.style.animation = ''; }, 400);
+                }
+                navigator.vibrate?.([50, 50]);
+            }
+        }
+        dragging = null;
+    }
+
+    const handleTouchMove = e => { if (clone && !done) { e.preventDefault(); moveDrag(e.touches[0].clientX, e.touches[0].clientY); } };
+    const handleTouchEnd = e => { if (clone && !done) endDrag(); };
+    const handleMouseMove = e => { if (mdown && !done) { e.preventDefault(); moveDrag(e.clientX, e.clientY); } };
+    const handleMouseUp = e => { if (mdown && !done) { mdown = false; endDrag(); } };
+
+    const grid = document.getElementById('_shapesGrid');
+
+    grid.addEventListener('touchstart', e => { const it = e.target.closest('._ch-shape'); if (!it || done) return; e.preventDefault(); startDrag(it, e.touches[0].clientX, e.touches[0].clientY); }, { passive: false });
+    grid.addEventListener('mousedown', e => { const it = e.target.closest('._ch-shape'); if (!it || done) return; mdown = true; startDrag(it, e.clientX, e.clientY); });
+
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    document.addEventListener('touchend', handleTouchEnd);
+    document.addEventListener('mousemove', handleMouseMove, { passive: false });
+    document.addEventListener('mouseup', handleMouseUp);
+};
 
 initSecurityLayer();
 
