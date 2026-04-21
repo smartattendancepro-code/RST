@@ -2745,12 +2745,11 @@ window.showDragChallenge = function (onSuccess) {
     const gridShapes = shuffled.slice(0, 6).sort(() => Math.random() - 0.5);
     const mkSvg = (sh, sz) => `<svg width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}">${sh.d(sz, sh.clr)}</svg>`;
 
-    let completedTargets = []; 
+    let completedTargets = [];
 
     const ov = document.createElement('div');
     ov.id = '_dragChallengeOverlay';
-    ov.style.cssText = `position:fixed;inset:0;z-index:2147483647;background:rgba(10, 15, 29, 0.95);backdrop-filter:blur(8px);display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:32px 20px 36px;font-family:'Outfit',sans-serif;overflow:hidden;user-select:none;touch-action:none;`;
-
+    ov.style.cssText = `position:fixed;inset:0;z-index:2147483647;background:var(--color-background-tertiary, rgba(15,23,42,0.96));backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:32px 20px 36px;font-family:'Outfit',sans-serif;overflow:hidden;user-select:none;touch-action:none;`;
     ov.innerHTML = `
     <style>
       @keyframes _dot-blink{0%,100%{opacity:1}50%{opacity:.25}}
@@ -2811,14 +2810,14 @@ window.showDragChallenge = function (onSuccess) {
       <span id="_dzText">أسقط الشكلين هنا</span>
     </div>`;
 
+    document.activeElement?.blur();
     document.body.appendChild(ov);
-
     const FULL_CIRC = 2 * Math.PI * 34;
     const ring = document.getElementById('_timerRing');
     const numEl = document.getElementById('_timerNum');
     let done = false;
 
-    const t0 = Date.now(), DUR = 6000; 
+    const t0 = Date.now(), DUR = 6000;
     const interval = setInterval(() => {
         if (done) return;
         const el = Date.now() - t0, p = Math.min(el / DUR, 1);
@@ -2879,16 +2878,14 @@ window.showDragChallenge = function (onSuccess) {
         dragging = item.getAttribute('data-sid');
         sx = cx; sy = cy; ox = ir.left; oy = ir.top;
         clone = item.cloneNode(true);
-        clone.style.cssText = `position:fixed;width:${ir.width}px;height:${ir.height}px;left:${ir.left}px;top:${ir.top}px;pointer-events:none;z-index:2147483648;border-radius:14px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;transform:scale(1.15);opacity:0.95;box-shadow:0 10px 25px rgba(0,0,0,0.4);`;
-        document.body.appendChild(clone);
+        clone.style.cssText = `position:fixed;width:${ir.width}px;height:${ir.height}px;left:0;top:0;pointer-events:none;z-index:2147483648;border-radius:14px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;will-change:transform;transform:translate(${ir.left}px,${ir.top}px) scale(1.15);opacity:0.95;`; document.body.appendChild(clone);
         item.style.opacity = '0.1';
         navigator.vibrate?.(10);
     }
 
     function moveDrag(cx, cy) {
         if (!clone || done) return;
-        clone.style.left = `${ox + (cx - sx)}px`;
-        clone.style.top = `${oy + (cy - sy)}px`;
+        clone.style.transform = `translate(${ox + (cx - sx)}px, ${oy + (cy - sy)}px) scale(1.15)`;
         const dz = document.getElementById('_dropZone');
         if (!dz) return;
 
