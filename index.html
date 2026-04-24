@@ -764,7 +764,7 @@
             <script type="module" src="./setup.js"></script>
             <script type="module" src="security.js"></script>
             <script type="module" src="admin-session.js?v=3.2.0"></script>
-            <script type="module" src="script.js?v=7.6.1"></script>
+            <script type="module" src="script.js?v=7.6.2"></script>
             <script type="module" src="profile-system.js"></script>
 
 
@@ -812,21 +812,10 @@
 
             <div id="studentPassModal" class="modal-overlay" style="z-index: 99999999;">
                 <div class="modal-box">
-                    <i class="fa-solid fa-key" style="font-size: 40px; color: #f59e0b; margin-bottom: 15px;"></i>
-                    <div class="modal-title" style="color: #1e293b;" data-i18n="session_password_title">كلمة سر
-                        الجلسة
+                    <div id="passwordChoicesContainer"
+                        style="display:flex; flex-direction:column; gap:14px; width:100%; padding:4px 0;">
                     </div>
-                    <div class="modal-text" data-i18n="session_protected_msg">هذه الجلسة محمية بكلمة مرور. يرجى
-                        إدخالها
-                        للمتابعة.</div>
-
-                    <input type="text" id="studentEnteredPass" class="modern-input"
-                        data-i18n-placeholder="enter_code_placeholder" placeholder="اكتب الرمز هنا"
-                        style="text-align: center; font-size: 20px; letter-spacing: 3px; font-weight: bold; margin-bottom: 15px;">
-
-                    <button onclick="verifyAndSubmit()" class="btn-main" style="background: #0ea5e9;">
-                        <span data-i18n="confirm_btn">تأكيد</span> <i class="fa-solid fa-check"></i>
-                    </button>
+                    <input type="hidden" id="studentEnteredPass" value="">
                 </div>
             </div>
             <div id="studentFloatingTimer" class="floating-timer" style="display: none;">
