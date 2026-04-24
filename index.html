@@ -19,9 +19,6 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Outfit:wght@500;700;900&family=Reem+Kufi:wght@700&display=swap"
         rel="stylesheet">
-    <link
-        href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Noto+Sans+Mono:wght@900&family=Outfit:wght@500;700;900&family=Reem+Kufi:wght@700&display=swap"
-        rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <link rel="stylesheet" href="style.css">
@@ -732,19 +729,12 @@
                                 </div>
 
                                 <div class="auth-input-zone" style="margin-top: 25px;">
-                                    <button onclick="joinSessionAction()" style="
-        width:100%; padding:16px; border-radius:16px;
-        border:2px dashed #0ea5e9; background:#f0f9ff;
-        color:#0284c7; font-size:15px; font-weight:800;
-        cursor:pointer; display:flex; align-items:center;
-        justify-content:center; gap:10px;
-        font-family:'Cairo',sans-serif;
-        transition:all 0.2s;
-    ">
-                                        <i class="fa-solid fa-lock"></i>
-                                        <span data-i18n="choose_password_btn">اضغط لاختيار كلمة المرور</span>
-                                        <i class="fa-solid fa-chevron-left" style="font-size:12px;"></i>
-                                    </button>
+                                    <div class="floating-group">
+                                        <i class="fa-solid fa-lock icon-inside"></i>
+                                        <input type="text" id="sessionPass" class="floating-input en-font"
+                                            placeholder=" " required>
+                                        <label class="floating-label">Session Password</label>
+                                    </div>
                                 </div>
 
                                 <div class="auth-action-area">
@@ -822,10 +812,21 @@
 
             <div id="studentPassModal" class="modal-overlay" style="z-index: 99999999;">
                 <div class="modal-box">
-                    <div id="passwordChoicesContainer"
-                        style="display:flex; flex-direction:column; gap:14px; width:100%; padding:4px 0;">
+                    <i class="fa-solid fa-key" style="font-size: 40px; color: #f59e0b; margin-bottom: 15px;"></i>
+                    <div class="modal-title" style="color: #1e293b;" data-i18n="session_password_title">كلمة سر
+                        الجلسة
                     </div>
-                    <input type="hidden" id="studentEnteredPass" value="">
+                    <div class="modal-text" data-i18n="session_protected_msg">هذه الجلسة محمية بكلمة مرور. يرجى
+                        إدخالها
+                        للمتابعة.</div>
+
+                    <input type="text" id="studentEnteredPass" class="modern-input"
+                        data-i18n-placeholder="enter_code_placeholder" placeholder="اكتب الرمز هنا"
+                        style="text-align: center; font-size: 20px; letter-spacing: 3px; font-weight: bold; margin-bottom: 15px;">
+
+                    <button onclick="verifyAndSubmit()" class="btn-main" style="background: #0ea5e9;">
+                        <span data-i18n="confirm_btn">تأكيد</span> <i class="fa-solid fa-check"></i>
+                    </button>
                 </div>
             </div>
             <div id="studentFloatingTimer" class="floating-timer" style="display: none;">
