@@ -1594,8 +1594,21 @@ const SessionManager = (() => {
             if (!sessionSnap.exists()) throw new Error('⛔ الجلسة غير موجودة');
             const sessionData = sessionSnap.data();
             if (!sessionData.isActive || !sessionData.isDoorOpen) throw new Error('🔒 عذراً، الجلسة مغلقة حالياً.');
-            if (sessionData.sessionPassword?.trim() && passInput !== sessionData.sessionPassword)
-                throw new Error('❌ كلمة المرور غير صحيحة');
+            if (sessionData.sessionPassword?.trim()) {
+                const enteredPass = document.getElementById('studentEnteredPass')?.value || "";
+
+                if (enteredPass === "") {
+                    document.getElementById('studentPassModal').style.display = 'flex';
+                    window.renderPasswordChoices(sessionData.sessionPassword);
+                    btn.innerHTML = originalHtml;
+                    btn.style.pointerEvents = 'auto';
+                    window.isJoiningProcessActive = false;
+                    return;
+                }
+
+                if (enteredPass !== sessionData.sessionPassword)
+                    throw new Error('❌ كلمة المرور غير صحيحة');
+            }
 
             const isDeviceMatch = await _verifyOrBindDevice(sensSnap, deviceFingerprint, user.uid);
 
@@ -1623,6 +1636,8 @@ const SessionManager = (() => {
             await PersistentStore.setWithSync('TARGET_DOCTOR_UID', doctorUID);
             sessionStorage.setItem('TEMP_DR_UID', '');
             sessionStorage.removeItem('TEMP_DR_UID');
+            const passInput = document.getElementById('studentEnteredPass');
+            if (passInput) passInput.value = '';
 
             _incrementAttendanceCache(user.uid);
             _populateLiveSessionUI(sessionData);
@@ -2448,6 +2463,10 @@ Object.assign(window, {
         setTimeout(() => { modal.style.display = 'none'; }, 300);
     },
     goHome: () => {
+        const passModal = Utils.$('studentPassModal');
+        if (passModal) passModal.style.setProperty('display', 'none', 'important');
+        Utils.$('passwordChoicesContainer') && (Utils.$('passwordChoicesContainer').innerHTML = '');
+        Utils.$('studentEnteredPass') && (Utils.$('studentEnteredPass').value = '');
         const live = Utils.$('screenLiveSession');
         if (live) { live.style.cssText = ''; live.style.setProperty('display', 'none', 'important'); }
         UI.switchScreen('screenWelcome');
@@ -2553,8 +2572,95 @@ Object.assign(window, {
     HARDWARE_ID: null,
 
     _authStateLoading: true,
-});
+    renderPasswordChoices: function (correctPassword) {
+        const container = document.getElementById('passwordChoicesContainer');
+        const hiddenInput = document.getElementById('studentEnteredPass');
+        if (!container) return;
 
+        // ✅ يكتشف نوع الحروف ويولد fakes مشابهة
+        const generateFake = (correct) => {
+            const chars = [...correct]; // حروف الباسورد الأصلي كمصدر
+
+            // جيب كل الـ code points الموجودة في الكلمة الأصلية
+            const codePoints = [...correct].map(c => c.codePointAt(0));
+            const minCP = Math.min(...codePoints);
+            const maxCP = Math.max(...codePoints);
+            const range = Math.max(maxCP - minCP, 20); // نطاق التغيير
+
+            let fake;
+            let attempts = 0;
+            do {
+                // غيّر كل حرف بحرف قريب منه في نفس النطاق
+                fake = [...correct].map(ch => {
+                    const cp = ch.codePointAt(0);
+                    const offset = Math.floor(Math.random() * range) - Math.floor(range / 2);
+                    const newCP = cp + offset;
+                    return String.fromCodePoint(Math.max(minCP, Math.min(maxCP, newCP)));
+                }).join('');
+                attempts++;
+            } while (fake === correct && attempts < 20);
+
+            return fake;
+        };
+
+        const choices = [correctPassword];
+        while (choices.length < 5) {
+            const fake = generateFake(correctPassword);
+            if (!choices.includes(fake)) choices.push(fake);
+        }
+
+        // خلط عشوائي
+        for (let i = choices.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [choices[i], choices[j]] = [choices[j], choices[i]];
+        }
+
+        container.innerHTML = '';
+        choices.forEach((choice) => {
+            const btn = document.createElement('button');
+            btn.innerText = choice;
+            btn.style.cssText = `
+    width:100%; padding:22px 12px; border-radius:16px;
+    border:2.5px solid #e2e8f0; background:#f8fafc;
+    font-size:34px; font-weight:900; letter-spacing:12px;
+    color:#0f172a; cursor:pointer; line-height:1;
+    font-family:'Courier New',monospace; transition:all 0.15s;
+    box-shadow:0 4px 12px rgba(0,0,0,0.06);
+`;
+            btn.onclick = () => {
+                container.querySelectorAll('button').forEach(b => {
+                    b.style.pointerEvents = 'none';
+                    b.style.opacity = '0.5';
+                });
+
+                if (choice === correctPassword) {
+                    btn.style.borderColor = '#10b981';
+                    btn.style.background = '#ecfdf5';
+                    btn.style.color = '#065f46';
+                    btn.style.opacity = '1';
+                    hiddenInput.value = choice;
+                    setTimeout(() => {
+                        document.getElementById('studentPassModal').style.display = 'none';
+                        SessionManager.joinSessionAction();
+                    }, 400);
+                } else {
+                    btn.style.borderColor = '#ef4444';
+                    btn.style.background = '#fef2f2';
+                    btn.style.color = '#b91c1c';
+                    btn.style.opacity = '1';
+                    btn.innerText = '❌ ' + choice;
+                    setTimeout(() => {
+                        document.getElementById('studentPassModal').style.display = 'none';
+                        hiddenInput.value = '';
+                        UI.showToast('⛔ كلمة المرور خاطئة!', 4000, '#ef4444');
+                        window.goHome();
+                    }, 800);
+                }
+            };
+            container.appendChild(btn);
+        });
+    },
+});
 
 async function _initPersistentSync() {
     const keysToSync = [
