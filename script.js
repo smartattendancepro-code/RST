@@ -1,2667 +1,2870 @@
-<!DOCTYPE html>
-<html dir="ltr" lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title data-i18n="app_title">نظام كشف الحضور - جامعة الريادة </title>
-    <meta name="apple-mobile-web-app-title" content="SAP">
-
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#0ea5e9">
-    <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="icon-192.png">
-    <link rel="icon" href="icon-192.png" type="image/png">
-
-    <link
-        href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Outfit:wght@500;700;900&family=Reem+Kufi:wght@700&display=swap"
-        rel="stylesheet">
-    <link
-        href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Noto+Sans+Mono:wght@900&family=Outfit:wght@500;700;900&family=Reem+Kufi:wght@700&display=swap"
-        rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="notifications.css">
-    <link rel="stylesheet" href="profile-style.css">
-
-
-</head>
-
-<body>
-    <div id="topToast"></div>
-    <div id="verificationSuccessModal" class="modal-overlay" style="z-index: 999999;">
-        <div class="modal-box">
-            <i class="fa-solid fa-check-circle success-icon-large"></i>
-            <div class="modal-title" style="color: #10b981; font-size: 16px;" data-i18n="verified_title">تم التحقق</div>
-            <div class="modal-text" style="font-weight:bold; color:#64748b; font-size: 13px;"
-                data-i18n="processing_text">جاري الفحص...</div>
-            <div style="margin-top:15px;"><i class="fa-solid fa-circle-notch fa-spin" style="color:var(--primary);"></i>
-            </div>
-        </div>
-    </div>
-    <div id="duplicateModal" class="modal-overlay" style="z-index: 999999;">
-        <div class="modal-box">
-            <i class="fa-solid fa-triangle-exclamation" style="font-size:45px; color:#f59e0b; margin-bottom:15px;"></i>
-            <div class="modal-title" style="color: #f59e0b;">تنبيه</div>
-            <div class="modal-text">لقد قمت بتسجيل الحضور مسبقاً في هذا المقرر اليوم.</div>
-            <button onclick="document.getElementById('duplicateModal').style.display='none'"
-                class="modal-btn btn-confirm" style="background:#334155;">حسناً</button>
-        </div>
-    </div>
-
-    <div id="desktop-blocker">
-        <i class="fa-solid fa-mobile-screen-button" style="font-size:50px; margin-bottom:20px;"></i>
-        <h2 style="margin-bottom:10px">عذراً، وصول غير مصرح به</h2>
-        <p>النظام متاح فقط من هواتف Android و iPhone الذكية.</p>
-    </div>
-
-    <div id="locationForceModal" class="modal-overlay" style="display:none;">
-        <div class="modal-box">
-            <div style="position:absolute; top:15px; left:15px;">
-                <button onclick="document.getElementById('locationForceModal').style.display='none'"
-                    style="background:none; border:none; color:#94a3b8; font-size:20px; cursor:pointer;"><i
-                        class="fa-solid fa-xmark"></i></button>
-            </div>
-            <i class="fa-solid fa-location-dot fa-bounce"></i>
-            <div class="modal-title">تفعيل الموقع</div>
-            <div class="modal-text">يرجى تفعيل خدمة GPS للمتابعة.</div>
-        </div>
-    </div>
-
-    <div class="bg-image"></div>
-    <audio id="successSound" src=""></audio>
-    <audio id="clickSound" src=""></audio>
-    <audio id="beepSound" src=""></audio>
-
-    <div id="customLogoutModal" class="modal-overlay">
-        <div class="modal-box">
-            <i class="fa-solid fa-arrow-right-from-bracket"
-                style="font-size: 40px; color: #ef4444; margin-bottom: 15px;"></i>
-            <div class="modal-title">تسجيل الخروج</div>
-            <div class="modal-text">هل تريد الخروج من وضع المسؤول؟</div>
-            <div class="modal-actions">
-                <button onclick="performLogout()" class="modal-btn btn-confirm">نعم</button>
-                <button onclick="closeLogoutModal()" class="modal-btn btn-cancel">إلغاء</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="banModal" class="modal-overlay" style="z-index: 100000;">
-        <div class="modal-box" style="border: 2px solid #ef4444;">
-            <i class="fa-solid fa-ban" style="font-size: 50px; color: #ef4444; margin-bottom: 15px;"></i>
-            <div class="modal-title" style="color: #ef4444;">تم حظرك</div>
-            <div class="modal-text" style="font-weight: bold;">لقد استنفذت محاولاتك (3 مرات) أو تم اكتشاف تكرار في
-                البيانات.</div>
-            <button onclick="location.reload()" class="modal-btn btn-confirm" style="margin-top: 10px;">إغلاق</button>
-        </div>
-    </div>
-
-
-    <div id="modernConfirmModal" class="modal-overlay" style="z-index: 210000000;">
-        <div class="modal-box confirm-box-style">
-            <div class="confirm-icon-animate">
-                <i class="fa-solid fa-trash-can"></i>
-            </div>
-            <div class="modal-title" id="modernConfirmTitle">تأكيد الحذف</div>
-            <div class="modal-text" id="modernConfirmText">هل أنت متأكد من إتمام هذه العملية؟</div>
-            <div class="modal-actions">
-                <button id="btnConfirmYes" class="modal-btn btn-confirm-modern">نعم، احذف</button>
-                <button onclick="closeModernConfirm()" class="modal-btn btn-cancel-modern">تراجع</button>
-            </div>
-        </div>
-    </div>
-
-
-    <div id="examModal" class="modal-overlay">
-        <div class="modal-box">
-            <div class="exam-loader"></div>
-            <div class="modal-title" style="color: #7c3aed;" data-i18n="preparing_title">جاري الإعداد</div>
-            <div class="modal-text" data-i18n="exam_system_notice">يتم تجهيز نظام الامتحانات حالياً...</div>
-            <button onclick="closeExamModal()" class="modal-btn btn-cancel" data-i18n="close_btn">إغلاق</button>
-        </div>
-    </div>
-
-    <div id="connectionLostModal" class="modal-overlay" style="z-index: 10000;">
-        <div class="modal-box">
-            <button class="btn-close-modal-x" onclick="hideConnectionLostModal()">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-            <i class="fa-solid fa-wifi" style="font-size: 45px; color: #ef4444; margin-bottom: 15px;"></i>
-            <div class="modal-title" style="color: #ef4444;" data-i18n="connection_lost_title">انقطع الاتصال</div>
-            <div class="modal-text" data-i18n="connection_lost_msg">لا يوجد اتصال بالإنترنت.<br>جاري المحاولة...</div>
-        </div>
-    </div>
-
-    <div id="toastNotification"></div>
-
-    <div id="adminFloatingBack" class="admin-floating-back" onclick="goBackToWelcome()">
-        <i class="fa-solid fa-arrow-right"></i>
-    </div>
-    <div class="app-card">
-        <div class="card-banner"></div>
-
-        <div id="infoBtn" class="info-btn" onclick="showInfoModal()">
-            <i class="fa-solid fa-circle-info"></i>
-        </div>
-        <div id="infoModal" class="modal-overlay" style="z-index: 9999999;">
-            <div class="modal-box info-modern-box" dir="ltr">
-
-                <div class="heart-icon-wrapper">
-                    <i class="fa-solid fa-heart"></i>
-                </div>
-
-                <h3 class="info-title-main">
-                    Designed with passion
-                    <span class="ar-caption-title">صُمم بكل شغف</span>
-                </h3>
-                <p class="info-subtitle">
-                    to celebrate your presence every day
-                    <span class="ar-caption-sub">للاحتفال بوجودكم معنا كل يوم</span>
-                </p>
-
-                <div class="info-content-card">
-
-                    <div class="faculty-section">
-                        <div class="faculty-icon" style="background: transparent; padding: 0;">
-                            <img src="https://k.top4top.io/p_3615d3vek1.png" alt="Logo"
-                                style="width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));">
-                        </div>
-                        <div>
-                            <div style="font-size: 10px; color: #94a3b8; font-weight: 700; letter-spacing: 1px;">
-                                SPONSORED BY</div>
-                            <div style="font-weight: 800; color: #0f172a; font-size: 15px;">Faculty of
-                                Nursing</div>
-                            <div style="font-size: 13px; color: #64748b;">Al-Ryada University</div>
-                        </div>
-                    </div>
-
-                    <div class="dean-highlight">
-                        <span class="dean-label">Under the Deanship of</span>
-                        <span class="dean-name">Prof. Dr. Naglaa Abdelmawgoud</span>
-                    </div>
-
-                    <div style="margin: 20px 0; border-top: 1px dashed #e2e8f0;"></div>
-
-                    <div class="credits-grid">
-                        <div class="credit-item">
-                            <div class="credit-icon icon-green">
-                                <i class="fa-solid fa-user-tie"></i>
-                            </div>
-                            <div class="credit-info">
-                                <h4>Supervision</h4>
-                                <p>Dr. Mahmoud Othman</p>
-                            </div>
-                        </div>
-
-                        <div class="credit-item">
-                            <div class="credit-icon icon-blue">
-                                <i class="fa-solid fa-code"></i>
-                            </div>
-                            <div class="credit-info">
-                                <h4>Development</h4>
-                                <p>Abdelrahman Abdelaziz</p>
-                            </div>
-                        </div>
-                    </div>
-
-                </div>
-
-                <button onclick="document.getElementById('infoModal').style.display='none'" class="btn-close-modern">
-                    Close
-                </button>
-            </div>
-        </div>
-        <div class="card-body">
-
-            <div class="hero-icon-wrapper" id="heroIconWrapper">
-                <img src="https://k.top4top.io/p_3615d3vek1.png" class="hero-img" id="heroImage">
-                <div class="status-icon-container" id="statusIconContainer">
-                    <i class="fa-solid fa-user-nurse hero-icon" id="statusIcon"></i>
-                </div>
-            </div>
-
-            <div class="info-bar">
-                <div class="info-pill"><i class="fa-regular fa-clock"></i> <span id="currentTime">--:--:--</span></div>
-                <div class="info-pill"><i class="fa-regular fa-calendar"></i> <span id="currentDate">--/--/----</span>
-                </div>
-            </div>
-
-            <div class="card-body-content">
-
-                <div id="screenWelcome" class="section active">
-                    <div class="halo-container-v2">
-
-                        <button id="btnLangNew" onclick="toggleSystemLanguage()" class="halo-item halo-center">
-                            <i class="fa-solid fa-globe"></i>
-                        </button>
-
-                    </div>
-                    <div class="faculty-title-box">
-                        <span class="faculty-title-text" data-i18n="college_name">جامعة الريادة للعلوم
-                            والتكنولوجيا</span>
-                    </div>
-                    <h1 class="smart-title" data-i18n="sys_title">نظام كشف الحضور</h1>
-                    <p data-i18n="welcome_subtitle">مرحباً بك. يرجى الضغط بالأسفل لتسجيل حضور المحاضرة الحالية.</p>
-
-                    <div style="position: relative; z-index: 2;">
-                        <button id="btnQuickMode" onclick="safeClick(this, toggleQuickMode)" class="btn-main"
-                            style="display:none; background: #fff7ed; color: #ea580c; border: 2px dashed #f97316; margin-bottom: 10px; font-size: 14px;">
-                            <div
-                                style="display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;">
-                                <i id="quickModeIcon" class="fa-solid fa-bolt"></i>
-                                <span id="quickModeText" data-i18n="quick_mode_btn">إعدادات التسجيل السريع ⚡</span>
-                            </div>
-                        </button>
-                        <button onclick="safeClick(this, () => startProcess(false))" class="btn-main"
-                            id="mainActionBtn">
-                            <span data-i18n="main_reg_btn">تسجيل الحضور</span> <i class="fa-solid fa-fingerprint"></i>
-                        </button>
-                        <div id="deanPrivateZone"
-                            style="display:none; width: 100%; margin-top: 15px; animation: slideDown 0.5s ease-out;">
-
-                            <div
-                                style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding: 0 5px;">
-                                <span style="font-weight: 800; color: #1e293b; font-size: 15px;">
-                                    <i class="fa-solid fa-crown" style="color: #f59e0b; margin-left: 5px;"></i>
-                                    <span data-i18n="dean_zone_title">منطقة القيادة</span>
-                                </span>
-                                <span
-                                    style="font-size: 10px; background: #e0f2fe; color: #0284c7; padding: 3px 10px; border-radius: 20px; font-weight: 700; border: 1px solid #bae6fd;"
-                                    data-i18n="admin_access_badge">
-                                    ADMIN ACCESS
-                                </span>
-                            </div>
-
-                            <div class="dean-grid-layout"
-                                style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-
-                                <button onclick="openDeanOversight()" class="dean-btn-modern monitor-style">
-                                    <div class="dean-icon-box"><i class="fa-solid fa-tower-broadcast fa-fade"></i></div>
-                                    <div class="dean-btn-text">
-                                        <span class="main-text" data-i18n="live_monitoring">المراقبة الحية</span>
-                                        <span class="sub-text" data-i18n="monitoring_sub">رصد القاعات لحظياً</span>
-                                    </div>
-                                </button>
-
-                                <button onclick="openDeanReports()" class="dean-btn-modern report-style">
-                                    <div class="dean-icon-box"><i class="fa-solid fa-chart-pie"></i></div>
-                                    <div class="dean-btn-text">
-                                        <span class="main-text" data-i18n="report_management">إدارة التقارير</span>
-                                        <span class="sub-text" data-i18n="analysis_sub">تحليل البيانات</span>
-                                    </div>
-                                </button>
-
-                                <button class="dean-btn-modern locked-style">
-                                    <div class="dean-icon-box"><i class="fa-solid fa-bell"></i></div>
-                                    <div class="dean-btn-text">
-                                        <span class="main-text" data-i18n="alarms">الإنذارات</span>
-                                        <span class="sub-text" data-i18n="coming_soon">قريباً</span>
-                                    </div>
-                                </button>
-
-                                <button onclick="openDeanSettings()" class="dean-btn-modern settings-style">
-                                    <div class="dean-icon-box"><i class="fa-solid fa-sliders"></i></div>
-                                    <div class="dean-btn-text">
-                                        <span class="main-text" data-i18n="sys_settings">إعدادات النظام</span>
-                                        <span class="sub-text" data-i18n="full_control_sub">التحكم الكامل</span>
-                                    </div>
-                                </button>
-
-                            </div>
-                        </div>
-
-                        <div id="deanOversightModal" class="modal-overlay">
-                            <div class="modal-box pro-oversight-box">
-
-                                <div class="oversight-header-premium">
-                                    <div class="header-top-actions">
-                                        <button class="icon-circle-btn">
-                                            <i class="fa-solid fa-bell"></i>
-                                        </button>
-
-                                        <button class="icon-circle-btn danger-text"
-                                            onclick="document.getElementById('deanOversightModal').style.display='none'">
-                                            <i class="fa-solid fa-xmark"></i>
-                                        </button>
-                                    </div>
-
-                                    <div class="header-text-center">
-                                        <h3 class="oversight-main-title" data-i18n="oversight_title">رادار المراقبة
-                                            السيادي</h3>
-                                        <p class="oversight-subtitle" data-i18n="oversight_sub">متابعة حية للمحاضرات
-                                            والقاعات الآن</p>
-                                    </div>
-                                </div>
-
-                                <div class="dean-stats-bar-modern">
-                                    <div class="d-stat-card-modern lectures-stat">
-                                        <div class="stat-icon-mini"><i class="fa-solid fa-tower-broadcast"></i></div>
-                                        <div class="stat-info">
-                                            <span id="totalActiveLectures">0</span>
-                                            <label data-i18n="active_lectures">محاضرة جارية</label>
-                                        </div>
-                                    </div>
-                                    <div class="d-stat-card-modern students-stat">
-                                        <div class="stat-icon-mini"><i class="fa-solid fa-users"></i></div>
-                                        <div class="stat-info">
-                                            <span id="totalStudentsNow">0</span>
-                                            <label data-i18n="present_students">طالب حاضر</label>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div id="oversightLoader" class="loader-box-center">
-                                    <div class="exam-loader"></div>
-                                    <p data-i18n="scanning_halls">جاري مسح القاعات...</p>
-                                </div>
-
-                                <div id="oversightContainer" class="oversight-live-grid">
-                                </div>
-
-                            </div>
-                        </div>
-
-                        <div id="deanReportsModal" class="modal-overlay" style="z-index: 2147483647; display: none;">
-                            <div class="modal-box dashboard-box">
-                                <div class="dashboard-header">
-                                    <h2 class="dash-title">
-                                        <i class="fa-solid fa-file-contract"></i>
-                                        <span>مركز التقارير السيادية</span>
-                                    </h2>
-                                    <div class="dash-actions">
-                                        <button
-                                            onclick="document.getElementById('deanReportsModal').style.display='none'"
-                                            class="btn-close-dash">
-                                            <i class="fa-solid fa-xmark"></i>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div class="dashboard-controls" style="flex-direction: column; gap: 15px;">
-                                    <div style="width: 100%; text-align: center; color: #64748b; margin-bottom: 10px;">
-                                        حدد الفترة الزمنية لاستخراج التقرير الرسمي
-                                    </div>
-
-                                    <div style="display: flex; gap: 10px; width: 100%; justify-content: center;">
-                                        <input type="date" id="reportStartDate" class="dash-input" style="width: 45%;">
-                                        <span style="align-self: center; font-weight: bold;">إلى</span>
-                                        <input type="date" id="reportEndDate" class="dash-input" style="width: 45%;">
-                                    </div>
-
-                                    <button onclick="generateDeanOfficialPDF()" class="btn-dash-run"
-                                        style="width: 100%; margin-top: 10px; background: linear-gradient(135deg, #1e1b4b, #312e81); border: 1px solid #4338ca; cursor: pointer;">
-                                        <span>Extract Official Report (PDF)</span>
-                                        <i class="fa-solid fa-file-pdf"></i>
-                                    </button>
-                                </div>
-
-                                <div id="dashboardContent" class="dashboard-body"
-                                    style="text-align: center; padding: 40px; color: #94a3b8;">
-                                    <i class="fa-solid fa-print"
-                                        style="font-size: 50px; margin-bottom: 20px; opacity: 0.5;"></i>
-                                    <p>سيتم تحميل ملف PDF يحتوي على (الحضور، الغياب، تقييمات الدكاترة، والمخالفات)
-                                        بتنسيق رسمي.</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div id="deanOversightModal" class="modal-overlay" style="z-index: 2147483647; display: none;">
-                            <div class="modal-box dean-oversight-box">
-                                <div class="oversight-header">
-                                    <div style="display: flex; align-items: center; gap: 10px;">
-                                        <div class="live-indicator">LIVE</div>
-                                        <h3 style="margin: 0; font-size: 16px;">الرصد اللحظي للقاعات</h3>
-                                    </div>
-                                    <button onclick="document.getElementById('deanOversightModal').style.display='none'"
-                                        class="btn-close-stylish" style="width: auto; border:none;">&times;</button>
-                                </div>
-
-                                <div id="oversightRoomsContainer" class="oversight-scroll-area">
-                                </div>
-                            </div>
-                        </div>
-                        <div id="makaniSearchBar" class="makani-search-container" style="display: none;">
-                            <div class="makani-input-wrapper">
-                                <i class="fa-solid fa-location-crosshairs search-icon-main"></i>
-                                <input type="text" id="makaniInput" data-i18n-placeholder="makani_placeholder"
-                                    placeholder="ابحث..." onkeyup="if(event.key === 'Enter') startSmartSearch()">
-                                <button onclick="startSmartSearch()" id="btnMakani">
-                                    <i class="fa-solid fa-magnifying-glass"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <!-- 1. حاوية زر الأوفلاين (مخفية افتراضياً ويتحكم بها الـ JS) -->
-                        <div id="offlineActionsWrapper" style="display: none; width: 90%; margin: 15px auto;">
-                            <button onclick="openOfflineRegistrationModal()" class="btn-main"
-                                style="background: linear-gradient(135deg, #475569, #1e293b); border: 1px solid #94a3b8; box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-size: 13px; height: 45px;">
-                                <i class="fa-solid fa-cloud-slash"></i>
-                                <span data-i18n="offline_reg_btn">تسجيل حضور (بدون إنترنت)</span>
-                            </button>
-                        </div>
-
-                        <!-- 2. مودال التسجيل الأوفلاين المطور -->
-                        <div id="offlineRegModal" class="modal-overlay" style="z-index: 2147483647; display: none;">
-                            <div class="modal-box"
-                                style="max-width: 340px; padding: 25px; border-top: 5px solid #475569;">
-
-                                <!-- أ. واجهة إدخال الكود (تظهر أولاً) -->
-                                <div id="offlineInputView">
-                                    <div class="icon-glow"
-                                        style="background: #f1f5f9; color: #475569; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
-                                        <i class="fa-solid fa-wifi-slash" style="font-size: 25px;"></i>
-                                    </div>
-                                    <h3 style="font-weight: 900; color: #1e293b; margin-bottom: 5px;"
-                                        data-i18n="offline_modal_title">Offline Registration</h3>
-                                    <p style="font-size: 11px; color: #64748b; margin-bottom: 20px;"
-                                        data-i18n="offline_modal_subtitle">أدخل كود المحاضرة المكون من 6 أرقام</p>
-
-                                    <div class="input-group" style="margin-bottom: 20px;">
-                                        <!-- تم إضافة oninput لضمان عدم تجاوز 6 أرقام برمجياً -->
-                                        <input type="number" id="offSessionPin" class="modern-input"
-                                            data-i18n-placeholder="offline_pin_placeholder" placeholder="6-Digit PIN"
-                                            style="text-align: center; border-color: #cbd5e1 !important; color: #0f172a !important; font-size: 22px; font-weight: bold; letter-spacing: 4px;"
-                                            oninput="if(this.value.length > 6) this.value = this.value.slice(0, 6);">
-                                    </div>
-
-                                    <button onclick="processOfflineQueue()" class="btn-main"
-                                        style="background: #1e293b; width: 100%; margin-bottom: 10px;">
-                                        <span data-i18n="offline_confirm_btn">تأكيد الانضمام</span>
-                                        <i class="fa-solid fa-paper-plane"></i>
-                                    </button>
-                                </div>
-
-                                <!-- ب. واجهة العداد التنازلي (تظهر عند الحفظ) -->
-                                <div id="offlineProcessView"
-                                    style="display: none; text-align: center; padding: 20px 0;">
-                                    <i class="fa-solid fa-circle-notch fa-spin"
-                                        style="font-size: 40px; color: #0ea5e9; margin-bottom: 15px;"></i>
-                                    <h4 style="margin: 0; color: #1e293b;" data-i18n="offline_securing_msg">جاري تأمين
-                                        الطلب...</h4>
-                                    <p style="font-size: 13px; color: #64748b; margin-top: 10px;">
-                                        <span data-i18n="offline_timer_text">سيتم الحفظ خلال</span>
-                                        <span id="offTimer" style="font-weight: bold; color: #0ea5e9;">3</span>
-                                        <span data-i18n="offline_seconds">ثواني</span>
-                                    </p>
-                                </div>
-
-                                <!-- ج. زر الإلغاء -->
-                                <button id="btnCancelOffline"
-                                    onclick="document.getElementById('offlineRegModal').style.display='none'"
-                                    class="btn-cancel-modern" style="width: 100%;" data-i18n="cancel_btn">إلغاء</button>
-                            </div>
-                        </div>
-                        <div id="makaniResultsModal" class="modal-overlay" style="z-index: 2147483647; display: none;"
-                            onclick="this.style.display='none'">
-                            <div class="modal-box makani-result-box" onclick="event.stopPropagation()">
-                                <div class="result-header">
-                                    <i class="fa-solid fa-radar fa-spin-slow"></i>
-                                    <span data-i18n="radar_results_title">نتائج رادار الكلية</span>
-                                </div>
-                                <div id="makaniContent">
-                                </div>
-                                <button onclick="document.getElementById('makaniResultsModal').style.display='none'"
-                                    class="btn-close-stylish" data-i18n="close_btn">إغلاق</button>
-                            </div>
-                        </div>
-                        <button id="btnToggleSession" onclick="safeClick(this, toggleSessionState)" class="btn-main"
-                            style="display:none; background: #e2e8f0; color: #475569; border: 2px solid #cbd5e1; margin-bottom: 15px; margin-top: 10px;">
-                            <div
-                                style="display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;">
-                                <i id="sessionIcon" class="fa-solid fa-lock"></i>
-                                <span id="sessionText">Checking status...</span>
-                            </div>
-                        </button>
-                        <div class="admin-controls-grid">
-                            <button id="btnAdminLogin" onclick="handleAdminTripleClick(this)"
-                                class="admin-sub-btn btn-admin-login">
-                                <i class="fa-solid fa-user-doctor sub-btn-icon"></i>
-                                <span data-i18n="faculty_portal">بوابة الدكاترة</span>
-                            </button>
-
-                            <button id="btnViewReport" onclick="handleReportClick()"
-                                class="admin-sub-btn btn-report locked">
-                                <i id="reportIcon" class="fa-solid fa-list-check sub-btn-icon"></i>
-                                <span data-i18n="attendance_report">سجل الحضور</span>
-                            </button>
-
-                            <button id="btnToolsRequest" onclick="openToolsRequestModal()"
-                                class="admin-sub-btn btn-tools"
-                                style="background: #ecfdf5; color: #047857; border-color: #a7f3d0; display: none;">
-                                <i class="fa-solid fa-briefcase-medical sub-btn-icon"></i>
-                                <span data-i18n="tools_request">طلب تجهيزات</span>
-                            </button>
-                            <button id="btnLiveFeedback" onclick="openFeedbackStats()"
-                                class="admin-sub-btn btn-feedback-static" style="display: none;">
-                                <i class="fa-solid fa-star sub-btn-icon"></i>
-                                <span id="badgeFeedbackCount" class="feedback-badge-static"
-                                    style="display:none;">0</span>
-                                <span data-i18n="feedback_btn">التقييمات</span>
-                            </button>
-                            <button onclick="openExamModal()" class="admin-sub-btn btn-exams">
-                                <i class="fa-solid fa-file-pen sub-btn-icon"></i>
-                                <span style="font-size: 13px;" data-i18n="exam_management">تنظيم الامتحانات</span>
-                            </button>
-
-                            <button onclick="safeClick(this, () => location.reload())"
-                                class="admin-sub-btn btn-refresh">
-                                <i class="fa-solid fa-arrows-rotate sub-btn-icon" style="font-size: 22px;"></i>
-                            </button>
-
-                            <button onclick="openDataEntryMenu()" class="admin-sub-btn btn-data-entry" id="btnDataEntry"
-                                style="display:none;">
-                                <i class="fa-solid fa-database sub-btn-icon"></i>
-                                <span data-i18n="data_entry">إدخال البيانات</span>
-                            </button>
-                        </div>
-
-                        <div id="installAppPrompt" class="install-prompt-box" onclick="triggerAppInstall()">
-                            <div class="install-icon-box"><i class="fa-solid fa-download"></i></div>
-                            <div class="install-text-col">
-                                <div class="install-title" data-i18n="install_app">تثبيت التطبيق</div>
-                                <div class="install-subtitle" data-i18n="install_app_sub">أضف النظام للشاشة الرئيسية
-                                </div>
-                            </div>
-                            <i class="fa-solid fa-chevron-left" style="font-size:12px; color:#64748b;"></i>
-                        </div>
-                        <div class="academic-footer">
-
-                            <div
-                                style="display:flex; align-items:center; justify-content:center; gap:16px; padding:12px 0; font-family:'Outfit', system-ui, sans-serif;">
-
-                                <div style="display:flex; flex-direction:column; align-items:flex-start; gap:2px;">
-                                    <span
-                                        style="font-size:9px; letter-spacing:0.12em; color:#94a3b8; text-transform:uppercase; font-weight:600;">Developed
-                                        by</span>
-                                    <span
-                                        style="font-size:15px; font-weight:700; color:#0f172a; letter-spacing:-0.01em;">Abdelrahman
-                                        Abdelaziz</span>
-                                </div>
-
-                                <div style="width:0.5px; height:28px; background:#e2e8f0;"></div>
-
-                                <div style="display:flex; align-items:center; gap:8px;">
-
-                                    <a href="https://wa.me/201221675353"
-                                        style="width:32px; height:32px; border-radius:10px; background:#f8fafc; border:1px solid #e2e8f0; display:flex; align-items:center; justify-content:center; text-decoration:none;">
-                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="#25D366">
-                                            <path
-                                                d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z" />
-                                        </svg>
-                                    </a>
-
-                                    <a href="mailto:abdelrahmanabdelaziz732@gmail.com"
-                                        style="width:32px; height:32px; border-radius:10px; background:#f8fafc; border:1px solid #e2e8f0; display:flex; align-items:center; justify-content:center; text-decoration:none;">
-                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9"
-                                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <rect x="2" y="4" width="20" height="16" rx="3" />
-                                            <path d="m2 7 10 6 10-6" />
-                                        </svg>
-                                    </a>
-
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                </div>
-                <div id="screenAdminLogin" class="section">
-                    <h1 data-i18n="admin_login_title">دخول المسؤول</h1>
-                    <p data-i18n="admin_login_sub">أدخل بيانات الحساب الإداري.</p>
-                    <div id="adminAlert" style="display:none;" class="alert-box"></div>
-
-                    <div class="input-group">
-                        <input type="email" id="adminEmailInput" class="modern-input"
-                            data-i18n-placeholder="email_placeholder" placeholder="البريد الإلكتروني"
-                            style="margin-bottom: 10px; direction: ltr;" required>
-
-                        <div style="position: relative; width: 100%;">
-                            <input type="password" id="adminPassword" class="modern-input"
-                                data-i18n-placeholder="password_placeholder" placeholder="كلمة المرور"
-                                style="padding-left: 45px;" required>
-
-                            <i class="fa-solid fa-eye" id="eyeIcon" onclick="togglePasswordVisibility()"
-                                style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #94a3b8; font-size: 18px; z-index: 10;">
-                            </i>
-                        </div>
-                    </div>
-
-                    <button onclick="checkAdminPassword()" class="btn-main">
-                        <span data-i18n="activate_btn">تفعيل</span> <i class="fa-solid fa-key"></i>
-                    </button>
-                    <button onclick="goBackToWelcome()" class="btn-back-modern">
-                        <span data-i18n="back_home_btn">العودة للصفحة الرئيسية</span>
-                        <i class="fa-solid fa-arrow-left"></i>
-                    </button>
-                </div>
-                <div id="screenLoading" class="section">
-                    <h1 style="margin-top: 10px;">جاري التحقق...</h1>
-                    <i class="fa-solid fa-circle-notch fa-spin"
-                        style="font-size:40px; color:var(--primary); margin: 20px 0;"></i>
-                    <p>يرجى السماح للمتصفح بتحديد موقعك الجغرافي.</p>
-
-                    <button onclick="openMapsToRefreshGPS()" class="btn-google-maps" style="margin-top: 20px;">
-                        <img src="https://upload.wikimedia.org/wikipedia/commons/a/aa/Google_Maps_icon_%282020%29.svg"
-                            class="maps-icon-img" alt="Maps">
-                        <span>فتح الخريطة (لتنشيط GPS)</span>
-                    </button>
-                </div>
-
-                <div id="screenReadyToStart" class="section">
-                    <div style="margin: 30px 0;">
-                        <i class="fa-solid fa-map-location-dot"
-                            style="font-size: 60px; color: #10b981; animation: popUp 0.5s;"></i>
-                    </div>
-                    <h1 style="color: #10b981;">الموقع مطابق</h1>
-                    <p>تم التحقق من تواجدك في الكلية بنجاح.</p>
-
-                    <button onclick="switchScreen('screenDataEntry')" class="btn-main" style="margin-top: 10px;"> سجل
-                        الآن <i class="fa-solid fa-arrow-left"></i></button>
-                </div>
-
-                <div id="screenDataEntry" class="section">
-                    <button onclick="goBackToWelcome()" class="floating-back-btn" style="display: none;">
-                        <i class="fa-solid fa-arrow-right"></i>
-                    </button>
-
-                    <div
-                        style="display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 10px; min-height: 80vh;">
-
-                        <div
-                            style="background: white; padding: 20px 25px 30px 25px; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); width: 90%; max-width: 360px; text-align: center; position: relative; margin-top: 10px;">
-
-                            <div id="step1_search" class="minimal-join-container">
-                                <div class="top-status-icon">
-                                    <div class="icon-glow"></div>
-                                    <i class="fa-solid fa-bolt-lightning"></i>
-                                </div>
-                                <div class="header-content-center">
-                                    <h2 class="auth-main-title" data-i18n="search_header">SESSION</h2>
-                                </div>
-                                <div class="pin-input-wrapper">
-                                    <div class="floating-group tech-input-glass">
-                                        <input type="text" id="attendanceCode" class="floating-input en-font pin-field"
-                                            placeholder=" " inputmode="numeric" maxlength="6"
-                                            oninput="this.value = this.value.replace(/[^0-9]/g, '');" required>
-                                        <label class="floating-label" data-i18n="pin_label">6-DIGIT PIN</label>
-                                    </div>
-                                </div>
-                                <button id="btnSearchSession" onclick="searchForSession()"
-                                    class="tech-link-btn join-style">
-                                    <span class="btn-text" data-i18n="join_now_btn">JOIN NOW</span>
-                                    <div class="btn-icon-circle"><i class="fa-solid fa-arrow-right-to-bracket"></i>
-                                    </div>
-                                </button>
-                                <p class="minimal-hint">ENTER THE 6-DIGIT CODE FROM YOUR DOCTOR</p>
-                            </div>
-
-                            <div id="step2_auth" style="display: none; animation: fadeIn 0.5s ease-out; width: 100%;">
-
-                                <div id="authCountdownBox"
-                                    style="display: flex; justify-content: center; margin-top: 10px; margin-bottom: 20px;">
-                                    <div class="auth-timer-pill"
-                                        style="background: #ecfdf5; border-color: #10b981; color: #047857;">
-                                        <i class="fa-solid fa-clock fa-spin-slow"></i>
-                                        <span id="authTimerDisplay">--:--</span>
-                                    </div>
-                                </div>
-
-                                <div class="royal-session-card" style="padding-bottom: 25px;">
-                                    <div class="r-card-accent"></div>
-                                    <div class="r-avatar-area">
-                                        <div class="r-avatar-glow"></div>
-                                        <div class="r-avatar-inner" id="foundDocAvatar">
-                                            <i class="fa-solid fa-user-doctor"></i>
-                                        </div>
-                                    </div>
-
-                                    <div class="r-info-content">
-                                        <span class="r-label-tag">CURRENT LECTURER</span>
-
-                                        <h3 id="foundDocName" class="r-doctor-name" style="margin-bottom: 5px;">Dr. Name
-                                        </h3>
-
-                                        <h4 id="foundSubjectName" class="r-subject-title"
-                                            style="font-size: 18px; line-height: 1.6; margin-top: 10px; color: #0077b6; font-weight: 800; white-space: normal;">
-                                            --
-                                        </h4>
-                                    </div>
-                                </div>
-
-                                <div class="auth-input-zone" style="margin-top: 25px;">
-                                    <button onclick="joinSessionAction()" style="
-        width:100%; padding:16px; border-radius:16px;
-        border:2px dashed #0ea5e9; background:#f0f9ff;
-        color:#0284c7; font-size:15px; font-weight:800;
-        cursor:pointer; display:flex; align-items:center;
-        justify-content:center; gap:10px;
-        font-family:'Cairo',sans-serif;
-        transition:all 0.2s;
-    ">
-                                        <i class="fa-solid fa-lock"></i>
-                                        <span data-i18n="choose_password_btn">اضغط لاختيار كلمة المرور</span>
-                                        <i class="fa-solid fa-chevron-left" style="font-size:12px;"></i>
-                                    </button>
-                                </div>
-
-                                <div class="auth-action-area">
-                                    <button id="btnJoinFinal" onclick="joinSessionAction()"
-                                        class="btn-main join-btn-premium">
-                                        Confirm & Join <i class="fa-solid fa-door-open"></i>
-                                    </button>
-
-                                    <div class="dual-buttons-row">
-                                        <button onclick="goBackToWelcome()" class="btn-secondary-outline">
-                                            <i class="fa-solid fa-house"></i> Home
-                                        </button>
-                                        <button onclick="resetSearchSession()" class="btn-secondary-outline">
-                                            <i class="fa-solid fa-magnifying-glass"></i> Search Again
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <script src="geo.js?v=7.5.2"></script>
-            <script type="module" src="js/core/utils.js"></script>
-            <script type="module" src="./setup.js"></script>
-            <script type="module" src="security.js"></script>
-            <script type="module" src="admin-session.js?v=3.2.0"></script>
-            <script type="module" src="script.js?v=7.6.1"></script>
-            <script type="module" src="profile-system.js"></script>
-
-
-            <style>
-                input[name="reportType"]:checked+label {
-                    background: #fff;
-                    color: #0ea5e9;
-                    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+import { MASTER_HALLS, MASTER_SUBJECTS } from './config.js';
+import {
+    getFirestore, collection, doc, addDoc, setDoc, getDoc,
+    getDocs, updateDoc, onSnapshot, query, where, limit,
+    writeBatch, serverTimestamp, getCountFromServer
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import {
+    getAuth, onAuthStateChanged,
+    signInWithEmailAndPassword, signOut, sendEmailVerification
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { i18n, t, changeLanguage } from './i18n.js';
+import { AuditManager } from './AuditManager.js';
+import { initPushNotifications, refreshPushSubscription, unsubscribePush, SAP_PUSH_VERSION } from './PushManager.js';
+
+console.info(`🔔 ${SAP_PUSH_VERSION.platform} | Push Manager v${SAP_PUSH_VERSION.version}`);
+
+
+
+const CFG = Object.freeze({
+    device: {
+        cacheKey: 'nursing_secure_device_v5',
+        verifiedCacheKey: 'nursing_user_verified_v2',
+        verifiedTTL: 7 * 86_400_000,
+    },
+    gps: {
+        targetLat: 30.385873919506743,
+        targetLng: 30.488794680472196,
+        allowedKm: 2.5,
+    },
+    network: {
+        pingUrl: 'https://cp.cloudflare.com/generate_204',
+        pingIntervalMs: 60_000,
+        pingTimeoutMs: 3_000,
+    },
+    api: {
+        base: 'https://nursing-backend-rej8.vercel.app',
+    },
+    firebase: {
+        excludedUID: 'R78Lu7IZBpYK0WngcaSL6t1Our62',
+    },
+    ui: {
+        idleTimeoutSec: 60,
+        statsCacheTTL: 900_000,
+    },
+    avatars: Object.freeze({
+        Male: ['fa-user-tie', 'fa-user-graduate', 'fa-user-doctor', 'fa-user-astronaut',
+            'fa-user-ninja', 'fa-user-secret', 'fa-user-crown', 'fa-person-biking',
+            'fa-person-skating', 'fa-person-snowboarding', 'fa-person-swimming',
+            'fa-robot', 'fa-ghost', 'fa-dragon', 'fa-gamepad', 'fa-headset',
+            'fa-guitar', 'fa-rocket', 'fa-bolt', 'fa-fire'],
+        Female: ['fa-user-nurse', 'fa-user-graduate', 'fa-user-doctor', 'fa-person-dress',
+            'fa-person-praying', 'fa-person-hiking', 'fa-person-skiing', 'fa-cat',
+            'fa-dove', 'fa-gem', 'fa-wand-magic-sparkles', 'fa-camera-retro',
+            'fa-palette', 'fa-mug-hot', 'fa-leaf', 'fa-heart', 'fa-star', 'fa-crown'],
+    }),
+    avatarColors: Object.freeze([
+        '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981',
+        '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef', '#f43f5e',
+    ]),
+    colleges: Object.freeze({
+        nameMap: {
+            N: 'Nursing', P: 'Physical Therapy', C: 'Pharmacy',
+            D: 'Dentistry', T: 'Computer Science', B: 'Business Admin', H: 'Health Sciences'
+        },
+        codeMap: { NURS: 'N', PT: 'P', PHARM: 'C', DENT: 'D', CS: 'T', BA: 'B', HS: 'H' },
+    }),
+});
+
+const PersistentStore = (() => {
+    const DB_NAME = 'nursing_app_db';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'session_store';
+    let _db = null;
+
+    function _open() {
+        if (_db) return Promise.resolve(_db);
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(DB_NAME, DB_VERSION);
+            req.onupgradeneeded = e => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    db.createObjectStore(STORE_NAME, { keyPath: 'key' });
                 }
+            };
+            req.onsuccess = e => { _db = e.target.result; resolve(_db); };
+            req.onerror = () => reject(req.error);
+        });
+    }
 
-                input[name="reportType"]:not(:checked)+label {
-                    color: #64748b;
+    async function set(key, value) {
+        try {
+            const db = await _open();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE_NAME, 'readwrite');
+                tx.objectStore(STORE_NAME).put({ key, value, ts: Date.now() });
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = () => reject(tx.error);
+            });
+        } catch (e) { console.warn('PersistentStore.set error:', e); return false; }
+    }
+
+    async function get(key) {
+        try {
+            const db = await _open();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE_NAME, 'readonly');
+                const req = tx.objectStore(STORE_NAME).get(key);
+                req.onsuccess = () => resolve(req.result?.value ?? null);
+                req.onerror = () => reject(req.error);
+            });
+        } catch (e) { console.warn('PersistentStore.get error:', e); return null; }
+    }
+
+    async function remove(key) {
+        try {
+            const db = await _open();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE_NAME, 'readwrite');
+                tx.objectStore(STORE_NAME).delete(key);
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = () => reject(tx.error);
+            });
+        } catch (e) { console.warn('PersistentStore.remove error:', e); return false; }
+    }
+
+    async function syncToLocal(key) {
+        const val = await get(key);
+        if (val !== null) {
+            try { localStorage.setItem(key, val); } catch { /* quota */ }
+        }
+        return val;
+    }
+
+    async function setWithSync(key, value) {
+        await set(key, value);
+        try { localStorage.setItem(key, value); } catch { /* quota */ }
+        try { sessionStorage.setItem(key, value); } catch { /* quota */ }
+    }
+
+    async function getWithFallback(key) {
+        let val = await get(key);
+        if (val !== null) return val;
+        // ثم localStorage
+        val = localStorage.getItem(key);
+        if (val !== null) { await set(key, val); return val; }
+        // أخيراً sessionStorage
+        val = sessionStorage.getItem(key);
+        if (val !== null) { await set(key, val); return val; }
+        return null;
+    }
+
+    async function removeWithSync(key) {
+        await remove(key);
+        try { localStorage.removeItem(key); } catch { /* ignore */ }
+        try { sessionStorage.removeItem(key); } catch { /* ignore */ }
+    }
+
+    return { set, get, remove, setWithSync, getWithFallback, removeWithSync, syncToLocal };
+})();
+
+
+const SessionGuard = (() => {
+    let _resolved = false;
+    let _authReadyCallbacks = [];
+
+    function lockScreen() {
+        const style = document.getElementById('_session_guard_style') || document.createElement('style');
+        style.id = '_session_guard_style';
+        style.textContent = `
+            #studentAuthDrawer { display: none !important; opacity: 0 !important; pointer-events: none !important; }
+        `;
+        document.head.appendChild(style);
+    }
+
+    function unlock() {
+        const style = document.getElementById('_session_guard_style');
+        if (style) style.remove();
+    }
+
+    function onAuthReady(cb) {
+        if (_resolved) { cb(); return; }
+        _authReadyCallbacks.push(cb);
+    }
+
+    function markResolved() {
+        if (_resolved) return;
+        _resolved = true;
+        unlock();
+        _authReadyCallbacks.forEach(cb => { try { cb(); } catch (e) { console.warn(e); } });
+        _authReadyCallbacks = [];
+    }
+
+    async function quickCheck() {
+        lockScreen();
+        const uid = await PersistentStore.getWithFallback('LOGGED_IN_UID');
+        const sessionId = await PersistentStore.getWithFallback('CURRENT_SESSION_ID');
+        const cached = await PersistentStore.getWithFallback('nursing_user_verified_v2');
+
+        if (uid && sessionId && cached) {
+            try {
+                const data = JSON.parse(cached);
+                if (data?.uid === uid && (Date.now() - data.ts) < CFG.device.verifiedTTL) {
+                    try { localStorage.setItem('LOGGED_IN_UID', uid); } catch { }
+                    try { localStorage.setItem('CURRENT_SESSION_ID', sessionId); } catch { }
+                    return { uid, sessionId, valid: true };
                 }
-            </style>
-
-            <style>
-                .time-grid-modern {
-                    display: grid;
-                    grid-template-columns: repeat(2, 1fr);
-                    gap: 10px;
-                }
-
-                .time-btn {
-                    background: #f1f5f9;
-                    border: 1px solid #cbd5e1;
-                    border-radius: 8px;
-                    padding: 12px;
-                    font-weight: bold;
-                    color: #334155;
-                    cursor: pointer;
-                    transition: 0.2s;
-                }
-
-                .time-btn:active {
-                    transform: scale(0.95);
-                }
-
-                .time-btn.open-time {
-                    grid-column: span 2;
-                    background: #dcfce7;
-                    color: #166534;
-                    border-color: #86efac;
-                }
-            </style>
-
-            <div id="studentPassModal" class="modal-overlay" style="z-index: 99999999;">
-                <div class="modal-box">
-                    <div id="passwordChoicesContainer"
-                        style="display:flex; flex-direction:column; gap:14px; width:100%; padding:4px 0;">
-                    </div>
-                    <input type="hidden" id="studentEnteredPass" value="">
-                </div>
-            </div>
-            <div id="studentFloatingTimer" class="floating-timer" style="display: none;">
-                <div class="timer-icon-pulse">
-                    <i class="fa-solid fa-hourglass-half"></i>
-                </div>
-                <span id="floatingTimeText" class="en-font">00</span>
-            </div>
-            <div id="quickModeOptionsModal" class="modal-overlay" style="z-index: 999999; display: none;">
-                <div class="modal-box">
-                    <div class="modal-title" style="color: #ea580c; display: flex; align-items: center; gap: 10px;">
-                        <i class="fa-solid fa-sliders"></i> تخصيص القيود
-                    </div>
-                    <p style="color: #64748b; font-size: 13px; margin-bottom: 20px;">
-                        حدد القيود التي تريد <b>تعطيلها (إلغاءها)</b> لتسهيل دخول الطلاب:
-                    </p>
-
-                    <div class="options-list" style="text-align: right;">
-                        <label class="option-row"
-                            style="display: flex; align-items: center; justify-content: space-between; padding: 15px; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 10px; cursor: pointer;">
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <i class="fa-solid fa-location-slash" style="color: #0ea5e9;"></i>
-                                <span style="font-weight: bold; color: #334155;">إلغاء الموقع (GPS)</span>
-                            </div>
-                            <input type="checkbox" id="chkDisableGPS"
-                                style="width: 20px; height: 20px; accent-color: #ea580c;">
-                        </label>
-
-                        <label class="option-row"
-                            style="display: flex; align-items: center; justify-content: space-between; padding: 15px; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 10px; cursor: pointer;">
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <i class="fa-solid fa-qrcode" style="color: #10b981;"></i>
-                                <span style="font-weight: bold; color: #334155;" data-i18n="disable_qr_label">إلغاء
-                                    كود
-                                    QR</span>
-                            </div>
-                            <input type="checkbox" id="chkDisableQR"
-                                style="width: 20px; height: 20px; accent-color: #ea580c;">
-                        </label>
-                    </div>
-
-                    <div class="modal-actions"
-                        style="margin-top: 20px; display: flex; flex-direction: column; gap: 10px;">
-                        <button onclick="confirmQuickModeParams()" class="btn-main"
-                            style="background: #ea580c; width: 100%;" data-i18n="activate_selected_btn">تفعيل المحدد
-                            ✅</button>
-                        <button onclick="disableQuickMode()" class="btn-cancel-modern"
-                            style="color: #ef4444; border-color: #fee2e2; background: #fef2f2; width: 100%;"
-                            data-i18n="stop_quick_mode_btn">إيقاف الوضع
-                            السريع</button>
-                        <button onclick="document.getElementById('quickModeOptionsModal').style.display='none'"
-                            class="btn-cancel-modern" style="width: 100%;" data-i18n="close_btn">إغلاق</button>
-                    </div>
-                </div>
-            </div>
-            <div id="studentAuthDrawer" class="auth-drawer-overlay"
-                onclick="if(event.target == this) closeAuthDrawer()">
-                <div class="auth-drawer-content modern-glass">
-
-                    <button onclick="closeAuthDrawer()" class="close-btn-modern" aria-label="Close">
-                        <i class="fa-solid fa-xmark"></i>
-                    </button>
-
-                    <div class="header-content-center">
-                        <h2 id="authTitle" class="auth-main-title">Welcome Back</h2>
-                        <p id="authSubtitle" class="auth-sub-title">Please enter your details to continue</p>
-                    </div>
-
-                    <div class="drawer-body">
-
-                        <div id="loginSection" class="auth-section active">
-                            <div class="floating-group">
-                                <i class="fa-solid fa-envelope icon-inside"></i>
-                                <input type="email" id="studentLoginEmail" class="floating-input" placeholder=" "
-                                    required>
-                                <label class="floating-label">University Email</label>
-                            </div>
-                            <div class="floating-group">
-                                <i class="fa-solid fa-lock icon-inside"></i>
-                                <input type="password" id="studentLoginPass" class="floating-input" placeholder=" "
-                                    required>
-                                <label class="floating-label">Password</label>
-                                <i class="fa-solid fa-eye eye-toggle"
-                                    onclick="togglePass('studentLoginPass', this)"></i>
-                            </div>
-                            <button onclick="performStudentLogin()" class="btn-modern-action">Sign In</button>
-                            <p class="switch-link-center">New student? <a href="javascript:void(0)"
-                                    onclick="toggleAuthMode('signup')">Create Account</a></p>
-                        </div>
-
-                        <div id="signupSection" class="auth-section">
-                            <div class="floating-group">
-                                <i class="fa-solid fa-id-card icon-inside"></i>
-                                <input type="number" id="regStudentID" class="floating-input" placeholder=" "
-                                    oninput="autoFetchName(this.value)" required>
-                                <label class="floating-label">University ID</label>
-                            </div>
-
-                            <div class="floating-group">
-                                <i class="fa-solid fa-user-graduate icon-inside"></i>
-                                <input type="text" id="regFullName" class="floating-input readonly-input"
-                                    placeholder=" " readonly>
-                                <label class="floating-label">Full Name</label>
-                                <div id="nameLoader" class="loader-inside"><i
-                                        class="fa-solid fa-circle-notch fa-spin"></i>
-                                </div>
-                            </div>
-
-                            <div class="form-row-pro">
-                                <div class="floating-group custom-dropdown icon-only-dropdown" id="dropdownLevel">
-                                    <div class="custom-select-display" onclick="toggleDropdown('listLevel')">
-                                        <i class="fa-solid fa-graduation-cap icon-main"></i>
-                                        <i class="fa-solid fa-caret-down mini-arrow"></i>
-                                    </div>
-                                    <ul class="dropdown-list" id="listLevel">
-                                        <li onclick="selectOption('Level', '1', '1st Year')">First Year (1st)
-                                        </li>
-                                        <li onclick="selectOption('Level', '2', '2nd Year')">Second Year (2nd)
-                                        </li>
-                                        <li onclick="selectOption('Level', '3', '3rd Year')">Third Year (3rd)
-                                        </li>
-                                        <li onclick="selectOption('Level', '4', '4th Year')">Fourth Year (4th)
-                                        </li>
-                                    </ul>
-                                    <input type="hidden" id="regLevel" value="">
-                                </div>
-
-                                <div class="floating-group custom-dropdown icon-only-dropdown" id="dropdownGender">
-                                    <div class="custom-select-display" onclick="toggleDropdown('listGender')">
-                                        <i class="fa-solid fa-venus-mars icon-main"></i>
-                                        <i class="fa-solid fa-caret-down mini-arrow"></i>
-                                    </div>
-                                    <ul class="dropdown-list" id="listGender">
-                                        <li onclick="selectOption('Gender', 'Male', 'Male')">Male</li>
-                                        <li onclick="selectOption('Gender', 'Female', 'Female')">Female</li>
-                                    </ul>
-                                    <input type="hidden" id="regGender" value="">
-                                </div>
-                            </div>
-
-                            <div class="floating-group">
-                                <i class="fa-solid fa-users-rectangle icon-inside"></i>
-                                <input type="text" id="regGroup" class="floating-input" placeholder=" " required
-                                    oninput="validateSignupForm()">
-                                <label class="floating-label">Group (e.g. 1G12)</label>
-                            </div>
-
-                            <div class="floating-group">
-                                <i class="fa-solid fa-at icon-inside"></i>
-                                <input type="email" id="regEmail" class="floating-input" placeholder=" " required
-                                    oninput="validateSignupForm()">
-                                <label class="floating-label"> Email</label>
-                            </div>
-                            <div class="floating-group">
-                                <i class="fa-solid fa-envelope-circle-check icon-inside"></i>
-                                <input type="email" id="regEmailConfirm" class="floating-input" placeholder=" " required
-                                    oninput="validateSignupForm()">
-                                <label class="floating-label">Confirm Email</label>
-                                <small id="emailError" class="error-text">Emails do not match!</small>
-                            </div>
-
-                            <div class="floating-group">
-                                <i class="fa-solid fa-key icon-inside"></i>
-                                <input type="password" id="regPass" class="floating-input" placeholder=" " required
-                                    oninput="validateSignupForm()">
-                                <label class="floating-label">Password</label>
-                                <i class="fa-solid fa-eye eye-toggle" onclick="togglePass('regPass', this)"></i>
-                            </div>
-                            <div class="floating-group">
-                                <i class="fa-solid fa-shield-halved icon-inside"></i>
-                                <input type="password" id="regPassConfirm" class="floating-input" placeholder=" "
-                                    required oninput="validateSignupForm()">
-                                <label class="floating-label">Confirm Password</label>
-                                <i class="fa-solid fa-eye eye-toggle" onclick="togglePass('regPassConfirm', this)"></i>
-                                <small id="passError" class="error-text">Passwords do not match!</small>
-                            </div>
-
-                            <button id="btnDoSignup" onclick="performStudentSignup()"
-                                class="btn-modern-action signup-color" disabled>REGISTER & VERIFY</button>
-
-                            <p class="switch-link-center">Already registered? <a href="javascript:void(0)"
-                                    onclick="toggleAuthMode('login')">Sign In</a></p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="studentProfileModal" class="profile-overlay">
-                <div class="pro-card"
-                    style="padding: 0; max-width: 350px; border-radius: 24px; overflow: hidden; background: #fff; font-family: 'Cairo', sans-serif;">
-
-                    <div
-                        style="height: 110px; background: linear-gradient(135deg, #0ea5e9, #3b82f6); position: relative;">
-
-                    </div>
-
-                    <div style="text-align: center; margin-top: -55px; padding-bottom: 10px;">
-                        <div class="avatar-wrapper" onclick="openAvatarSelector()"
-                            style="margin: 0 auto; width: 100px; height: 100px; position: relative;">
-                            <div id="currentAvatar"
-                                style="width: 100%; height: 100%; border-radius: 50%; background: #fff; border: 4px solid #fff; display: flex; align-items: center; justify-content: center; font-size: 45px; color: #0ea5e9; box-shadow: 0 10px 20px rgba(0,0,0,0.1);">
-                                <i class="fa-solid fa-user"></i>
-                            </div>
-                            <div class="edit-badge"
-                                style="position: absolute; bottom: 5px; right: 0; background: #f8fafc; border: 2px solid #fff; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #64748b; box-shadow: 0 2px 5px rgba(0,0,0,0.1); cursor: pointer;">
-                                <i class="fa-solid fa-pen"></i>
-                            </div>
-                        </div>
-
-                        <h2 id="profFullName"
-                            style="font-size: 18px; font-weight: 800; color: #1e293b; margin: 10px 0 2px 0;"
-                            data-i18n="loading_user">Loading...</h2>
-                        <p class="pro-role" style="font-size: 12px; color: #64748b; font-weight: 600; margin: 0;">
-                            <i class="fa-solid fa-circle-notch fa-spin" style="font-size:10px; opacity:0.4;"></i>
-                        </p>
-                    </div>
-
-                    <div
-                        style="display: flex; justify-content: space-around; padding: 15px 20px; border-bottom: 1px solid #f1f5f9;">
-                        <div style="text-align: center;">
-                            <div style="color: #10b981; font-size: 18px; margin-bottom: 4px;"><i
-                                    class="fa-solid fa-calendar-check"></i></div>
-                            <div id="profAttendanceVal"
-                                style="font-size: 18px; font-weight: 800; color: #0f172a; line-height: 1;">--</div>
-                            <div style="font-size: 10px; color: #94a3b8; font-weight: bold; margin-top: 4px;"
-                                data-i18n="stat_attendance">Attendance</div>
-                        </div>
-                        <div style="width: 1px; background: #e2e8f0;"></div>
-                        <div style="text-align: center;">
-                            <div style="color: #ef4444; font-size: 18px; margin-bottom: 4px;"><i
-                                    class="fa-solid fa-calendar-xmark"></i></div>
-                            <div id="profAbsenceVal"
-                                style="font-size: 18px; font-weight: 800; color: #0f172a; line-height: 1;">--</div>
-                            <div style="font-size: 10px; color: #94a3b8; font-weight: bold; margin-top: 4px;"
-                                data-i18n="stat_absence">Absence</div>
-                        </div>
-                        <div style="width: 1px; background: #e2e8f0;"></div>
-                        <div style="text-align: center;">
-                            <div style="color: #3b82f6; font-size: 18px; margin-bottom: 4px;"><i
-                                    class="fa-solid fa-scale-balanced"></i></div>
-                            <div id="profDisciplineVal"
-                                style="font-size: 14px; font-weight: 800; color: #0f172a; line-height: 1.3;">--</div>
-                            <div style="font-size: 10px; color: #94a3b8; font-weight: bold; margin-top: 4px;"
-                                data-i18n="stat_discipline">Discipline</div>
-                        </div>
-                    </div>
-
-                    <div style="padding: 10px 20px 0 20px;">
-                        <button onclick="openAcademicRecord()"
-                            style="width: 100%; padding: 12px; background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s;">
-                            <i class="fa-solid fa-graduation-cap"></i>
-                            <span data-i18n="academic_record_title">Academic Record</span>
-                        </button>
-                    </div>
-
-                    <div style="padding: 20px;">
-
-                        <div style="display: flex; gap: 15px; margin-bottom: 15px;">
-                            <div
-                                style="flex: 1; background: #f8fafc; padding: 10px; border-radius: 12px; display: flex; align-items: center; gap: 10px;">
-                                <div
-                                    style="width: 35px; height: 35px; background: #e0f2fe; color: #0284c7; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px;">
-                                    <i class="fa-solid fa-layer-group"></i>
-                                </div>
-                                <div>
-                                    <div style="font-size: 9px; color: #64748b;" data-i18n="academic_level_label">Level
-                                    </div>
-                                    <div id="profLevel" style="font-size: 12px; font-weight: 700; color: #1e293b;">--
-                                    </div>
-                                </div>
-                            </div>
-                            <div
-                                style="flex: 1; background: #f8fafc; padding: 10px; border-radius: 12px; display: flex; align-items: center; gap: 10px;">
-                                <div
-                                    style="width: 35px; height: 35px; background: #f3e8ff; color: #7c3aed; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px;">
-                                    <i class="fa-solid fa-venus-mars"></i>
-                                </div>
-                                <div>
-                                    <div style="font-size: 9px; color: #64748b;" data-i18n="gender_label">Gender</div>
-                                    <div id="profGender" style="font-size: 12px; font-weight: 700; color: #1e293b;">--
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div style="display: flex; flex-direction: column; gap: 10px;">
-                            <div
-                                style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px dashed #e2e8f0;">
-                                <span style="font-size: 12px; color: #64748b;">
-                                    <i class="fa-solid fa-id-card" style="margin-right:5px;"></i> <span
-                                        data-i18n="university_id_label">University ID</span>
-                                </span>
-                                <span id="profStudentID" class="en-font"
-                                    style="font-size: 14px; font-weight: 700; color: #0f172a; letter-spacing: 1px;">--</span>
-                            </div>
-
-                            <div
-                                style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px dashed #e2e8f0;">
-                                <span style="font-size: 12px; color: #64748b;">
-                                    <i class="fa-solid fa-envelope" style="margin-right:5px;"></i> <span
-                                        data-i18n="official_email_label">Official Email</span>
-                                </span>
-                                <span id="profEmail" class="en-font"
-                                    style="font-size: 11px; font-weight: 600; color: #334155; max-width: 180px; overflow: hidden; text-overflow: ellipsis;">--</span>
-                            </div>
-                        </div>
-
-                        <div
-                            style="margin-top: 15px; padding: 10px; background: #fef2f2; border-radius: 12px; border: 1px dashed #fca5a5; text-align: center;">
-
-                            <div
-                                style="display: flex; align-items: center; justify-content: center; gap: 6px; color: #b91c1c; font-size: 11px; font-weight: 700; margin-bottom: 5px;">
-                                <i class="fa-solid fa-triangle-exclamation"></i>
-                                <span data-i18n="device_warning_msg">Warning: This account is permanently linked to your
-                                    device.</span>
-                            </div>
-
-                        </div>
-
-                        <button
-                            onclick="document.getElementById('infoBtn').style.display='flex'; document.getElementById('studentProfileModal').classList.remove('active'); setTimeout(()=>document.getElementById('studentProfileModal').style.display='none', 300);"
-                            style="margin-top: 20px; width: 100%; padding: 12px; background: #f1f5f9; color: #64748b; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                            <i class="fa-solid fa-xmark"></i>
-                            <span>Close</span>
-                        </button>
-
-                    </div>
-                </div>
-            </div>
-            <div id="avatarSelectorModal" class="profile-overlay" style="z-index: 2147483647;">
-                <div class="pro-card" style="max-width: 340px; padding-top: 20px;">
-
-                    <h3 class="pro-name" style="font-size: 18px; margin-bottom: 5px;" data-i18n="choose_avatar_title">
-                        اختر صورتك الرمزية</h3>
-                    <p class="pro-role" style="margin-bottom: 20px;" data-i18n="choose_avatar_sub">اختر أيقونة تمثلك
-                        في
-                        النظام</p>
-
-                    <div id="avatarsGrid" class="avatars-grid-modern"></div>
-
-                    <button onclick="document.getElementById('avatarSelectorModal').style.display='none'"
-                        class="btn-logout-pro" style="background: #f1f5f9; color: #64748b; margin-top: 20px;"
-                        data-i18n="cancel_btn">
-                        إلغاء
-                    </button>
-                </div>
-            </div>
-            <div id="unifiedProfileBtn" class="modern-profile-trigger" onclick="handleProfileIconClick()">
-                <div class="profile-glow-ring"></div>
-                <div class="profile-inner-container" id="profileIconWrapper">
-                    <i class="fa-solid fa-user-astronaut" id="profileIconImg"></i>
-                    <div class="status-indicator" id="userStatusDot"></div>
-                </div>
-            </div>
-            <style>
-                #facultyProfileBtn {
-                    background: none !important;
-                    border: none !important;
-                    box-shadow: none !important;
-                    padding: 0 !important;
-                    width: 80px !important;
-                    height: 80px !important;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    z-index: 9999;
-                }
-
-                #facultyProfileBtn .trigger-avatar-wrapper {
-                    width: 65px !important;
-                    height: 65px !important;
-                    background: linear-gradient(135deg, #0ea5e9, #0284c7);
-                    border-radius: 50%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    border: 3px solid #fff;
-                    box-shadow: 0 6px 20px rgba(14, 165, 233, 0.4);
-                    position: relative;
-                    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-                }
-
-                #facultyProfileBtn .trigger-avatar-wrapper i {
-                    color: white !important;
-                    font-size: 30px !important;
-                }
-
-                #facultyProfileBtn::after {
-                    display: none !important;
-                    content: none !important;
-                }
-
-                #facultyProfileBtn:active .trigger-avatar-wrapper {
-                    transform: scale(0.9);
-                }
-            </style>
-
-            <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-
-</body>
-
-</html>
-<style>
-    .faculty-modal.modal-overlay {
-        background: rgba(15, 23, 42, 0.5);
-        backdrop-filter: blur(15px);
-        -webkit-backdrop-filter: blur(15px);
-        display: none;
-        align-items: center;
-        justify-content: center;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        z-index: 999999;
+            } catch { }
+        }
+        return { valid: false };
     }
 
-    .faculty-modal .modal-box {
-        background: rgba(255, 255, 255, 0.15);
-        backdrop-filter: blur(30px);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        box-shadow: 0 40px 80px rgba(0, 0, 0, 0.4);
-        border-radius: 25px;
-        width: 95%;
-        max-width: 450px;
-        color: #fff;
+    return { lockScreen, unlock, onAuthReady, markResolved, quickCheck };
+})();
+
+SessionGuard.lockScreen();
+
+
+const Utils = (() => {
+
+    async function hashString(str) {
+        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+        return Array.from(new Uint8Array(buf))
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('')
+            .slice(0, 32);
     }
 
-    .input-group {
-        position: relative;
-        margin-bottom: 22px;
-        width: 100%;
+    function debounce(fn, ms = 300) {
+        let timer;
+        return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
     }
 
-    .modern-input {
-        width: 100% !important;
-        background: transparent !important;
-        border: 1.5px solid rgba(255, 255, 255, 0.3) !important;
-        padding: 15px 18px;
-        border-radius: 12px;
-        color: #fff !important;
-        outline: none;
-        box-sizing: border-box;
-        font-size: 14px;
-        transition: all 0.3s ease;
+    function haversineKm(lat1, lon1, lat2, lon2) {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) ** 2
+            + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180)
+            * Math.sin(dLon / 2) ** 2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
-    .modern-input-pass {
-        padding-right: 55px !important;
+    function smartNormalize(text = '') {
+        return text.toString().toLowerCase()
+            .replace(/\b(dr|prof|eng|mr|mrs|ms|د|دكتور|مهندس)\b\.?/g, ' ')
+            .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, ' ')
+            .replace(/\s+/g, ' ').trim();
     }
 
-    .input-group label {
-        position: absolute;
-        top: 50%;
-        left: 15px;
-        transform: translateY(-50%);
-        font-size: 14px;
-        color: rgba(255, 255, 255, 0.6);
-        pointer-events: none;
-        transition: all 0.2s ease;
-        padding: 0 8px;
-        background: transparent;
+    function safeJsonParse(str, fallback = null) {
+        try { return JSON.parse(str); } catch { return fallback; }
     }
 
-    .modern-input:focus~label,
-    .modern-input:not(:placeholder-shown)~label,
-    .input-group.has-value label {
-        top: 0;
-        font-size: 12px;
-        color: #fff;
-        font-weight: 600;
-        background: #2e384d;
-        border-radius: 4px;
+    const $ = id => document.getElementById(id);
+
+    const _t = (key, def) => (typeof t === 'function' ? t(key, def) : def);
+
+    const lang = () => localStorage.getItem('sys_lang') || 'ar';
+
+    return { hashString, debounce, haversineKm, smartNormalize, safeJsonParse, $, _t, lang };
+})();
+
+
+const UI = (() => {
+
+    function showToast(message, duration = 3000, bgColor = '#334155') {
+        const toast = Utils.$('toastNotification');
+        if (!toast) return;
+        toast.style.backgroundColor = bgColor;
+        toast.innerText = message;
+        toast.style.display = 'block';
+        clearTimeout(toast._timer);
+        toast._timer = setTimeout(() => { toast.style.display = 'none'; }, duration);
     }
 
-    .modern-input:focus {
-        border-color: #fff !important;
-        box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.05);
+    function switchScreen(screenId) {
+        const current = document.querySelector('.section.active');
+        if (current?.id === screenId) return;
+        window.scrollTo({ top: 0, behavior: 'auto' });
+        document.querySelectorAll('.section').forEach(sec => {
+            sec.style.cssText = '';
+            sec.style.setProperty('display', 'none', 'important');
+            sec.classList.remove('active');
+        });
+        const target = Utils.$(screenId);
+        if (!target) return;
+        target.style.cssText = '';
+        target.style.setProperty('display', 'flex', 'important');
+        target.style.flexDirection = 'column';
+        setTimeout(() => target.classList.add('active'), 10);
+
+        const infoBtn = Utils.$('infoBtn');
+        if (infoBtn) infoBtn.style.display = screenId === 'screenWelcome' ? 'flex' : 'none';
     }
 
-    select.modern-input option {
-        background: #1e293b;
-        color: #fff;
+    function updateHeaderState(screenId) {
+        const wrapper = Utils.$('heroIconWrapper');
+        const icon = Utils.$('statusIcon');
+        if (!wrapper || !icon) return;
+        wrapper.classList.remove('show-icon');
+        if (screenId === 'screenWelcome') return;
+        wrapper.classList.add('show-icon');
+        const states = {
+            screenLoading: ['fa-solid fa-satellite-dish hero-icon fa-spin', 'var(--primary)'],
+            screenDataEntry: ['fa-solid fa-user-pen hero-icon', 'var(--primary)'],
+            screenSuccess: ['fa-solid fa-check hero-icon', '#10b981'],
+            screenError: ['fa-solid fa-triangle-exclamation hero-icon', '#ef4444'],
+        };
+        const [cls, color] = states[screenId] || ['', ''];
+        if (cls) { icon.className = cls; icon.style.color = color; icon.style.animation = screenId === 'screenLoading' ? '' : 'none'; }
     }
 
-    .password-wrapper {
-        position: relative;
-        width: 100%;
+    function openAuthDrawer() {
+        if (window._authStateLoading) return;
+        const drawer = Utils.$('studentAuthDrawer');
+        if (!drawer) return;
+        drawer.style.display = 'flex';
+        requestAnimationFrame(() => {
+            drawer.classList.add('active');
+            const content = drawer.querySelector('.auth-drawer-content');
+            if (content) { content.style.transform = 'translateY(0)'; content.style.opacity = '1'; }
+        });
     }
 
-    .toggle-eye {
-        position: absolute;
-        right: 18px;
-        top: 50%;
-        transform: translateY(-50%);
-        cursor: pointer;
-        color: rgba(255, 255, 255, 0.5);
-        z-index: 20;
-        font-size: 18px;
-        display: flex;
-        align-items: center;
-        height: 100%;
+    function closeAuthDrawer() {
+        const drawer = Utils.$('studentAuthDrawer');
+        if (!drawer) return;
+        drawer.classList.remove('active');
+        setTimeout(() => { drawer.style.display = 'none'; document.body.style.overflow = 'auto'; }, 200);
     }
 
-    #facMasterKey {
-        text-align: center;
-        letter-spacing: 2px;
-        font-weight: 800;
-        background: rgba(255, 255, 255, 0.1) !important;
-        border: 1.5px dashed rgba(255, 255, 255, 0.4) !important;
-        color: #fff !important;
-        text-transform: uppercase;
-    }
-
-    .glass-btn-submit {
-        width: 100%;
-        height: 55px;
-        background: #fff;
-        color: #0f172a;
-        border: none;
-        border-radius: 15px;
-        font-weight: 800;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 12px;
-        transition: 0.3s;
-    }
-
-    .signup-scroll-area {
-        max-height: 480px;
-        overflow-y: auto;
-        padding: 10px 5px;
-    }
-</style>
-
-<div id="facultyGateModal" class="modal-overlay faculty-modal">
-    <div class="modal-box">
-
-        <div style="display: flex; border-bottom: 1px solid rgba(255,255,255,0.1);">
-            <button id="tabLogin" onclick="switchFacultyTab('login')" class="faculty-tab active"
-                style="flex:1; border:none; padding:20px; background:transparent; color:#fff; font-weight:bold; cursor:pointer;">LOGIN</button>
-            <button id="tabSignup" onclick="switchFacultyTab('signup')" class="faculty-tab"
-                style="flex:1; border:none; padding:20px; background:transparent; color:rgba(255,255,255,0.5); cursor:pointer;">REGISTER</button>
-        </div>
-
-        <div style="padding: 30px;">
-            <div id="facultySignupSection" style="display: none;">
-                <div class="signup-scroll-area">
-                    <div class="input-group">
-                        <input type="text" id="facName" class="modern-input" placeholder=" ">
-                        <label>Full Name (Triple)</label>
-                    </div>
-
-                    <div class="input-group has-value">
-                        <select id="facRole" class="modern-input">
-                            <option value="doctor">Faculty Member / Doctor</option>
-                            <option value="dean">Vice Dean / Dean</option>
-                        </select>
-                        <label>Position / Role</label>
-                    </div>
-
-                    <div class="input-group has-value">
-                        <select id="facGender" class="modern-input">
-                            <option value="" disabled selected>Select Gender</option>
-                            <option value="Male">Male</option>
-                            <option value="Female">Female</option>
-                        </select>
-                        <label>Gender</label>
-                    </div>
-
-                    <div class="input-group">
-                        <input type="text" id="facJobTitle" class="modern-input" placeholder=" ">
-                        <label>Job Title</label>
-                    </div>
-
-                    <div class="input-group">
-                        <input type="email" id="facEmail" class="modern-input" placeholder=" ">
-                        <label>Email Address</label>
-                    </div>
-
-                    <div class="input-group">
-                        <input type="email" id="facEmailConfirm" class="modern-input" placeholder=" ">
-                        <label>Confirm Email</label>
-                    </div>
-
-                    <div class="input-group password-wrapper">
-                        <input type="password" id="facPass" class="modern-input modern-input-pass" placeholder=" ">
-                        <label>Password</label>
-                        <i class="fa-solid fa-eye toggle-eye" onclick="togglePasswordVisibility('facPass', this)"></i>
-                    </div>
-
-                    <div class="input-group password-wrapper">
-                        <input type="password" id="facPassConfirm" class="modern-input modern-input-pass"
-                            placeholder=" ">
-                        <label>Confirm Password</label>
-                        <i class="fa-solid fa-eye toggle-eye"
-                            onclick="togglePasswordVisibility('facPassConfirm', this)"></i>
-                    </div>
-
-                    <div
-                        style="background: rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 20px; border: 1.5px dashed rgba(255,255,255,0.2);">
-                        <div class="input-group" style="margin-bottom: 0;">
-                            <input type="text" id="facMasterKey" class="modern-input" placeholder=" "
-                                autocomplete="off">
-                            <label
-                                style="left: 50%; transform: translate(-50%, -50%); width: 100%; text-align: center;">Master
-                                Key (Authorization Code)</label>
-                        </div>
-                    </div>
-                </div>
-
-                <button onclick="performFacultySignup()" class="glass-btn-submit" style="margin-top: 25px;">
-                    <i class="fa-solid fa-user-plus"></i> CREATE ACCOUNT
-                </button>
-            </div>
-
-            <div id="facultyLoginSection">
-                <div class="input-group">
-                    <input type="email" id="facLoginEmail" class="modern-input" placeholder=" ">
-                    <label>Email Address</label>
-                </div>
-                <div class="input-group password-wrapper">
-                    <input type="password" id="facLoginPass" class="modern-input modern-input-pass" placeholder=" ">
-                    <label>Password</label>
-                    <i class="fa-solid fa-eye toggle-eye" onclick="togglePasswordVisibility('facLoginPass', this)"></i>
-                </div>
-                <button onclick="performFacultyLogin()" class="glass-btn-submit">
-                    SIGN IN <i class="fa-solid fa-lock-open"></i>
-                </button>
-            </div>
-        </div>
-
-        <button onclick="document.getElementById('facultyGateModal').style.display='none'"
-            style="width:100%; background:transparent; border:none; color:rgba(255,255,255,0.4); padding:20px; cursor:pointer; font-size:12px;">DISMISS</button>
-    </div>
-</div>
-
-<style>
-    .fac-tab {
-        flex: 1;
-        padding: 15px;
-        border: none;
-        background: none;
-        font-weight: 800;
-        color: #94a3b8;
-        cursor: pointer;
-        transition: 0.3s;
-        font-family: 'Cairo', sans-serif;
-    }
-
-    .fac-tab.active {
-        color: #0f172a;
-        border-bottom: 3px solid #0f172a;
-        background: white;
-    }
-
-    .modern-input:focus {
-        border-color: #0f172a;
-        box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.1);
-    }
-
-    #customTimeModal .modern-input {
-        background-color: #ffffff !important;
-        color: #1e293b !important;
-        border: 1.5px solid #cbd5e1 !important;
-        padding: 12px !important;
-    }
-
-    #modalSubjectSelect,
-    #modalHallSelect {
-        color: #1e293b !important;
-        font-weight: 700 !important;
-    }
-
-    #modalSessionPassInput,
-    #modalMaxStudents {
-        color: #0f172a !important;
-        background: #f8fafc !important;
-    }
-
-    #customTimeModal select option {
-        color: #1e293b !important;
-        background-color: #fff !important;
-        padding: 10px;
-    }
-
-    #customTimeModal .modern-input::placeholder {
-        color: #94a3b8 !important;
-        opacity: 1;
-    }
-</style>
-<div id="facultyProfileModal" class="modal-overlay faculty-modal" style="z-index: 2147483646;">
-    <div class="modal-box" style="max-width: 400px; text-align: center; padding-bottom: 20px;">
-
-        <div
-            style="padding: 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1);">
-            <h3 style="margin: 0; font-size: 18px; letter-spacing: 1px; color: white;">Admin Profile</h3>
-            <button onclick="document.getElementById('facultyProfileModal').style.display='none'"
-                style="background: none; border: none; color: #fff; cursor: pointer; font-size: 20px;">&times;</button>
-        </div>
-
-        <div style="padding: 30px 20px;">
-            <div style="position: relative; display: inline-block; margin-bottom: 20px;">
-                <div id="facCurrentAvatar" class="profile-avatar-circle"
-                    style="width: 100px; height: 100px; font-size: 45px; border: 3px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff;">
-                    <i class="fa-solid fa-user-doctor"></i>
-                </div>
-                <button onclick="openAvatarSelector('faculty')"
-                    style="position: absolute; bottom: 0; right: 0; width: 32px; height: 32px; border-radius: 50%; background: #0ea5e9; border: 2px solid #fff; color: #fff; cursor: pointer; font-size: 14px;">
-                    <i class="fa-solid fa-camera"></i>
-                </button>
-            </div>
-
-            <h2 id="profFacName" style="margin: 0; font-size: 22px; font-weight: 800; color: white;">Loading...</h2>
-            <p id="profFacRole"
-                style="margin: 5px 0 20px 0; color: rgba(255,255,255,0.6); font-size: 14px; text-transform: uppercase; letter-spacing: 2px;">
-                Faculty Member</p>
-
-            <div
-                style="text-align: left; background: rgba(0,0,0,0.2); border-radius: 20px; padding: 15px; border: 1px solid rgba(255,255,255,0.05);">
-                <div style="margin-bottom: 15px;">
-                    <label
-                        style="display: block; font-size: 10px; color: #0ea5e9; font-weight: 800; margin-bottom: 3px; text-transform: uppercase;">
-                        Job Title
-                    </label>
-                    <span id="profFacSubject" style="font-size: 15px; font-weight: 600; color: white;">--</span>
-                </div>
-                <div style="margin-bottom: 15px;">
-                    <label
-                        style="display: block; font-size: 10px; color: #0ea5e9; font-weight: 800; margin-bottom: 3px; text-transform: uppercase;">
-                        Email Address
-                    </label>
-                    <span id="profFacEmail"
-                        style="font-size: 13px; font-family: 'Courier New', Courier, monospace; color: white;">--</span>
-                </div>
-                <div>
-                    <label
-                        style="display: block; font-size: 10px; color: #0ea5e9; font-weight: 800; margin-bottom: 3px; text-transform: uppercase;">
-                        System ID
-                    </label>
-                    <span id="profFacUID" style="font-size: 11px; opacity: 0.5; color: white;">--</span>
-                </div>
-            </div>
-        </div>
-
-        <button onclick="performLogout()"
-            style="width: 80%; background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid #ef4444; padding: 12px; border-radius: 12px; font-weight: 700; cursor: pointer; transition: 0.3s;">
-            <i class="fa-solid fa-right-from-bracket"></i> SIGN OUT
-        </button>
-    </div>
-</div>
-<style>
-    #screenLiveSession {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: #f8fafc;
-        z-index: 2147483647;
-        display: none;
-        flex-direction: column;
-        align-items: center;
-        justify-content: flex-start !important;
-        padding: 10px 10px 0 10px;
-        overflow-y: auto;
-        pointer-events: auto !important;
-        touch-action: auto !important;
-    }
-
-    .live-top-bar {
-        width: 100%;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 5px 15px;
-        background: transparent;
-        position: relative;
-        z-index: 10;
-        margin-bottom: 5px;
-    }
-
-    .home-floating-btn {
-        position: static !important;
-        transform: none !important;
-        margin: 0 !important;
-        width: 45px;
-        height: 45px;
-        background: #ffffff;
-        border-radius: 14px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-        border: 1px solid #e2e8f0;
-        color: #334155;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .home-floating-btn:active {
-        transform: scale(0.9);
-    }
-
-    .live-pill {
-        background: #fee2e2;
-        color: #ef4444;
-        padding: 8px 18px;
-        border-radius: 30px;
-        font-size: 11px;
-        font-weight: 800;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        border: 1px solid #fecaca;
-        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.1);
-        font-family: 'Outfit', sans-serif;
-        letter-spacing: 0.5px;
-    }
-
-    .pulse {
-        width: 8px;
-        height: 8px;
-        background: #ef4444;
-        border-radius: 50%;
-        animation: blink 1s infinite;
-    }
-
-    @keyframes blink {
-        50% {
-            opacity: 0.4;
+    function toggleAuthMode(mode) {
+        const loginSec = Utils.$('loginSection');
+        const signupSec = Utils.$('signupSection');
+        const title = Utils.$('authTitle');
+        const subtitle = Utils.$('authSubtitle');
+        if (mode === 'signup') {
+            loginSec?.classList.remove('active');
+            signupSec?.classList.add('active');
+            if (title) title.innerText = 'Create Account';
+            if (subtitle) subtitle.innerText = 'Join our nursing community below';
+        } else {
+            signupSec?.classList.remove('active');
+            loginSec?.classList.add('active');
+            if (title) title.innerText = 'Welcome Back';
+            if (subtitle) subtitle.innerText = 'Please enter your details to continue';
         }
     }
 
-    .royal-card {
-        background: #ffffff;
-        width: 98%;
-        border-radius: 24px;
-        box-shadow: 0 20px 60px -10px rgba(14, 165, 233, 0.15);
-        border: 1px solid rgba(255, 255, 255, 0.8);
-        position: relative;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-        margin-top: 0 !important;
+    function togglePass(inputId, icon) {
+        const input = Utils.$(inputId);
+        if (!input) return;
+        const showing = input.type !== 'password';
+        input.type = showing ? 'password' : 'text';
+        if (icon) {
+            icon.classList.replace(showing ? 'fa-eye-slash' : 'fa-eye', showing ? 'fa-eye' : 'fa-eye-slash');
+            icon.style.color = showing ? '#94a3b8' : '#0ea5e9';
+            icon.style.filter = showing ? 'none' : 'drop-shadow(0 0 5px rgba(14,165,233,0.5))';
+        }
+        navigator.vibrate?.(10);
     }
 
-    .royal-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 6px;
-        height: 100%;
-        background: linear-gradient(to bottom, #0ea5e9, #3b82f6);
+    function applyLanguage(lang) {
+        const dict = i18n[lang];
+        if (!dict) return;
+        document.documentElement.dir = dict.dir || 'rtl';
+        document.documentElement.lang = lang;
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+            const text = dict[key];
+            if (!text) return;
+            const icon = el.querySelector('i');
+            el.innerHTML = icon
+                ? `${icon.outerHTML} <span class="btn-text-content">${text}</span>`
+                : text;
+        });
+        document.querySelectorAll('[data-i18n-placeholder]').forEach(input => {
+            const key = input.getAttribute('data-i18n-placeholder');
+            if (dict[key]) input.placeholder = dict[key];
+        });
+        localStorage.setItem('sys_lang', lang);
     }
 
-    .royal-header {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        padding: 20px;
-        gap: 15px;
-        direction: ltr;
+    function setMainButton(mode) {
+        const btn = Utils.$('mainActionBtn');
+        if (!btn) return;
+        const isAr = Utils.lang() === 'ar';
+        const dict = typeof i18n !== 'undefined' ? i18n[Utils.lang()] : null;
+
+        btn.style.pointerEvents = 'auto';
+        btn.style.opacity = '1';
+        btn.disabled = false;
+        btn.classList.remove('locked');
+
+        if (mode === 'enter') {
+            btn.innerHTML = `${isAr ? 'دخول المحاضرة' : 'Enter Lecture'} <i class="fa-solid fa-door-open fa-beat-fade"></i>`;
+            btn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+            btn.style.boxShadow = '0 8px 25px -5px rgba(16, 185, 129, 0.5)';
+            btn.style.border = '1px solid #10b981';
+            btn.onclick = () => {
+                window.playClick?.();
+                switchScreen('screenLiveSession');
+                window.startLiveSnapshotListener?.();
+            };
+        } else {
+            const regText = dict?.main_reg_btn || (isAr ? 'تسجيل الحضور' : 'Register Attendance');
+            btn.innerHTML = `${regText} <i class="fa-solid fa-fingerprint"></i>`;
+            btn.style.background = '';
+            btn.style.boxShadow = '';
+            btn.style.border = '';
+            btn.onclick = () => window.forceOpenPinScreen?.() ?? window.startProcess?.(false);
+        }
     }
 
-    .royal-avatar-box {
-        width: 70px;
-        height: 70px;
-        background: #f0f9ff;
-        border-radius: 20px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 35px;
-        color: #0284c7;
-        border: 2px solid #bae6fd;
-        box-shadow: 0 5px 15px rgba(14, 165, 233, 0.15);
-        flex-shrink: 0;
-    }
+    function openModal(id) { const m = Utils.$(id); if (m) m.style.display = 'flex'; }
+    function closeModal(id) { const m = Utils.$(id); if (m) m.style.display = 'none'; }
 
-    .royal-text {
-        text-align: left;
-        flex: 1;
-    }
+    function renderHallOptions(filter = '') {
+        const container = Utils.$('hallOptionsContainer');
+        const select = Utils.$('hallSelect');
+        if (!select || !container) return;
 
-    .r-name {
-        font-size: 20px;
-        font-weight: 900;
-        color: #0f172a;
-        margin-bottom: 5px;
-        display: block;
-        font-family: 'Outfit', sans-serif;
-    }
+        select.innerHTML = '<option value="" disabled selected>-- اختر المدرج --</option>';
+        container.innerHTML = '';
 
-    .r-sub {
-        font-size: 13px;
-        color: #0ea5e9;
-        font-weight: 700;
-        background: #f0f9ff;
-        padding: 5px 15px;
-        border-radius: 8px;
-        display: inline-block;
-        font-family: 'Outfit', sans-serif;
-    }
+        const filtered = MASTER_HALLS.filter(h => h.includes(filter));
 
-    .royal-stats {
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
-        padding: 15px 0;
-        background: #fafafa;
-        border-top: 1px solid #f1f5f9;
-        direction: ltr;
-    }
-
-    .r-stat {
-        text-align: center;
-        border-right: 1px solid #e2e8f0;
-    }
-
-    .r-stat:last-child {
-        border-right: none;
-    }
-
-    .rs-label {
-        display: block;
-        font-size: 10px;
-        color: #94a3b8;
-        font-weight: 800;
-        margin-bottom: 4px;
-        text-transform: uppercase;
-    }
-
-    .rs-val {
-        font-size: 18px;
-        font-weight: 900;
-        color: #334155;
-        font-family: 'Outfit', sans-serif;
-    }
-
-    .rs-val.green {
-        color: #10b981;
-    }
-
-    .rs-val.blue {
-        color: #0ea5e9;
-    }
-
-    .bottom-action-area {
-        width: 100%;
-        background: #ffffff;
-        padding: 15px 15px 25px 15px;
-        border-top: 1px solid #e2e8f0;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        justify-content: center;
-        box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.03);
-        margin-top: auto;
-    }
-
-    .btn-end-session-eng {
-        background: linear-gradient(135deg, #ef4444, #b91c1c);
-        color: white;
-        border: none;
-        width: 100%;
-        padding: 15px;
-        border-radius: 18px;
-        font-weight: 800;
-        font-size: 15px;
-        box-shadow: 0 12px 25px rgba(239, 68, 68, 0.3);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 12px;
-        transition: transform 0.2s;
-        font-family: 'Outfit', sans-serif;
-        text-transform: uppercase;
-    }
-
-    .btn-end-session-eng:active {
-        transform: scale(0.96);
-    }
-
-    .live-students-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
-        gap: 15px;
-        width: 100%;
-        padding: 15px;
-        padding-bottom: 50px;
-    }
-
-    .action-buttons-row {
-        display: flex;
-        justify-content: center;
-        gap: 8px;
-        margin-top: 10px;
-        border-top: 1px solid #f1f5f9;
-        padding-top: 8px;
-        width: 100%;
-    }
-
-    .mini-action-btn {
-        width: 32px;
-        height: 32px;
-        border-radius: 8px;
-        border: none;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 14px;
-        cursor: pointer;
-        transition: all 0.2s;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-    }
-
-    .search-floating-wrapper {
-        position: relative;
-        width: 95%;
-        margin: 10px auto;
-        z-index: 5;
-    }
-
-    .modern-search-input {
-        width: 100%;
-        padding: 12px 50px 12px 20px;
-        border-radius: 16px;
-        border: 1px solid #e2e8f0;
-        background: #ffffff;
-        font-family: 'Outfit', sans-serif;
-        font-size: 14px;
-        font-weight: 600;
-        color: #1e293b;
-        outline: none;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
-    }
-
-    .modern-search-input:focus {
-        border-color: #0ea5e9;
-        box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.1);
-    }
-
-    .search-icon-box {
-        position: absolute;
-        right: 15px;
-        top: 50%;
-        transform: translateY(-50%);
-        color: #94a3b8;
-        font-size: 16px;
-        pointer-events: none;
-    }
-</style>
-
-<div id="screenLiveSession" style="display: none;">
-
-    <div class="live-top-bar">
-        <div class="live-pill" id="liveStatusPill">
-            <span class="pulse"></span>
-            <span id="liveStatusText" data-i18n="live_status_active">الجلسة نشطة حالياً</span>
-        </div>
-
-        <button class="home-floating-btn" onclick="goHome()" title="Exit">
-            <i class="fa-solid fa-house"></i>
-        </button>
-    </div>
-
-    <div
-        style="width: 100%; flex: 1; display: flex; flex-direction: column; align-items: center; overflow-y: auto; padding-bottom: 20px;">
-
-        <div class="royal-card">
-            <div class="royal-header">
-                <div class="royal-avatar-box" id="liveDocAvatar">
-                    <i class="fa-solid fa-user-doctor"></i>
-                </div>
-                <div class="royal-text">
-                    <span class="r-name" id="liveDocName" data-i18n="loading_text">جاري التحميل...</span>
-                    <div style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;">
-                        <span class="r-sub" id="liveSubjectTag" data-i18n="subject_label">اسم المادة</span>
-                        <span id="liveGroupTag" onclick="openGroupManager()"
-                            style="cursor: pointer; background: #eef2ff; color: #6366f1; padding: 2px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; border: 1px solid #c7d2fe;">
-                            المجموعة: --
-                        </span>
-                    </div>
-                    <div id="liveHallTag" style="font-size: 12px; color: #64748b; margin-top: 4px; font-weight: bold;">
-                        <i class="fa-solid fa-building-columns"></i> <span data-i18n="hall_label">القاعة</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="royal-stats"
-                style="grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 15px; background: #f8fafc;">
-
-                <div class="r-stat"
-                    style="border: none; background: white; border-radius: 15px; padding: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
-                    <span class="rs-label" data-i18n="present_count_label">الحاضرين</span>
-                    <span id="livePresentCount" class="rs-val green">0</span>
-                </div>
-
-                <div class="r-stat" id="doorControlBtn" onclick="openDoorActionModal()"
-                    style="cursor: pointer; border: 1.5px dashed #0ea5e9; border-radius: 15px; background: #f0f9ff; padding: 10px; transition: 0.3s;">
-                    <span class="rs-label" style="color: #0284c7;" data-i18n="entrance_gate_label">بوابة الدخول</span>
-                    <span id="doorStatusText" class="rs-val blue" style="font-size: 16px;"
-                        data-i18n="gate_closed_status">
-                        <i class="fa-solid fa-door-closed"></i> مغلقة
-                    </span>
-                </div>
-
-                <div class="r-stat" id="codeStatBlock"
-                    style="border: none; background: white; border-radius: 15px; padding: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
-                    <span class="rs-label" data-i18n="session_code_label">كود الجلسة</span>
-                    <span id="liveSessionCodeDisplay" class="rs-val" style="letter-spacing: 2px;">------</span>
-                </div>
-
-                <div class="r-stat" id="extraStatBlock"
-                    style="border: none; background: white; border-radius: 15px; padding: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
-                    <span class="rs-label" data-i18n="extra_count_label">إضافي</span>
-                    <span id="liveExtraCount" class="rs-val" style="color: #94a3b8;">0</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="search-floating-wrapper">
-            <input type="text" id="liveSearchInput" class="modern-search-input"
-                data-i18n-placeholder="live_search_placeholder" placeholder="بحث بالاسم أو الكود..."
-                onkeyup="filterLiveStudents()">
-            <div class="search-icon-box">
-                <i class="fa-solid fa-magnifying-glass"></i>
-            </div>
-        </div>
-
-        <div id="liveStudentsGrid" class="live-students-grid" style="width: 100%; padding: 10px;"></div>
-    </div>
-
-    <style>
-        .live-fab-container {
-            position: fixed;
-            bottom: 25px;
-            left: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            z-index: 2000;
-            pointer-events: auto;
-            align-items: center;
+        if (!filtered.length) {
+            container.innerHTML = '<div style="padding:10px;text-align:center;color:#94a3b8;font-size:12px;">لا توجد نتائج</div>';
+            return;
         }
 
-        .live-fab-btn {
-            width: 55px;
-            height: 55px;
-            border-radius: 50%;
-            border: 2px solid white;
-            color: white;
-            font-size: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
-            cursor: pointer;
-            transition: transform 0.2s;
+        filtered.forEach(val => {
+            const opt = Object.assign(document.createElement('option'), { value: val, text: val });
+            select.appendChild(opt);
+
+            const div = Object.assign(document.createElement('div'), { className: 'custom-option' });
+            div.setAttribute('data-value', val);
+            div.innerHTML = `<span>${val}</span>`;
+            div.addEventListener('click', e => {
+                e.stopPropagation();
+                container.parentElement.querySelectorAll('.custom-option').forEach(o => o.classList.remove('selected'));
+                div.classList.add('selected');
+                const trigger = document.querySelector('#hallSelectWrapper .trigger-text');
+                if (trigger) trigger.textContent = val;
+                Utils.$('hallSelectWrapper')?.classList.remove('open');
+                select.value = val;
+                window.playClick?.();
+            });
+            container.appendChild(div);
+        });
+    }
+
+    function filterModalSubjects() {
+        const input = Utils.$('subjectSearchInput');
+        const select = Utils.$('modalSubjectSelect');
+        if (!input || !select) return;
+        const q = input.value;
+        select.innerHTML = '';
+        const labelMap = {
+            first_year: 'First Year', '1': 'First Year', second_year: 'Second Year', '2': 'Second Year',
+            third_year: 'Third Year', '3': 'Third Year', fourth_year: 'Fourth Year', '4': 'Fourth Year',
+        };
+        let hasResults = false;
+        for (const [year, subjects] of Object.entries(MASTER_SUBJECTS)) {
+            const matched = subjects.filter(s => s.includes(q));
+            if (!matched.length) continue;
+            hasResults = true;
+            const group = Object.assign(document.createElement('optgroup'), { label: labelMap[year] || year });
+            matched.forEach(sub => {
+                group.appendChild(Object.assign(document.createElement('option'), { value: sub, text: sub }));
+            });
+            select.appendChild(group);
+        }
+        if (!hasResults) {
+            select.appendChild(Object.assign(document.createElement('option'), {
+                text: Utils.lang() === 'ar' ? 'لا توجد نتائج' : 'No results found',
+                disabled: true,
+            }));
+        }
+    }
+
+    function toggleDropdown(listId) {
+        const list = Utils.$(listId);
+        document.querySelectorAll('.dropdown-list').forEach(el => { if (el.id !== listId) el.classList.remove('show'); });
+        list?.classList.toggle('show');
+    }
+
+    function selectOption(type, value) {
+        const hidden = Utils.$('reg' + type);
+        if (hidden) hidden.value = value;
+        Utils.$('dropdown' + type)?.classList.add('selected-active');
+        Utils.$('list' + type)?.classList.remove('show');
+        validateSignupForm();
+    }
+
+    function validateSignupForm() {
+        const val = id => Utils.$(id)?.value?.trim() || '';
+        const setStyle = (el, valid) => {
+            if (!el) return;
+            el.style.borderColor = valid ? '#10b981' : '#ef4444';
+        };
+
+        const email = val('regEmail');
+        const emailConfirm = val('regEmailConfirm');
+        const pass = val('regPass');
+        const passConfirm = val('regPassConfirm');
+        const level = val('regLevel');
+        const gender = val('regGender');
+        const name = val('regFullName');
+        const groupRaw = val('regGroup').toUpperCase();
+
+        const emailRx = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        const isEmailValid = emailRx.test(email);
+        const isEmailMatch = isEmailValid && email === emailConfirm;
+
+        if (emailConfirm) {
+            setStyle(Utils.$('regEmailConfirm'), isEmailMatch);
+            const err = Utils.$('emailError');
+            if (err) err.style.display = isEmailMatch ? 'none' : 'block';
         }
 
-        .fab-add {
-            background: linear-gradient(135deg, #10b981, #059669);
+        const isPassLen = pass.length >= 6;
+        const isPassMatch = isPassLen && pass === passConfirm;
+        if (passConfirm) {
+            setStyle(Utils.$('regPassConfirm'), isPassMatch);
+            const err = Utils.$('passError');
+            if (err) err.style.display = isPassMatch ? 'none' : 'block';
         }
 
-        .fab-end {
-            background: linear-gradient(135deg, #ef4444, #b91c1c);
+        const groupRx = /^[1-4][GPNCDTBH]\d{1,2}$/;
+        const isGroupFmt = groupRx.test(groupRaw);
+        const isGroupLevel = !level || !isGroupFmt || groupRaw.startsWith(level);
+        const isGroupOk = isGroupFmt && isGroupLevel;
+        const groupEl = Utils.$('regGroup');
+        if (groupEl && groupRaw.length > 0) {
+            groupEl.style.borderColor = isGroupOk ? '#10b981' : '#ef4444';
+            groupEl.style.backgroundColor = isGroupOk ? '#f0fdf4' : '#fef2f2';
+            if (groupEl.value !== groupRaw) groupEl.value = groupRaw;
+        } else if (groupEl) {
+            groupEl.style.borderColor = groupEl.style.backgroundColor = '';
         }
-    </style>
 
-    <div class="live-fab-container" id="adminFabControls" style="display: flex;">
-        <button onclick="triggerSessionEndOptions()" class="live-fab-btn fab-end" title="إنهاء الجلسة">
-            <i class="fa-solid fa-power-off"></i>
-        </button>
+        const isNameOk = name && !name.includes('⚠️') && !name.includes('❌') && !name.toLowerCase().includes('not registered');
+        const allValid = isEmailValid && isEmailMatch && isPassLen && isPassMatch
+            && level && gender && isNameOk && isGroupOk;
 
-        <button onclick="document.getElementById('manualAddModal').style.display='flex'" class="live-fab-btn fab-add"
-            title="إضافة طالب">
-            <i class="fa-solid fa-user-plus"></i>
-        </button>
-    </div>
-</div>
-<div id="manualAddModal" class="modal-overlay" style="z-index: 2147483647;">
-    <div class="modal-box" style="text-align: center; max-width: 320px; padding: 25px;">
+        const btn = Utils.$('btnDoSignup');
+        if (btn) {
+            btn.disabled = !allValid;
+            btn.style.opacity = allValid ? '1' : '0.5';
+            btn.style.filter = allValid ? 'grayscale(0%)' : 'grayscale(100%)';
+            btn.style.cursor = allValid ? 'pointer' : 'not-allowed';
+            btn.style.boxShadow = allValid ? '0 4px 12px rgba(16,185,129,0.2)' : 'none';
+        }
+    }
 
-        <div
-            style="background: #f0fdf4; width: 70px; height: 70px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px auto; border: 1px solid #dcfce7;">
-            <i class="fa-solid fa-user-plus" style="font-size: 30px; color: #16a34a;"></i>
-        </div>
-        <h3 style="color: #1e293b; margin-bottom: 5px; font-weight: 900;" data-i18n="manual_add_title">إضافة طالب يدوياً
-        </h3>
+    return {
+        showToast, switchScreen, updateHeaderState,
+        openAuthDrawer, closeAuthDrawer, toggleAuthMode, togglePass,
+        applyLanguage, setMainButton, openModal, closeModal,
+        renderHallOptions, filterModalSubjects, toggleDropdown,
+        selectOption, validateSignupForm,
+    };
+})();
 
-        <div id="manualInputStep">
-            <p style="color: #64748b; font-size: 13px; margin-bottom: 20px;" data-i18n="manual_search_hint">أدخل كود
-                الطالب للبحث عنه في قاعدة البيانات.</p>
 
-            <div class="input-group" style="margin-bottom: 15px;">
-                <input type="number" id="manualStudentCodeInput" class="modern-input" placeholder=" "
-                    style="text-align: center; color: #0f172a !important; border-color: #cbd5e1 !important; font-weight: bold; font-family: 'Outfit', sans-serif;">
-                <label style="color: #64748b; left: 50%; transform: translate(-50%, -50%);"
-                    data-i18n="student_id_label">كود الطالب (ID)</label>
+const DeviceManager = (() => {
+    let _cachedId = null;
+
+    async function getUniqueDeviceId() {
+        if (_cachedId) return _cachedId;
+
+        const storedIDB = await PersistentStore.get(CFG.device.cacheKey);
+        if (storedIDB) { _cachedId = storedIDB; return storedIDB; }
+
+        const stored = localStorage.getItem(CFG.device.cacheKey);
+        if (stored) {
+            _cachedId = stored;
+            await PersistentStore.set(CFG.device.cacheKey, stored);
+            return stored;
+        }
+
+        const extras = [
+            navigator.hardwareConcurrency || 0,
+            navigator.deviceMemory || 0,
+            screen.colorDepth,
+            `${screen.width}x${screen.height}`,
+            screen.pixelDepth || 0,
+            navigator.platform || '',
+            navigator.maxTouchPoints || 0,
+            Intl.DateTimeFormat().resolvedOptions().timeZone,
+            (navigator.languages || []).join(','),
+        ].join('||');
+
+        let fpId = `FALLBACK_${Date.now().toString(36)}`;
+        try {
+            if (window.FingerprintJS) {
+                const fp = await FingerprintJS.load();
+                const res = await fp.get();
+                fpId = res.visitorId;
+            }
+        } catch (e) {
+            console.warn('FingerprintJS failed:', e);
+        }
+
+        const finalId = await Utils.hashString(`${fpId}|${extras}`);
+        _cachedId = finalId;
+        localStorage.setItem(CFG.device.cacheKey, finalId);
+        await PersistentStore.set(CFG.device.cacheKey, finalId);
+        return finalId;
+    }
+
+    function saveVerifiedCache(uid) {
+        const data = JSON.stringify({ uid, ts: Date.now() });
+        localStorage.setItem(CFG.device.verifiedCacheKey, data);
+        PersistentStore.set(CFG.device.verifiedCacheKey, data).catch(() => { });
+    }
+
+    function readVerifiedCache(uid) {
+        const raw = localStorage.getItem(CFG.device.verifiedCacheKey);
+        if (!raw) return false;
+        const data = Utils.safeJsonParse(raw);
+        return data?.uid === uid && (Date.now() - data.ts) < CFG.device.verifiedTTL;
+    }
+
+    async function readVerifiedCacheAsync(uid) {
+        let raw = localStorage.getItem(CFG.device.verifiedCacheKey);
+        if (!raw) {
+            raw = await PersistentStore.get(CFG.device.verifiedCacheKey);
+            if (raw) {
+                try { localStorage.setItem(CFG.device.verifiedCacheKey, raw); } catch { /* ignore */ }
+            }
+        }
+        if (!raw) return false;
+        const data = Utils.safeJsonParse(raw);
+        return data?.uid === uid && (Date.now() - data.ts) < CFG.device.verifiedTTL;
+    }
+
+    function clearVerifiedCache() {
+        localStorage.removeItem(CFG.device.verifiedCacheKey);
+        PersistentStore.remove(CFG.device.verifiedCacheKey).catch(() => { });
+    }
+
+    return { getUniqueDeviceId, saveVerifiedCache, readVerifiedCache, readVerifiedCacheAsync, clearVerifiedCache };
+})();
+
+
+const NetworkManager = (() => {
+    let _pingInterval = null;
+    let userIP = 'Unknown';
+
+    async function isReallyOnline() {
+        if (!navigator.onLine) return false;
+        try {
+            const ctrl = new AbortController();
+            setTimeout(() => ctrl.abort(), CFG.network.pingTimeoutMs);
+            await fetch(`${CFG.network.pingUrl}?${Date.now()}`, { mode: 'no-cors', signal: ctrl.signal });
+            return true;
+        } catch { return false; }
+    }
+    function showLostModal() { UI.showToast('📡 لا يوجد اتصال بالإنترنت', 2000, '#334155'); }
+    function hideLostModal() { /* toast بتختفي لوحدها */ }
+
+    function fetchIP() {
+        fetch('https://api.ipify.org?format=json')
+            .then(r => r.json())
+            .then(d => { userIP = d.ip; })
+            .catch(() => { userIP = 'Hidden IP'; });
+    }
+
+    function getIP() { return userIP; }
+
+    function initNetworkIndicator() {
+        const indicator = Utils.$('superWifiIndicator');
+        if (!indicator) return;
+        const statusText = indicator.querySelector('.wifi-text');
+        const ICON_HTML = '<i class="fa-solid fa-wifi fa-fade"></i><i class="fa-solid fa-slash wifi-slash" id="wifiSlashIcon"></i>';
+
+        function updateUI(state) {
+            indicator.classList.remove('state-loading', 'state-weak', 'wifi-status-hidden');
+            const iconBox = indicator.querySelector('.wifi-icon-box');
+            if (state !== 'LOADING' && !iconBox.querySelector('.fa-wifi')) iconBox.innerHTML = ICON_HTML;
+            const slash = Utils.$('wifiSlashIcon');
+
+            switch (state) {
+                case 'ONLINE':
+                    if (document.readyState === 'complete') indicator.classList.add('wifi-status-hidden');
+                    if (slash) slash.style.display = 'none';
+                    break;
+                case 'OFFLINE':
+                    if (statusText) statusText.innerText = 'CONNECTION LOST';
+                    if (slash) slash.style.display = 'block';
+                    break;
+                case 'WEAK':
+                    indicator.classList.add('state-weak');
+                    if (statusText) statusText.innerText = 'UNSTABLE NETWORK';
+                    if (slash) slash.style.display = 'none';
+                    break;
+                case 'LOADING':
+                    indicator.classList.add('state-loading');
+                    if (statusText) statusText.innerText = 'CONNECTING...';
+                    iconBox.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" style="font-size:16px;"></i>';
+                    break;
+            }
+        }
+
+        async function diagnose() {
+            if (document.readyState !== 'complete') updateUI('LOADING');
+            if (!navigator.onLine) { updateUI('OFFLINE'); return; }
+            try {
+                const ctrl = new AbortController();
+                setTimeout(() => ctrl.abort(), CFG.network.pingTimeoutMs);
+                await fetch(`${CFG.network.pingUrl}?${Date.now()}`, { mode: 'no-cors', signal: ctrl.signal });
+                const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+                const weak = conn && (conn.effectiveType === 'slow-2g' || conn.effectiveType === '2g' || conn.rtt > 1000);
+                updateUI(weak ? 'WEAK' : 'ONLINE');
+            } catch { updateUI('OFFLINE'); }
+        }
+
+        window.addEventListener('online', diagnose);
+        window.addEventListener('offline', () => updateUI('OFFLINE'));
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') { clearInterval(_pingInterval); _pingInterval = null; }
+            else { diagnose(); _pingInterval = setInterval(diagnose, CFG.network.pingIntervalMs); }
+        });
+
+        if (document.readyState !== 'complete') updateUI('LOADING');
+        window.addEventListener('load', diagnose);
+        _pingInterval = setInterval(diagnose, CFG.network.pingIntervalMs);
+        diagnose();
+    }
+
+    function initGlobalGuard() {
+        setInterval(async () => {
+            // بعد
+            const onLiveScreen = document.querySelector('.section.active')?.id === 'screenLiveSession';
+            if (await isReallyOnline()) hideLostModal();
+            else if (!onLiveScreen) showLostModal();
+            else hideLostModal();
+        }, 2000);
+
+        if (!isMobileDevice()) {
+            Utils.$('desktop-blocker').style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            throw new Error('Desktop access denied.');
+        }
+    }
+
+    return { isReallyOnline, showLostModal, hideLostModal, fetchIP, getIP, initNetworkIndicator, initGlobalGuard };
+})();
+
+
+const GPSManager = (() => {
+    let _watchId = null;
+    let _lat = '', _lng = '';
+    let _prefetched = null;
+    let _prefetchTime = 0;
+
+    function startWatcher() {
+        if (!navigator.geolocation) return;
+        _watchId = navigator.geolocation.watchPosition(
+            pos => { _lat = pos.coords.latitude; _lng = pos.coords.longitude; },
+            () => { },
+            { enableHighAccuracy: true, maximumAge: 30_000, timeout: 20_000 },
+        );
+    }
+
+    function stopWatcher() {
+        if (_watchId !== null) { navigator.geolocation.clearWatch(_watchId); _watchId = null; }
+    }
+
+    async function getGPSForJoin() {
+        if (_lat && _lng) return { lat: _lat, lng: _lng, cached: true };
+        return new Promise(resolve => {
+            if (!navigator.geolocation) { resolve({ lat: 0, lng: 0, error: 'unavailable' }); return; }
+            navigator.geolocation.getCurrentPosition(
+                pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                () => resolve({ lat: 0, lng: 0, error: 'denied' }),
+                { enableHighAccuracy: true, timeout: 8_000, maximumAge: 0 },
+            );
+        });
+    }
+
+    function openMapsToCollegeLocation() {
+        window._isOpeningMaps = true;
+        window.open(`https://www.google.com/maps/search/?api=1&query=${CFG.gps.targetLat},${CFG.gps.targetLng}`, '_blank');
+    }
+
+    return { startWatcher, stopWatcher, getGPSForJoin, openMapsToCollegeLocation };
+})();
+
+
+const AuthManager = (() => {
+    const db = window.db;
+    const auth = window.auth;
+
+    async function onAuthChange(user) {
+        const drawerEl = Utils.$('studentAuthDrawer');
+        const profileWrap = Utils.$('profileIconWrapper');
+        const profileIcon = Utils.$('profileIconImg');
+        const statusDot = Utils.$('userStatusDot');
+
+        window._authStateLoading = false;
+
+        // [MODERN & GLOBAL SESSION RECOVERY LOGIC]
+        if (!user) {
+            console.log('[Auth] No active Firebase user detected. Analyzing persistent storage...');
+
+            // 1. جلب البيانات من المخزن الدائم (IndexedDB / LocalStorage) بشكل متوازي للسرعة
+            const [savedUID, savedSession, verifiedRaw] = await Promise.all([
+                PersistentStore.getWithFallback('LOGGED_IN_UID'),
+                PersistentStore.getWithFallback('CURRENT_SESSION_ID'),
+                PersistentStore.get(CFG.device.verifiedCacheKey)
+            ]);
+
+            // 2. التحقق مما إذا كان هناك "أثر" لمستخدم مسجل سابقاً
+            if (savedUID && savedSession && verifiedRaw) {
+                const verifiedData = Utils.safeJsonParse(verifiedRaw);
+                const isTTValid = verifiedData && (Date.now() - verifiedData.ts) < CFG.device.verifiedTTL;
+
+                // [الذكاء الصناعي للنت الضعيف]: إذا كانت البيانات موجودة وصالحة
+                if (verifiedData?.uid === savedUID && isTTValid) {
+
+                    // إذا كنا لا نزال في مرحلة التحميل الأولية (النت ضعيف)، لا تفعل شيئاً وانتظر Firebase
+                    if (window._authStateLoading) {
+                        console.warn('[Security] Weak network detected. Holding session integrity...');
+                        // نحن لا نستدعي markResolved هنا لترك الشاشة مقفولة (Loading) بدلاً من إظهار نافذة تسجيل الدخول
+                        return;
+                    }
+
+                    // إذا انتهى التحميل تماماً وفايربيز لا يزال يصر أنه لا يوجد مستخدم
+                    console.log('[Auth] Persistent session found but Firebase is empty. Restoring UI state...');
+                    SessionGuard.markResolved();
+                    return;
+                }
+            }
+
+            // 3. [حماية المستخدم]: إذا وصلنا هنا، فهذا يعني إما مستخدم جديد أو جلسة منتهية الصلاحية تماماً
+            // لكن مهلاً! لا تمسح البيانات أبداً طالما أن الـ Loading لا يزال يعمل (حماية ضد الـ Network Glitch)
+            if (window._authStateLoading) {
+                return; // ابقَ صامتاً وانتظر الرد النهائي
+            }
+
+            // 4. [القرار النهائي]: مسح الجلسة فقط عند التأكد 100% من عدم وجود مستخدم
+            console.error('[Auth] Hard logout triggered: No valid credentials or session expired.');
+            await _handleSignedOut({ drawerEl, profileWrap, profileIcon, statusDot });
+
+            // فتح التطبيق للزوار (Guest Mode)
+            SessionGuard.markResolved();
+            return;
+        }
+
+        const isVerifiedCached = DeviceManager.readVerifiedCache(user.uid);
+
+        try { await user.reload(); }
+        catch (e) { console.warn('user.reload() skipped — weak network:', e.code || e.message); }
+
+        let isManuallyVerified = false;
+        try {
+            const snap = await getDoc(doc(db, 'user_registrations', user.uid));
+            if (snap.exists()) {
+                const d = snap.data();
+                isManuallyVerified = d.status === 'verified' || d.manual_verification === true;
+            }
+        } catch (e) { console.warn('Manual verification check warning:', e); }
+
+        if (user.emailVerified || isManuallyVerified || isVerifiedCached) {
+            DeviceManager.saveVerifiedCache(user.uid);
+            await _handleVerifiedUser(user, { drawerEl, profileWrap, profileIcon, statusDot });
+        } else {
+            _handleUnverifiedUser({ profileWrap, profileIcon, statusDot });
+        }
+
+        window.updateUIForMode?.();
+        SessionGuard.markResolved();
+    }
+
+    async function _handleVerifiedUser(user, els) {
+        const { drawerEl, profileWrap, profileIcon, statusDot } = els;
+
+        if (drawerEl) {
+            drawerEl.classList.remove('active');
+            setTimeout(() => { drawerEl.style.display = 'none'; }, 300);
+        }
+
+        try {
+            const snap = await getDoc(doc(db, 'user_registrations', user.uid));
+            if (!snap.exists()) return;
+
+            const data = snap.data();
+
+            const name = data.registrationInfo?.fullName || data.fullName || 'Student';
+
+            const alreadyTracked = localStorage.getItem('CURRENT_SESSION_ID')
+                || await PersistentStore.get('CURRENT_SESSION_ID');
+            const sessionId = user.uid;
+            const sessionRef = doc(db, 'active_users', user.uid, 'sessions', sessionId);
+            if (!alreadyTracked) {
+                const existingSession = await getDoc(sessionRef);
+                if (!existingSession.exists() || existingSession.data()?.isLoggedIn !== true) {
+                    const deviceId = await DeviceManager.getUniqueDeviceId();
+                    await setDoc(sessionRef, {
+                        isLoggedIn: true,
+                        loginAt: serverTimestamp(),
+                        deviceFingerprint: deviceId,
+                        studentName: data.registrationInfo?.fullName || data.fullName || '',
+                        studentID: data.registrationInfo?.studentID || data.studentID || '',
+                        ipAddress: NetworkManager.getIP(),
+                    }, { merge: true });
+                    await PersistentStore.setWithSync('CURRENT_SESSION_ID', sessionId);
+                    await PersistentStore.setWithSync('LOGGED_IN_UID', user.uid);
+                }
+            } else {
+                try { localStorage.setItem('CURRENT_SESSION_ID', sessionId); } catch { /* ignore */ }
+                try { localStorage.setItem('LOGGED_IN_UID', user.uid); } catch { /* ignore */ }
+            }
+
+            window.listenToSessionState?.();
+
+            const savedUID = localStorage.getItem('TARGET_DOCTOR_UID')
+                || await PersistentStore.get('TARGET_DOCTOR_UID');
+            if (savedUID) {
+                sessionStorage.setItem('TARGET_DOCTOR_UID', savedUID);
+                localStorage.setItem('TARGET_DOCTOR_UID', savedUID);
+            }
+
+            window.monitorMyParticipation?.();
+            setTimeout(() => initPushNotifications(user.uid), 3000);
+            setTimeout(() => refreshPushSubscription(user.uid), 5000);
+            window.showSmartWelcome?.(name);
+            setTimeout(() => window.checkForPendingSurveys?.(), 2500);
+
+            const avatarClass = data.avatarClass || data.registrationInfo?.avatarClass || 'fa-user-graduate';
+            if (profileIcon) profileIcon.className = `fa-solid ${avatarClass}`;
+            if (profileWrap) profileWrap.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+            if (statusDot) {
+                statusDot.style.background = '#22c55e';
+                statusDot.style.boxShadow = '0 0 10px #22c55e, 0 0 20px rgba(34,197,94,0.5)';
+            }
+
+            if (data.preferredLanguage) {
+                UI.applyLanguage(data.preferredLanguage);
+                document.querySelectorAll('.active-lang-text-pro').forEach(s => {
+                    s.innerText = data.preferredLanguage === 'ar' ? 'EN' : 'عربي';
+                });
+            }
+        } catch (e) { console.error('Auth state error:', e); }
+    }
+
+    function _handleUnverifiedUser({ profileWrap, profileIcon, statusDot }) {
+        sessionStorage.clear();
+        if (profileIcon) profileIcon.className = 'fa-solid fa-envelope-circle-check';
+        if (profileWrap) profileWrap.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+        if (statusDot) statusDot.style.background = '#f59e0b';
+    }
+
+    async function _handleSignedOut({ drawerEl, profileWrap, profileIcon, statusDot }) {
+        const uid = auth.currentUser?.uid;
+        const sessionId = localStorage.getItem('CURRENT_SESSION_ID')
+            || await PersistentStore.get('CURRENT_SESSION_ID');
+
+        if (uid && sessionId) {
+            try {
+                await setDoc(
+                    doc(db, 'active_users', uid, 'sessions', sessionId),
+                    { isLoggedIn: false, logoutAt: serverTimestamp() },
+                    { merge: true }
+                );
+            } catch (e) { console.warn('Session clear warning:', e); }
+        }
+
+        await PersistentStore.removeWithSync('CURRENT_SESSION_ID');
+        await PersistentStore.removeWithSync('LOGGED_IN_UID');
+
+        sessionStorage.clear();
+        DeviceManager.clearVerifiedCache();
+        if (window.studentStatusListener) { window.studentStatusListener(); window.studentStatusListener = null; }
+        if (profileIcon) profileIcon.className = 'fa-solid fa-user-astronaut';
+        if (profileWrap) profileWrap.style.background = 'rgba(15, 23, 42, 0.8)';
+        if (statusDot) { statusDot.style.background = '#94a3b8'; statusDot.style.boxShadow = 'none'; }
+        window.updateUIForMode?.();
+    }
+
+    async function performStudentSignup() {
+        const _t = Utils._t;
+        const fields = {
+            email: Utils.$('regEmail')?.value.trim(),
+            password: Utils.$('regPass')?.value,
+            fullName: Utils.$('regFullName')?.value.trim(),
+            studentID: Utils.$('regStudentID')?.value.trim(),
+            level: Utils.$('regLevel')?.value,
+            gender: Utils.$('regGender')?.value,
+            group: Utils.$('regGroup')?.value || 'عام',
+        };
+
+        if (!fields.email || !fields.password || !fields.fullName || !fields.studentID || !fields.level || !fields.gender) {
+            UI.showToast(_t('msg_missing_data', '⚠️ بيانات ناقصة! يرجى ملء كل الحقول واختيار الفرقة والنوع'), 3000, '#f59e0b');
+            return;
+        }
+        if (fields.password.length < 6) {
+            UI.showToast(_t('msg_weak_pass', '⚠️ كلمة المرور ضعيفة (6 أحرف على الأقل)'), 3000, '#f59e0b');
+            return;
+        }
+
+        const btn = Utils.$('btnDoSignup');
+        const originalHtml = btn?.innerHTML;
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up fa-fade"></i> ${_t('status_connecting', 'جاري الاتصال...')}`;
+        }
+
+        try {
+            const deviceID = await DeviceManager.getUniqueDeviceId();
+            const res = await fetch(`${CFG.api.base}/api/registerStudent`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...fields, deviceFingerprint: deviceID }),
+            });
+            const result = await res.json();
+
+            if (!res.ok || !result.success) throw new Error(result.error || _t('error_security_fail', 'فشل التسجيل'));
+
+            if (btn) btn.innerHTML = `<i class="fa-regular fa-envelope fa-bounce"></i> ${_t('status_sending_email', 'إرسال رابط التفعيل...')}`;
+
+            try {
+                const cred = await signInWithEmailAndPassword(auth, fields.email, fields.password); // غيرنا fields.pass إلى fields.password
+                await sendEmailVerification(cred.user);
+                await signOut(auth);
+            } catch (emailErr) {
+                console.warn('Email send warning:', emailErr);
+                UI.showToast(_t('msg_email_fail', '⚠️ تم الحساب، لكن تعذر إرسال الإيميل'), 4000, '#f59e0b');
+            }
+
+            UI.showToast(_t('msg_account_created', '✅ تم إنشاء الحساب بنجاح!'), 4000, '#10b981');
+            UI.closeAuthDrawer();
+            UI.toggleAuthMode('login');
+
+            const loginEmail = Utils.$('studentLoginEmail');
+            if (loginEmail) loginEmail.value = fields.email;
+            if (Utils.$('regPass')) Utils.$('regPass').value = '';
+            if (Utils.$('regEmail')) Utils.$('regEmail').value = '';
+
+            _showSignupSuccessModal(fields.studentID, fields.fullName);
+        } catch (error) {
+            let msg = error.message;
+            if (msg.includes('email-already-in-use')) msg = _t('error_email_exists', 'هذا البريد مسجل بالفعل!');
+            UI.showToast(`❌ ${msg}`, 5000, '#ef4444');
+        } finally {
+            if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
+        }
+    }
+
+    function _showSignupSuccessModal(studentID, fullName) {
+        const _t = Utils._t;
+        const firstName = fullName.split(' ')[0];
+        const modal = Utils.$('signupSuccessModal');
+        const title = Utils.$('successModalTitle');
+        const body = Utils.$('successModalBody');
+
+        if (title) title.innerText = `${_t('modal_welcome_title', '🎉 Welcome')} ${firstName}!`;
+        if (body) body.innerHTML = `
+            <div style="background:#f8fafc;padding:15px;border-radius:12px;margin-bottom:20px;border:1px dashed #cbd5e1;text-align:center;">
+                <div style="font-size:12px;font-weight:bold;color:#64748b;margin-bottom:5px;">${_t('modal_id_reserved', 'تم حجز الكود الجامعي:')}</div>
+                <div style="font-size:24px;font-weight:900;color:#0ea5e9;font-family:'Outfit',sans-serif;letter-spacing:1px;">${studentID}</div>
             </div>
+            <p style="font-size:14px;color:#334155;margin-bottom:8px;">📨 ${_t('modal_email_sent', 'تم إرسال رابط تفعيل إلى بريدك الإلكتروني.')}</p>
+            <div style="background:#fee2e2;color:#b91c1c;padding:10px;border-radius:8px;font-weight:bold;font-size:12px;display:flex;align-items:center;gap:8px;">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span>${_t('modal_verify_warning', 'يرجى تفعيل الحساب من الإيميل قبل تسجيل الدخول.')}</span>
+            </div>`;
+        if (modal) modal.style.display = 'flex';
+    }
 
-            <button onclick="searchManualStudent()" class="btn-main"
-                style="background: #0f172a; width: 100%; margin-bottom: 10px;">
-                <span data-i18n="search_btn">بحث</span> <i class="fa-solid fa-magnifying-glass"></i>
-            </button>
+    async function performStudentLogin() {
+        const _t = Utils._t;
+        const email = Utils.$('studentLoginEmail')?.value.trim();
+        const pass = Utils.$('studentLoginPass')?.value;
+        const btn = document.querySelector('#loginSection .btn-modern-action')
+            || document.querySelector('#loginSection .btn-main');
+
+        const originalHtml = btn?.innerHTML || 'Sign In';
+        if (btn) {
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${_t('status_verifying', 'جاري التحقق...')}`;
+            btn.disabled = true;
+        }
+
+        if (!email || !pass) {
+            UI.showToast(_t('msg_enter_creds', '⚠️ أدخل الإيميل والباسورد'), 3000, '#f59e0b');
+            if (btn) { btn.innerHTML = originalHtml; btn.disabled = false; }
+            return;
+        }
+
+        try {
+            const cred = await signInWithEmailAndPassword(auth, email, pass);
+            const user = cred.user;
+            const snap = await getDoc(doc(db, 'user_registrations', user.uid));
+
+            const isManuallyVerified = snap.exists() && snap.data().status === 'verified';
+
+            if (!user.emailVerified && !isManuallyVerified) {
+                await signOut(auth);
+                const vModal = Utils.$('verificationModal');
+                if (vModal) { vModal.style.display = 'flex'; navigator.vibrate?.([200, 100, 200]); }
+                else UI.showToast(_t('msg_email_not_verified', '⛔ حساب غير مفعل! راجع الإيميل.'), 5000, '#ef4444');
+                return;
+            }
+
+            const sessionsSnap = await getDocs(
+                query(
+                    collection(db, 'active_users', user.uid, 'sessions'),
+                    where('isLoggedIn', '==', true),
+                    limit(1)
+                )
+            );
+            if (!sessionsSnap.empty) {
+                await signOut(auth);
+                navigator.vibrate?.([300, 100, 300, 100, 300]);
+
+                const activeSession = sessionsSnap.docs[0].data();
+                const loginTime = activeSession.loginAt?.toDate?.();
+                const timeStr = loginTime
+                    ? loginTime.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
+                    : '--:--';
+
+                try {
+                    const deviceId = await DeviceManager.getUniqueDeviceId();
+                    await addDoc(collection(db, 'security_violations'), {
+                        uid: user.uid,
+                        email,
+                        type: 'multi_login_attempt',
+                        attemptAt: serverTimestamp(),
+                        deviceFingerprint: deviceId,
+                        ipAddress: NetworkManager.getIP(),
+                        deviceInfo: {
+                            userAgent: navigator.userAgent,
+                            platform: navigator.platform || 'Unknown',
+                            screenSize: `${screen.width}x${screen.height}`,
+                            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                        },
+                    });
+                } catch (e) { console.warn('Violation log failed:', e); }
+
+                const existingModal = document.getElementById('_multiLoginModal');
+                if (existingModal) existingModal.remove();
+
+                const modal = document.createElement('div');
+                modal.id = '_multiLoginModal';
+                modal.style.cssText = `
+        position:fixed;inset:0;z-index:999999;
+        background:rgba(0,0,0,0.5);
+        display:flex;align-items:center;justify-content:center;
+        padding:20px;
+    `;
+                modal.innerHTML = `
+        <div style="
+            background:var(--card-bg, #1e293b);
+            border:1px solid #334155;
+            border-radius:20px;
+            padding:28px 24px;
+            max-width:340px;
+            width:100%;
+            text-align:center;
+            box-shadow:0 20px 60px rgba(0,0,0,0.4);
+            direction:rtl;
+        ">
+            <i class="fa-solid fa-circle-exclamation"
+               style="font-size:36px;color:#ef4444;margin-bottom:16px;display:block;"></i>
+
+            <div style="
+                color:var(--text-primary,#f1f5f9);
+                font-size:16px;font-weight:800;
+                margin-bottom:12px;
+                font-family:'Outfit',sans-serif;
+            ">الحساب مسجّل مسبقاً</div>
+
+            <div style="
+                color:var(--text-secondary,#94a3b8);
+                font-size:13px;line-height:2;
+                margin-bottom:6px;
+            ">هذا الحساب مفتوح حالياً على جهاز أو متصفح آخر</div>
+
+            <div style="
+                color:#64748b;
+                font-size:12px;
+                margin-bottom:24px;
+                direction:ltr;
+            ">This account is active on another device or browser</div>
+
+            <button onclick="document.getElementById('_multiLoginModal').remove()" style="
+                width:100%;padding:13px;border:none;
+                background:linear-gradient(135deg,#3b82f6,#2563eb);
+                color:#fff;font-size:14px;font-weight:700;
+                border-radius:12px;cursor:pointer;
+                font-family:'Outfit',sans-serif;
+            ">حسناً</button>
         </div>
+    `;
+                document.body.appendChild(modal);
 
-        <div id="manualConfirmStep" style="display: none; animation: fadeIn 0.3s;">
+                if (btn) { btn.innerHTML = originalHtml; btn.disabled = false; }
+                return;
+            }
+            const sessionId = user.uid;
+            await PersistentStore.setWithSync('CURRENT_SESSION_ID', sessionId);
+            await PersistentStore.setWithSync('LOGGED_IN_UID', user.uid);
 
-            <div
-                style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 15px; margin-bottom: 15px; margin-top: 10px;">
-                <div
-                    style="width: 60px; height: 60px; border-radius: 50%; background: #fff; border: 2px solid #0ea5e9; margin: 0 auto 10px auto; display: flex; align-items: center; justify-content: center; font-size: 25px; color: #0ea5e9;">
-                    <i class="fa-solid fa-user-graduate"></i>
-                </div>
-                <div id="previewStudentName"
-                    style="font-weight: 900; color: #0f172a; font-size: 14px; margin-bottom: 5px;">--</div>
-                <div id="previewStudentID" class="en-font"
-                    style="font-size: 12px; color: #64748b; background: #e2e8f0; padding: 2px 10px; border-radius: 10px; display: inline-block;">
-                    --</div>
-            </div>
+            const deviceId = await DeviceManager.getUniqueDeviceId();
+            await setDoc(doc(db, 'active_users', user.uid, 'sessions', sessionId), {
+                studentName: snap.data()?.registrationInfo?.fullName || snap.data()?.fullName || '',
+                studentID: snap.data()?.registrationInfo?.studentID || snap.data()?.studentID || '',
+                isLoggedIn: true,
+                loginAt: serverTimestamp(),
+                deviceFingerprint: deviceId,
+                ipAddress: NetworkManager.getIP(),
+                deviceInfo: {
+                    userAgent: navigator.userAgent,
+                    platform: navigator.platform || 'Unknown',
+                    screenSize: `${screen.width}x${screen.height}`,
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    brand: navigator.userAgentData?.brands?.[0]?.brand || 'Unknown',
+                }
+            }, { merge: true });
 
-            <button id="btnConfirmManualAdd" onclick="confirmManualAdd()" class="btn-main"
-                style="background: #16a34a; width: 100%; margin-bottom: 10px; box-shadow: 0 4px 15px rgba(22, 163, 74, 0.3);">
-                <span data-i18n="confirm_add_btn">تأكيد الإضافة</span> <i class="fa-solid fa-check"></i>
-            </button>
-        </div>
+            if (snap.exists()) {
+                const data = snap.data();
+                const info = data.registrationInfo || data;
+                _cacheProfile(user.uid, info, data);
+                await _syncDeviceBinding(user.uid);
+            }
 
-        <button onclick="resetManualModal()" class="btn-cancel-modern" style="width: 100%;"
-            data-i18n="cancel_btn">إلغاء</button>
-    </div>
-</div>
-<div id="dailyWelcomeModal" class="modal-overlay" style="z-index: 2147483647; display: none;"
-    onclick="closeDailyWelcome()">
-    <div class="modal-box modern-glass-popup" onclick="event.stopPropagation(); closeDailyWelcome();">
-        <div class="welcome-icon-circle"><i class="fa-solid fa-face-smile-beam"></i></div>
-        <h2 class="welcome-title"><span data-i18n="hi_text">أهلاً</span>، <span id="welcomeUserName">Student</span>! 😊
-        </h2>
-        <div class="welcome-divider"></div>
-        <p class="welcome-text">
-            <span data-i18n="glad_here_text">سعداء بوجودك معنا اليوم.</span><br>
-            <span data-i18n="better_than_yesterday">لنكن أفضل مما كنا عليه بالأمس!</span> ✨
-        </p>
-        <button onclick="closeDailyWelcome()" class="btn-main welcome-btn" data-i18n="lets_go_btn">هيا بنا</button>
-    </div>
-</div>
+            AuthManager.startSessionWatcher(user.uid, sessionId);
 
-<div id="studentAuthDrawer" class="auth-drawer-overlay" onclick="if(event.target == this) closeAuthDrawer()">
-    <div class="auth-drawer-content modern-glass">
-        <button onclick="closeAuthDrawer()" class="close-btn-modern"><i class="fa-solid fa-xmark"></i></button>
-        <div class="header-content-center">
-            <h2 id="authTitle" class="auth-main-title" data-i18n="welcome_back_title">مرحباً بعودتك</h2>
-            <p id="authSubtitle" class="auth-sub-title" data-i18n="welcome_nursing_sub">انضم إلى مجتمع التمريض الخاص بنا
-                بالأسفل</p>
-        </div>
-        <div class="drawer-body">
+            UI.showToast(_t('msg_login_success', '🔓 تم تسجيل الدخول.. أهلاً بك'), 3000, '#10b981');
+            UI.closeAuthDrawer();
 
-        </div>
-    </div>
-</div>
+        } catch (error) {
+            UI.showToast(_resolveAuthError(error.code), 5000, '#ef4444');
+            window.playBeep?.();
+        } finally {
+            if (btn) { btn.innerHTML = originalHtml; btn.disabled = false; }
+        }
+    }
+
+    function _cacheProfile(uid, info, data) {
+        const cache = {
+            fullName: info.fullName, email: info.email, studentID: info.studentID,
+            level: info.level, gender: info.gender, group: info.group || '',
+            avatarClass: data.avatarClass || info.avatarClass || 'fa-user-graduate',
+            status_message: data.status_message || '', uid, type: 'student',
+        };
+        const cacheStr = JSON.stringify(cache);
+        localStorage.setItem('cached_profile_data', cacheStr);
+        PersistentStore.set('cached_profile_data', cacheStr).catch(() => { });
+    }
+
+    async function _syncDeviceBinding(uid) {
+        try {
+            const deviceId = await DeviceManager.getUniqueDeviceId();
+            await updateDoc(doc(db, 'user_registrations', uid), {
+                bound_device_id: deviceId,
+                device_bind_date: serverTimestamp(),
+                last_device_sync: serverTimestamp(),
+            });
+        } catch (e) { console.warn('Device sync warning:', e); }
+    }
+
+    function _resolveAuthError(code) {
+        const _t = Utils._t;
+        const map = {
+            'auth/user-not-found': _t('error_user_not_found', '❌ هذا البريد الإلكتروني غير مسجل لدينا!'),
+            'auth/wrong-password': _t('error_wrong_pass', '❌ كلمة المرور غير صحيحة!'),
+            'auth/invalid-credential': _t('error_invalid_cred', '❌ البريد الإلكتروني أو كلمة المرور غير صحيحة.'),
+            'auth/invalid-email': _t('error_invalid_email', '⚠️ صيغة البريد الإلكتروني غير سليمة!'),
+            'auth/user-disabled': _t('error_user_disabled', '⛔ تم تعطيل هذا الحساب من قبل الإدارة.'),
+            'auth/too-many-requests': _t('error_too_many', '⏳ محاولات كثيرة! تم إيقاف الدخول مؤقتاً.'),
+            'auth/network-request-failed': _t('error_network', '📡 فشل الاتصال! تأكد من الإنترنت.'),
+        };
+        return map[code] || `${_t('error_unknown', '❌ خطأ غير معروف')}: ${code}`;
+    }
+
+    function startSessionWatcher(uid, sessionId) {
+        window.sessionWatcherUnsubscribe?.();
+
+        window.sessionWatcherUnsubscribe = onSnapshot(
+            doc(db, 'active_users', uid, 'sessions', sessionId),
+            async (snap) => {
+                if (!snap.exists()) return;
+                const data = snap.data();
+
+                if (data.isLoggedIn === false || data.forceLogout === true) {
+                    window.sessionWatcherUnsubscribe?.();
+                    window.sessionWatcherUnsubscribe = null;
+
+                    await signOut(auth);
+                    sessionStorage.clear();
+                    await PersistentStore.removeWithSync('CURRENT_SESSION_ID');
+                    await PersistentStore.removeWithSync('LOGGED_IN_UID');
+                    await PersistentStore.removeWithSync('TARGET_DOCTOR_UID');
+                    DeviceManager.clearVerifiedCache();
+
+                    UI.showToast('⛔تم تسجيل خروجك ', 5000, '#ef4444');
+                    navigator.vibrate?.([300, 100, 300]);
+                    setTimeout(() => location.reload(), 2000);
+                }
+            },
+            err => console.warn('Session watcher error:', err)
+        );
+    }
+
+    async function performStudentLogout() {
+        const uid = auth.currentUser?.uid;
+        const sessionId = localStorage.getItem('CURRENT_SESSION_ID')
+            || await PersistentStore.get('CURRENT_SESSION_ID');
+
+        if (uid && sessionId) {
+            try {
+                await setDoc(
+                    doc(db, 'active_users', uid, 'sessions', sessionId),
+                    { isLoggedIn: false, logoutAt: serverTimestamp() },
+                    { merge: true }
+                );
+            } catch (e) { console.warn('Logout write failed:', e); }
+        }
+
+        try { await unsubscribePush(uid); } catch { /* non-critical */ }
 
 
-<div id="toolsRequestModal" class="modal-overlay" style="z-index: 2147483647; display: none;">
-    <div class="modal-box"
-        style="max-width: 420px; padding: 0; border-radius: 16px; overflow: hidden; background: white; direction: ltr; text-align: left; font-family: sans-serif;">
+        window.sessionWatcherUnsubscribe?.();
+        window.sessionWatcherUnsubscribe = null;
+        await PersistentStore.removeWithSync('CURRENT_SESSION_ID');
+        await PersistentStore.removeWithSync('LOGGED_IN_UID');
+        await PersistentStore.removeWithSync('TARGET_DOCTOR_UID');
+        await signOut(auth);
+    }
 
-        <div
-            style="background: linear-gradient(135deg, #16a34a, #15803d); padding: 18px 25px; color: white; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-            <h3 style="margin: 0; font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
-                <i class="fa-solid fa-briefcase-medical" style="margin-left: 8px;"></i> <span
-                    data-i18n="tools_request_title">طلب معدات / أدوات</span>
-            </h3>
-            <button onclick="document.getElementById('toolsRequestModal').style.display='none'"
-                style="background: rgba(255,255,255,0.2); border: none; color: white; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s;">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-        </div>
+    return { onAuthChange, performStudentSignup, performStudentLogin, startSessionWatcher, performStudentLogout };
+})();
 
-        <div style="padding: 25px;">
 
-            <div style="margin-bottom: 20px;">
-                <label style="font-size: 13px; font-weight: 700; color: #374151; display:block; margin-bottom: 8px;"
-                    data-i18n="required_tool_label">الأداة / الجهاز المطلوب</label>
-                <input type="text" id="reqToolName" data-i18n-placeholder="tool_name_placeholder"
-                    placeholder="مثال: جهاز عرض، سماعات..."
-                    style="width: 100%; padding: 12px 15px; border-radius: 10px; border: 1px solid #d1d5db; background: #f9fafb; color: #111827; font-weight: 500; font-size: 14px; outline: none; font-family: 'Cairo', sans-serif;">
-            </div>
+const SessionManager = (() => {
+    const db = window.db;
+    const auth = window.auth;
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+    async function monitorMyParticipation() {
+        const user = auth.currentUser;
+        const mainBtn = Utils.$('mainActionBtn');
+        if (!user) return;
 
-                <div>
-                    <label style="font-size: 13px; font-weight: 700; color: #374151; display:block; margin-bottom: 8px;"
-                        data-i18n="quantity_label">الكمية</label>
-                    <div
-                        style="display: flex; align-items: center; border: 1px solid #d1d5db; border-radius: 10px; overflow: hidden; background: #f9fafb;">
-                        <button onclick="changeQty(-1)"
-                            style="width: 40px; height: 42px; background: #e5e7eb; border: none; color: #374151; cursor: pointer; font-size: 16px; border-right: 1px solid #d1d5db;">-</button>
-                        <input type="number" id="reqToolQty" value="1" min="1" readonly
-                            style="flex: 1; height: 42px; text-align: center; border: none; background: transparent; color: #111827; font-weight: 700; font-size: 16px; width: 50px;">
-                        <button onclick="changeQty(1)"
-                            style="width: 40px; height: 42px; background: #e5e7eb; border: none; color: #16a34a; cursor: pointer; font-size: 16px; border-left: 1px solid #d1d5db;">+</button>
+        let targetDoctorUID = localStorage.getItem('TARGET_DOCTOR_UID')
+            || await PersistentStore.get('TARGET_DOCTOR_UID');
+
+        if (!targetDoctorUID) {
+            if (mainBtn) {
+                mainBtn.innerHTML = '<i class="fa-solid fa-arrows-rotate fa-spin"></i> جاري المزامنة...';
+                mainBtn.style.opacity = '0.7';
+                mainBtn.style.pointerEvents = 'none';
+            }
+            targetDoctorUID = await _recoverActiveSession(user.uid);
+            if (!targetDoctorUID) { UI.setMainButton('register'); return; }
+        }
+
+        localStorage.setItem('TARGET_DOCTOR_UID', targetDoctorUID);
+        sessionStorage.setItem('TARGET_DOCTOR_UID', targetDoctorUID);
+
+        window.studentStatusListener?.();
+        window.sessionStatusListener?.();
+
+        window.sessionStatusListener = onSnapshot(
+            doc(db, 'active_sessions', targetDoctorUID),
+            snap => {
+                if (!snap.exists() || !snap.data().isActive) {
+                    PersistentStore.removeWithSync('TARGET_DOCTOR_UID');
+                    UI.setMainButton('register');
+                    window.studentStatusListener?.();
+                    window.studentStatusListener = null;
+                }
+            },
+        );
+
+        window.studentStatusListener = onSnapshot(
+            doc(db, 'active_sessions', targetDoctorUID, 'participants', user.uid),
+            snap => _handleParticipantChange(snap, targetDoctorUID),
+            err => { console.warn('Listener error:', err); UI.setMainButton('register'); },
+        );
+    }
+
+    async function _recoverActiveSession(uid) {
+        try {
+            const q = query(collection(db, 'active_sessions'), where('isActive', '==', true), limit(20));
+            const snap = await getDocs(q);
+            for (const s of snap.docs) {
+                const pSnap = await getDoc(doc(db, 'active_sessions', s.id, 'participants', uid));
+                if (pSnap.exists() && pSnap.data().status === 'active') {
+                    await PersistentStore.setWithSync('TARGET_DOCTOR_UID', s.id);
+                    return s.id;
+                }
+            }
+        } catch (e) { console.error('Session recovery error:', e); }
+        return null;
+    }
+
+    function _handleParticipantChange(snap, doctorUID) {
+        if (!snap.exists()) {
+            sessionStorage.removeItem('TARGET_DOCTOR_UID');
+            UI.setMainButton('register');
+            if (document.querySelector('.section.active')?.id === 'screenLiveSession') {
+                UI.showToast('⚠️ تم إغلاق الجلسة أو إخراجك منها', 4000, '#f59e0b');
+                window.goHome?.();
+            }
+            return;
+        }
+
+        const { status } = snap.data();
+
+        if (status === 'expelled') {
+            _handleExpulsion();
+            return;
+        }
+        if (status === 'on_break') {
+            _handleBreak();
+            return;
+        }
+        if (status === 'active') {
+            Utils.$('breakModal') && (Utils.$('breakModal').style.display = 'none');
+            sessionStorage.setItem('TARGET_DOCTOR_UID', doctorUID);
+            UI.setMainButton('enter');
+        }
+    }
+
+    function _handleExpulsion() {
+        const _t = Utils._t;
+        window.studentStatusListener?.();
+        window.studentStatusListener = null;
+        sessionStorage.removeItem('TARGET_DOCTOR_UID');
+        PersistentStore.removeWithSync('TARGET_DOCTOR_UID');
+        UI.setMainButton('register');
+
+        const liveScreen = Utils.$('screenLiveSession');
+        if (liveScreen) { liveScreen.style.setProperty('display', 'none', 'important'); liveScreen.classList.remove('active'); }
+        window.goHome?.();
+
+        const exModal = Utils.$('expulsionModal');
+        const exTitle = Utils.$('expelTitle');
+        const exBody = Utils.$('expelBody');
+        if (exTitle) exTitle.innerText = _t('modal_expel_title', '⛔ You have been expelled!');
+        if (exBody) exBody.innerHTML = _t('modal_expel_body', 'The instructor has removed you from this session.<br>You cannot rejoin.');
+        if (exModal) {
+            exModal.style.setProperty('display', 'flex', 'important');
+            const btn = exModal.querySelector('button') || exModal.querySelector('.btn-danger');
+            if (btn) { btn.innerHTML = _t('btn_leave_hall', 'Leave Hall ➜'); btn.onclick = () => { exModal.style.display = 'none'; window.location.reload(); }; }
+            navigator.vibrate?.([500, 200, 500]);
+        } else {
+            alert(_t('modal_expel_title', '⛔ You have been expelled!'));
+            window.location.reload();
+        }
+    }
+
+    function _handleBreak() {
+        sessionStorage.removeItem('TARGET_DOCTOR_UID');
+        UI.setMainButton('register');
+        window.unsubscribeLiveSnapshot?.();
+        window.unsubscribeLiveSnapshot = null;
+        const live = Utils.$('screenLiveSession');
+        if (live) { live.style.cssText = ''; live.style.setProperty('display', 'none', 'important'); }
+        UI.switchScreen('screenWelcome');
+        UI.showToast('⏸️ استراحة: يرجى تسجيل الدخول مجدداً عند الاستئناف', 4000, '#f59e0b');
+    }
+
+    async function searchForSession() {
+        const codeInput = Utils.$('attendanceCode');
+        const btn = Utils.$('btnSearchSession');
+        const code = codeInput?.value.trim();
+        if (!code) { UI.showToast('⚠️ Please enter session PIN', 3000, '#f59e0b'); return; }
+
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> SEARCHING...';
+        btn.style.pointerEvents = 'none';
+
+        try {
+            const q = query(collection(db, 'active_sessions'),
+                where('sessionCode', '==', code),
+                where('isActive', '==', true),
+                where('isDoorOpen', '==', true));
+            const snap = await getDocs(q);
+
+            if (snap.empty) {
+                const checkSnap = await getDocs(query(collection(db, 'active_sessions'), where('sessionCode', '==', code)));
+                UI.showToast(checkSnap.empty ? '❌ Invalid Session PIN' : '🔒 Session is currently CLOSED', 4000, '#ef4444');
+                return;
+            }
+
+            const sessionDoc = snap.docs[0];
+            const sessionData = sessionDoc.data();
+            const doctorUID = sessionDoc.id;
+
+            if (sessionData.startTime) {
+                const doorOpenMs = sessionData.startTime.toMillis();
+                const codeDeadlineMs = doorOpenMs + 10_000;
+                const entryStarted = window._codeEntryStarted;
+
+                if (!entryStarted || entryStarted > codeDeadlineMs) {
+                    UI.showToast('⏰ انتهى وقت إدخال الكود', 4000, '#ef4444');
+                    navigator.vibrate?.([300, 100, 300]);
+                    btn.innerHTML = originalHtml;
+                    btn.style.pointerEvents = 'auto';
+                    window._codeEntryStarted = null;
+                    return;
+                }
+            }
+            window._codeEntryStarted = null;
+
+            sessionStorage.setItem('TEMP_DR_UID', doctorUID);
+            window.stopCodeEntryIdleTimer?.();
+            _populateSessionUI(sessionData);
+
+            const noPassword = !sessionData.sessionPassword?.trim();
+            _showStep(2);
+            if (noPassword) {
+                setTimeout(() => joinSessionAction(), 300);
+            } else {
+                setTimeout(() => Utils.$('sessionPass')?.focus(), 400);
+            }
+
+            window.startAuthScreenTimer?.(doctorUID);
+        } catch (e) {
+            console.error('Search error:', e);
+            const isAr = Utils.lang() === 'ar';
+            UI.showToast(isAr ? '📡 لا يوجد اتصال، تأكد من النت' : '📡 No connection, check your network', 4000, '#ef4444');
+        } finally {
+            btn.innerHTML = originalHtml;
+            btn.style.pointerEvents = 'auto';
+        }
+    }
+
+    function _populateSessionUI(data) {
+        const docName = Utils.$('foundDocName');
+        const subName = Utils.$('foundSubjectName');
+        const avatar = Utils.$('foundDocAvatar');
+        if (docName) { docName.innerText = `Dr. ${data.doctorName || 'Unknown'}`; docName.style.fontFamily = "'Outfit', sans-serif"; }
+        if (subName) { subName.innerText = data.allowedSubject || '--'; subName.style.fontFamily = "'Outfit', sans-serif"; }
+        if (avatar && data.doctorAvatar) avatar.innerHTML = `<i class="fa-solid ${data.doctorAvatar}"></i>`;
+    }
+
+    function _showStep(step) {
+        Utils.$('step1_search')?.style.setProperty('display', step === 1 ? 'block' : 'none');
+        const step2 = Utils.$('step2_auth');
+        if (step2) {
+            step2.style.display = step === 2 ? 'block' : 'none';
+            if (step === 2) step2.classList.add('active');
+            else step2.classList.remove('active');
+        }
+    }
+
+    function resetSearchSession() {
+        window._codeEntryStarted = null;
+        _showStep(1);
+        Utils.$('step1_search').style.cssText = 'display:block;opacity:1;visibility:visible;';
+        const passInput = Utils.$('sessionPass');
+        const codeInput = Utils.$('attendanceCode');
+        if (passInput) passInput.value = '';
+        if (codeInput) codeInput.value = '';
+        Utils.$('screenError') && (Utils.$('screenError').style.display = 'none');
+        window.startCodeEntryIdleTimer?.();
+    }
+
+    async function joinSessionAction() {
+        const passInput = Utils.$('sessionPass')?.value.trim();
+        const btn = Utils.$('btnJoinFinal');
+        const doctorUID = sessionStorage.getItem('TEMP_DR_UID');
+        const user = auth.currentUser;
+
+        if (!user) { UI.showToast('❌ يجب تسجيل الدخول أولاً', 3000, '#ef4444'); return; }
+        if (!doctorUID) {
+            UI.showToast('⚠️ حدث خطأ في بيانات الجلسة، يرجى البحث مجدداً', 4000, '#f59e0b');
+            resetSearchSession();
+            return;
+        }
+
+        window.isJoiningProcessActive = true;
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Verifying & Joining...';
+        btn.style.pointerEvents = 'none';
+
+        try {
+            const [sessionSnap, gpsData, deviceFingerprint, idToken, sensSnap] = await Promise.all([
+                getDoc(doc(db, 'active_sessions', doctorUID)),
+                GPSManager.getGPSForJoin(),
+                DeviceManager.getUniqueDeviceId(),
+                user.getIdToken(),
+                getDoc(doc(db, 'user_registrations', user.uid, 'sensitive_info', 'main')),
+            ]);
+
+            if (!sessionSnap.exists()) throw new Error('⛔ الجلسة غير موجودة');
+            const sessionData = sessionSnap.data();
+            if (!sessionData.isActive || !sessionData.isDoorOpen) throw new Error('🔒 عذراً، الجلسة مغلقة حالياً.');
+            if (sessionData.sessionPassword?.trim()) {
+                const enteredPass = document.getElementById('studentEnteredPass')?.value || "";
+
+                if (enteredPass === "") {
+                    document.getElementById('studentPassModal').style.display = 'flex';
+                    window.renderPasswordChoices(sessionData.sessionPassword);
+                    btn.innerHTML = originalHtml;
+                    btn.style.pointerEvents = 'auto';
+                    window.isJoiningProcessActive = false;
+                    return;
+                }
+
+                if (enteredPass !== sessionData.sessionPassword)
+                    throw new Error('❌ كلمة المرور غير صحيحة');
+            }
+
+            const isDeviceMatch = await _verifyOrBindDevice(sensSnap, deviceFingerprint, user.uid);
+
+            await AuditManager.sendSecretLog(db, user, sessionData, {
+                deviceFingerprint, isDeviceMatch,
+                userIP: NetworkManager.getIP(),
+                gpsData,
+            });
+
+            const res = await fetch(`${CFG.api.base}/joinSessionSecure`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+                body: JSON.stringify({
+                    studentUID: user.uid, sessionDocID: doctorUID,
+                    gpsLat: gpsData.lat || 0, gpsLng: gpsData.lng || 0,
+                    deviceFingerprint, isDeviceMatch, codeInput: sessionData.sessionCode,
+                }),
+            });
+            const result = await res.json();
+            if (!res.ok || !result.success) throw new Error(result.error || 'تم رفض الدخول من قبل النظام الأمني');
+
+            window.stopCodeEntryIdleTimer?.();
+            UI.showToast(`✅ ${result.message}`, 3000, '#10b981');
+
+            await PersistentStore.setWithSync('TARGET_DOCTOR_UID', doctorUID);
+            sessionStorage.setItem('TEMP_DR_UID', '');
+            sessionStorage.removeItem('TEMP_DR_UID');
+            const passInput = document.getElementById('studentEnteredPass');
+            if (passInput) passInput.value = '';
+
+            _incrementAttendanceCache(user.uid);
+            _populateLiveSessionUI(sessionData);
+
+            UI.setMainButton('enter');
+            setTimeout(() => window.monitorMyParticipation?.(), 100);
+            UI.switchScreen('screenLiveSession');
+            window.startLiveSnapshotListener?.();
+
+        } catch (e) {
+            console.error('Join session error:', e);
+            window.isJoiningProcessActive = false;
+            let msg = e.message;
+            if (msg.includes('Failed to fetch')) msg = 'فشل الاتصال بالسيرفر! تأكد من الإنترنت.';
+            UI.showToast(['❌', '⛔', '🔒'].some(p => msg.startsWith(p)) ? msg : `⚠️ ${msg}`, 4000, '#ef4444');
+            if (msg.includes('غير موجودة') || msg.includes('مغلقة')) setTimeout(() => location.reload(), 1500);
+        } finally {
+            if (document.querySelector('.section.active')?.id !== 'screenLiveSession') {
+                btn.innerHTML = originalHtml;
+                btn.style.pointerEvents = 'auto';
+            }
+        }
+    }
+
+    async function _verifyOrBindDevice(sensSnap, fingerprint, uid) {
+        try {
+            if (!sensSnap.exists()) return true;
+            const data = sensSnap.data();
+            let allowed = data.allowed_devices || (data.bound_device_id ? [data.bound_device_id] : []);
+            if (allowed.includes(fingerprint)) return true;
+            if (allowed.length < 2) {
+                allowed.push(fingerprint);
+                await setDoc(doc(db, 'user_registrations', uid, 'sensitive_info', 'main'),
+                    { allowed_devices: allowed, second_device_added_at: serverTimestamp() }, { merge: true });
+                return true;
+            }
+            return false;
+        } catch (e) { console.error('Device security sync error:', e); return true; }
+    }
+
+    function _incrementAttendanceCache(uid) {
+        try {
+            const raw = localStorage.getItem('cached_profile_data');
+            if (!raw) return;
+            const obj = JSON.parse(raw);
+            if (obj.uid === uid) {
+                obj.attendanceCount = (obj.attendanceCount || 0) + 1;
+                const updated = JSON.stringify(obj);
+                localStorage.setItem('cached_profile_data', updated);
+                PersistentStore.set('cached_profile_data', updated).catch(() => { });
+            }
+        } catch { }
+    }
+
+    function _populateLiveSessionUI(data) {
+        const name = Utils.$('liveDocName');
+        const subject = Utils.$('liveSubjectTag');
+        const avatar = Utils.$('liveDocAvatar');
+        if (name) name.innerText = data.doctorName || 'Professor';
+        if (subject) subject.innerText = data.allowedSubject || 'Subject';
+        if (avatar && data.doctorAvatar) avatar.innerHTML = `<i class="fa-solid ${data.doctorAvatar}"></i>`;
+    }
+
+    return { monitorMyParticipation, searchForSession, resetSearchSession, joinSessionAction };
+})();
+
+
+function startAuthScreenTimer(doctorUID) {
+    const db = window.db;
+    const display = Utils.$('authTimerDisplay');
+    const pill = document.querySelector('.auth-timer-pill');
+    const _t = Utils._t;
+
+    window.authUnsubscribe?.();
+    window.authUnsubscribe = null;
+    clearInterval(window.localTicker);
+    window.localTicker = null;
+
+    const sessionRef = doc(db, 'active_sessions', doctorUID);
+
+    window.authUnsubscribe = onSnapshot(sessionRef, snap => {
+        if (!snap.exists()) { _endSession(_t, '⛔ Session ended by instructor.'); return; }
+        const data = snap.data();
+        if (!data.isActive || !data.isDoorOpen) {
+            if (window.isJoiningProcessActive) return;
+            _endSession(_t, '🔒 Registration closed by lecturer.');
+            return;
+        }
+        if (data.duration === -1) {
+            clearInterval(window.localTicker);
+            _updateTimerUI(display, pill, 'OPEN', 'normal');
+            return;
+        }
+
+        const serverReadMs = snap.readTime ? snap.readTime.toMillis() : Date.now();
+        const offset = serverReadMs - Date.now();
+        const startMs = data.startTime ? data.startTime.toMillis() : serverReadMs;
+        const deadline = startMs + data.duration * 1000;
+
+        clearInterval(window.localTicker);
+        _runTick(deadline, offset, display, pill, _t);
+        window.localTicker = setInterval(() => _runTick(deadline, offset, display, pill, _t), 1000);
+    }, err => console.error('Timer listener error:', err));
+
+    function _runTick(deadline, offset, display, pill, _t) {
+        const remaining = Math.floor((deadline - (Date.now() + offset)) / 1000);
+        if (remaining <= 0) {
+            clearInterval(window.localTicker);
+            if (window.isJoiningProcessActive) return;
+            _updateTimerUI(display, pill, '0s', 'urgent');
+            window.authUnsubscribe?.();
+            window.authUnsubscribe = null;
+            UI.showToast(_t('toast_session_timer_ended', '⏰ Time is up! Entrance period has ended.'), 4000, '#ef4444');
+            setTimeout(() => location.reload(), 3000);
+            return;
+        }
+        _updateTimerUI(display, pill, `${remaining}s`, remaining <= 10 ? 'urgent' : 'normal');
+    }
+
+    function _updateTimerUI(display, pill, text, mode) {
+        if (display) display.innerText = text;
+        if (!pill) return;
+        pill.classList.remove('urgent-mode');
+        pill.style.cssText = '';
+        if (mode === 'urgent') { pill.classList.add('urgent-mode'); }
+        else if (text === 'OPEN') {
+            pill.style.background = '#ecfdf5';
+            pill.style.color = '#10b981';
+            pill.style.borderColor = '#a7f3d0';
+        }
+    }
+
+    function _endSession(_t, msg) {
+        window.authUnsubscribe?.();
+        clearInterval(window.localTicker);
+        UI.showToast(_t('toast_session_closed_manual', msg), 4000, '#ef4444');
+        setTimeout(() => location.reload(), 2500);
+    }
+}
+
+
+const ProfileManager = (() => {
+    const db = window.db;
+    const auth = window.auth;
+
+    async function openStudentProfile(forceRefresh = false) {
+        const user = auth.currentUser;
+        Utils.$('infoBtn') && (Utils.$('infoBtn').style.display = 'none');
+        if (!user) { UI.showToast('⚠️ يرجى تسجيل الدخول أولاً', 3000, '#f59e0b'); return; }
+
+        const modal = Utils.$('studentProfileModal');
+        if (modal) { modal.style.display = 'flex'; setTimeout(() => modal.classList.add('active'), 10); }
+
+        _renderFromCache(user.uid);
+
+        const statsCacheKey = `stats_cache_${user.uid}`;
+        const cachedStats = Utils.safeJsonParse(localStorage.getItem(statsCacheKey));
+        if (cachedStats && !forceRefresh && (Date.now() - cachedStats.timestamp) < CFG.ui.statsCacheTTL) {
+            _renderStats(cachedStats); return;
+        }
+
+        _showStatsLoading();
+        try {
+            const snap = await getDoc(doc(db, 'user_registrations', user.uid));
+            if (!snap.exists()) return;
+            const data = snap.data();
+            const info = data.registrationInfo || data;
+            _renderProfileInfo(user, info, data);
+            const stats = await _computeStats(user.uid, info.group);
+            _renderStats(stats);
+            localStorage.setItem(statsCacheKey, JSON.stringify({ ...stats, timestamp: Date.now() }));
+        } catch (e) {
+            console.error('Profile load error:', e);
+            Utils.$('profAttendanceVal').innerText = '?';
+            Utils.$('profAbsenceVal').innerText = '?';
+        }
+    }
+
+    function _renderFromCache(uid) {
+        const raw = localStorage.getItem('cached_profile_data');
+        if (!raw) return;
+        const d = Utils.safeJsonParse(raw);
+        if (!d || d.uid !== uid) return;
+        Utils.$('profFullName').innerText = d.fullName || '--';
+        Utils.$('profStudentID').innerText = d.studentID || '--';
+        Utils.$('profLevel').innerText = `الفرقة ${d.level || '?'}`;
+        Utils.$('profGender').innerText = d.gender || '--';
+        Utils.$('profEmail').innerText = d.email || '--';
+        _setCollegeRole(d.group, d.college);
+        const av = Utils.$('currentAvatar');
+        if (av) { av.innerHTML = `<i class="fa-solid ${d.avatarClass || 'fa-user-graduate'}"></i>`; av.style.color = 'var(--primary-dark)'; }
+    }
+
+    function _renderProfileInfo(user, info, data) {
+        Utils.$('profFullName').innerText = info.fullName || '--';
+        Utils.$('profStudentID').innerText = info.studentID || '--';
+        Utils.$('profLevel').innerText = `الفرقة ${info.level || '?'}`;
+        Utils.$('profGender').innerText = info.gender || '--';
+        Utils.$('profEmail').innerText = info.email || user.email || '--';
+        _setCollegeRole(info.group, data.college || info.college);
+        const av = Utils.$('currentAvatar');
+        if (av) { av.innerHTML = `<i class="fa-solid ${data.avatarClass || info.avatarClass || 'fa-user-graduate'}"></i>`; av.style.color = 'var(--primary-dark)'; }
+    }
+
+    function _setCollegeRole(group = '', collegeCode = '') {
+        const letter = collegeCode
+            ? (CFG.colleges.codeMap[collegeCode] || group[1]?.toUpperCase() || 'N')
+            : (group.length >= 2 ? group[1].toUpperCase() : 'N');
+        const roleEl = document.querySelector('.pro-role');
+        if (roleEl) roleEl.innerHTML =
+            `<span style="font-size:13px;font-weight:800;">${CFG.colleges.nameMap[letter] || 'Nursing'} Student</span><br>` +
+            `<span style="font-size:13px;color:#0ea5e9;font-weight:900;background:#e0f2fe;padding:2px 10px;border-radius:20px;display:inline-block;margin-top:4px;">${group || '--'}</span>`;
+    }
+
+    async function _computeStats(uid, rawGroup) {
+        const group = rawGroup?.trim() || 'General';
+        const normalizeStr = s => s.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '').toLowerCase();
+
+        const q = query(collection(db, 'course_counters'), where('targetGroups', 'array-contains', group));
+        const [myStatsSnap, countersSnap] = await Promise.all([
+            getDoc(doc(db, 'student_stats', uid)),
+            getDocs(q),
+        ]);
+
+        let attended = {};
+        let discipline = 'good';
+        if (myStatsSnap.exists()) {
+            const d = myStatsSnap.data();
+            attended = d.attended || {};
+            if (d.cumulative_unruly >= 3) discipline = 'bad';
+            else if (d.cumulative_unruly > 0) discipline = 'warning';
+        }
+
+        const heldMap = {};
+        countersSnap.forEach(d => {
+            const s = d.data().subject.trim();
+            heldMap[s] = (heldMap[s] || 0) + 1;
+        });
+
+        let totalAttendance = 0, totalAbsence = 0;
+        for (const [subject, heldCount] of Object.entries(heldMap)) {
+            let studentCount = 0;
+            const tNorm = normalizeStr(subject);
+            for (const [k, v] of Object.entries(attended)) {
+                if (normalizeStr(k) === tNorm) { studentCount = v; break; }
+            }
+            totalAttendance += studentCount;
+            totalAbsence += Math.max(0, heldCount - studentCount);
+        }
+        return { attendance: totalAttendance, absence: totalAbsence, discipline };
+    }
+
+    function _showStatsLoading() {
+        Utils.$('profAttendanceVal').innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" style="font-size:14px"></i>';
+        Utils.$('profAbsenceVal').innerHTML = '-';
+        Utils.$('profDisciplineVal').innerHTML = '-';
+    }
+
+    function _renderStats({ attendance, absence, discipline }) {
+        Utils.$('profAttendanceVal').innerText = attendance;
+        Utils.$('profAbsenceVal').innerText = absence;
+        const el = Utils.$('profDisciplineVal');
+        if (!el) return;
+        const map = { bad: ['مشاغب', '#ef4444'], warning: ['تنبيه', '#f59e0b'], good: ['ملتزم', '#10b981'] };
+        const [text, color] = map[discipline] || map.good;
+        el.innerText = text;
+        el.style.color = color;
+    }
+
+    async function openAvatarSelector() {
+        const user = auth.currentUser;
+        if (!user) return;
+        const grid = Utils.$('avatarsGrid');
+        if (!grid) return;
+
+        let gender = 'Male';
+        try {
+            const snap = await getDoc(doc(db, 'user_registrations', user.uid));
+            if (snap.exists()) gender = snap.data().registrationInfo?.gender || snap.data().gender || 'Male';
+        } catch { }
+
+        grid.innerHTML = '';
+        const icons = CFG.avatars[gender] || CFG.avatars.Male;
+        icons.forEach((iconClass, i) => {
+            const color = CFG.avatarColors[i % CFG.avatarColors.length];
+            const item = Object.assign(document.createElement('div'), { className: 'avatar-option-modern' });
+            item.innerHTML = `<i class="fa-solid ${iconClass}"></i>`;
+            Object.assign(item.style, { color, borderColor: `${color}40`, backgroundColor: `${color}10` });
+            item.onclick = () => saveNewAvatar(iconClass, color);
+            grid.appendChild(item);
+        });
+
+        const modal = Utils.$('avatarSelectorModal');
+        if (modal) { modal.style.zIndex = '2147483647'; modal.style.display = 'flex'; setTimeout(() => modal.classList.add('active'), 10); }
+    }
+
+    async function saveNewAvatar(iconClass, color) {
+        const user = auth.currentUser;
+        if (!user) return;
+
+        const el = Utils.$('currentAvatar');
+        if (el) {
+            el.innerHTML = `<i class="fa-solid ${iconClass}"></i>`;
+            if (color) { el.style.color = color; el.style.borderColor = color; el.style.backgroundColor = `${color}10`; }
+        }
+        Utils.$('avatarSelectorModal').style.display = 'none';
+
+        try {
+            await setDoc(doc(db, 'user_registrations', user.uid), { avatarClass: iconClass }, { merge: true });
+            const raw = localStorage.getItem('cached_profile_data');
+            if (raw) {
+                const obj = JSON.parse(raw);
+                if (obj.uid === user.uid) {
+                    obj.avatarClass = iconClass;
+                    const updated = JSON.stringify(obj);
+                    localStorage.setItem('cached_profile_data', updated);
+                    PersistentStore.set('cached_profile_data', updated).catch(() => { });
+                }
+            }
+            UI.showToast('✅ تم تحديث صورتك بنجاح', 2000, '#10b981');
+        } catch (e) { UI.showToast('❌ فشل حفظ التغييرات', 3000, '#ef4444'); }
+    }
+
+    async function autoFetchName(studentId) {
+        const nameInput = Utils.$('regFullName');
+        const signupBtn = Utils.$('btnDoSignup');
+        if (!nameInput) return;
+
+        nameInput.value = '';
+        nameInput.placeholder = 'جاري التحقق أمنياً...';
+        const cleanId = studentId.toString().trim();
+        if (!cleanId || cleanId.length < 4) { nameInput.placeholder = 'Full Name'; return; }
+
+        try {
+            const lockSnap = await getDoc(doc(db, 'taken_student_ids', cleanId));
+            if (lockSnap.exists()) {
+                nameInput.value = '⚠️ الكود محجوز لحساب آخر';
+                nameInput.style.color = '#ef4444';
+                if (signupBtn) signupBtn.disabled = true;
+                return;
+            }
+            const stdSnap = await getDoc(doc(db, 'students', cleanId));
+            if (stdSnap.exists()) {
+                nameInput.value = stdSnap.data().name;
+                nameInput.style.color = '#0f172a';
+                nameInput.placeholder = '';
+            } else {
+                nameInput.value = '❌ كود غير مسجل';
+                nameInput.style.color = '#b91c1c';
+            }
+        } catch { nameInput.value = '⚠️ اعد المحاولة'; }
+        finally { UI.validateSignupForm(); }
+    }
+
+    return { openStudentProfile, openAvatarSelector, saveNewAvatar, autoFetchName };
+})();
+
+
+const FeedbackManager = (() => {
+    const db = window.db;
+    const auth = window.auth;
+
+    async function checkForPendingSurveys() {
+        const user = auth.currentUser;
+        if (!user || user.uid === CFG.firebase.excludedUID) return;
+
+        try {
+            const userDoc = await getDoc(doc(db, 'user_registrations', user.uid));
+            const studentCode = userDoc.data()?.registrationInfo?.studentID || userDoc.data()?.studentID;
+            if (!studentCode) return;
+
+            const q = query(collection(db, 'attendance'),
+                where('id', '==', studentCode),
+                where('feedback_status', '==', 'pending'),
+                limit(1));
+            const snap = await getDocs(q);
+            if (snap.empty) return;
+
+            const pending = snap.docs[0];
+            const localKey = `fd_${pending.id}`;
+
+            if (localStorage.getItem(localKey)) {
+                try {
+                    await updateDoc(doc(db, 'attendance', pending.id), {
+                        feedback_status: 'dismissed',
+                        dismissed_at: serverTimestamp(),
+                    });
+                } catch { }
+                return;
+            }
+
+            _showFeedbackModal(pending.id, pending.data());
+        } catch (e) { console.error('Survey check error:', e); }
+    }
+
+    function _showFeedbackModal(docId, data) {
+        Utils.$('feedbackSubjectName').innerText = data.subject || 'محاضرة';
+        Utils.$('feedbackDocName').innerText = data.doctorName || 'الكلية';
+        Utils.$('targetAttendanceDocId').value = docId;
+        selectStar(0);
+        Utils.$('feedbackModal').style.display = 'flex';
+        _injectSkipButton();
+    }
+
+    function _injectSkipButton() {
+        const modal = Utils.$('feedbackModal');
+        if (!modal || modal.querySelector('.btn-skip-feedback')) return;
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn-skip-feedback';
+        Object.assign(btn.style, {
+            display: 'block', margin: '10px auto 0', background: 'none',
+            border: 'none', color: '#94a3b8', fontSize: '12px', cursor: 'pointer',
+            padding: '6px 12px', borderRadius: '8px', transition: 'color 0.2s',
+            borderBottom: '0.5px solid #cbd5e1',
+        });
+        btn.innerText = Utils.lang() === 'ar' ? 'لا شكراً، ربما لاحقاً' : 'No thanks, maybe later';
+        btn.onmouseenter = () => { btn.style.color = 'var(--color-text-secondary)'; };
+        btn.onmouseleave = () => { btn.style.color = '#94a3b8'; };
+        btn.onclick = dismissFeedback;
+
+        const submitBtn = modal.querySelector('.btn-main');
+        submitBtn?.parentNode?.insertBefore(btn, submitBtn.nextSibling) ?? modal.appendChild(btn);
+    }
+
+    async function dismissFeedback() {
+        const docId = Utils.$('targetAttendanceDocId')?.value;
+        UI.closeModal('feedbackModal');
+        if (!docId) return;
+
+        UI.showToast('تم تخطي التقييم', 2000, '#64748b');
+
+        try {
+            const uid = auth.currentUser?.uid || 'unknown';
+            const token = await Utils.hashString(`${docId}${uid}dismiss_v1`);
+            localStorage.setItem(`fd_${docId}`, JSON.stringify({ ts: Date.now(), token }));
+        } catch {
+            localStorage.setItem(`fd_${docId}`, JSON.stringify({ ts: Date.now() }));
+        }
+
+        try {
+            await updateDoc(doc(db, 'attendance', docId), {
+                feedback_status: 'dismissed',
+                dismissed_at: serverTimestamp(),
+            });
+        } catch (e) {
+            console.warn('Dismiss Firestore sync failed — local cache active:', e.code || e.message);
+        }
+
+        setTimeout(() => checkForPendingSurveys(), 600);
+    }
+
+    function selectStar(val) {
+        const dict = i18n[Utils.lang()] || {};
+        const texts = ['', dict.rate_bad, dict.rate_poor, dict.rate_fair, dict.rate_good, dict.rate_excellent];
+        document.querySelectorAll('.star-btn').forEach(star => {
+            star.classList.toggle('active', parseInt(star.getAttribute('data-value')) <= val);
+        });
+        const textEl = Utils.$('ratingText');
+        if (textEl) {
+            textEl.innerText = texts[val] || '';
+            textEl.style.animation = 'none';
+            setTimeout(() => { textEl.style.animation = 'fadeIn 0.3s'; }, 10);
+        }
+        Utils.$('selectedRating').value = val;
+        navigator.vibrate?.(20);
+    }
+
+    async function submitFeedback() {
+        const rating = Utils.$('selectedRating')?.value;
+        const docId = Utils.$('targetAttendanceDocId')?.value;
+        const btn = document.querySelector('#feedbackModal .btn-main');
+
+        if (!rating || rating === '0') { UI.showToast('⚠️ من فضلك قيم بعدد النجوم', 2000, '#f59e0b'); return; }
+
+        btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> جاري التوثيق...';
+        btn.style.pointerEvents = 'none';
+
+        try {
+            const attRef = doc(db, 'attendance', docId);
+            const attSnap = await getDoc(attRef);
+            if (!attSnap.exists()) throw new Error('بيانات الحضور غير موجودة');
+            const room = attSnap.data();
+
+            const batch = writeBatch(db);
+            batch.update(attRef, { feedback_status: 'submitted', feedback_timestamp: serverTimestamp() });
+            batch.set(doc(collection(db, 'feedback_reports')), {
+                rating: parseInt(rating), comment: '', timestamp: serverTimestamp(),
+                doctorName: room.doctorName, doctorUID: room.doctorUID, subject: room.subject,
+                hall: room.hall || 'Unknown', date: room.date, studentId: room.id, studentLevel: 'General',
+            });
+            await batch.commit();
+
+            try { localStorage.removeItem(`fd_${docId}`); } catch { /* non-critical */ }
+
+            UI.closeModal('feedbackModal');
+            UI.showToast('✅ تم وصول تقييمك للإدارة بخصوصية تامة.', 3000, '#10b981');
+            setTimeout(() => checkForPendingSurveys(), 1000);
+        } catch (e) {
+            console.error('Feedback submit error:', e);
+            UI.showToast('❌ تعذر الإرسال، حاول مرة أخرى', 3000, '#ef4444');
+        } finally {
+            btn.innerHTML = 'إرسال التقييم <i class="fa-solid fa-paper-plane"></i>';
+            btn.style.pointerEvents = 'auto';
+        }
+    }
+
+    return { checkForPendingSurveys, selectStar, submitFeedback, dismissFeedback };
+})();
+
+
+const SmartSearch = (() => {
+    const db = window.db;
+
+    async function startSmartSearch() {
+        const rawInput = Utils.$('makaniInput')?.value.trim();
+        const content = Utils.$('makaniContent');
+        const modal = Utils.$('makaniResultsModal');
+        const btn = Utils.$('btnMakani');
+        const _t = Utils._t;
+        if (!rawInput) return;
+
+        const q = Utils.smartNormalize(rawInput);
+        btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+        content.innerHTML = `<div style="padding:30px;text-align:center;">
+            <i class="fa-solid fa-wand-magic-sparkles fa-bounce" style="font-size:40px;color:#0ea5e9;"></i>
+            <p>${_t('processing_text', 'جاري البحث في الكلية...')}</p>
+        </div>`;
+        modal.style.display = 'flex';
+
+        try {
+            const results = [];
+            const sessions = await getDocs(query(collection(db, 'active_sessions'), where('isActive', '==', true)));
+
+            for (const sessionDoc of sessions.docs) {
+                const data = { ...sessionDoc.data() };
+                const docId = sessionDoc.id;
+                const normSub = Utils.smartNormalize(data.allowedSubject || '');
+                const groups = Array.isArray(data.targetGroups) ? data.targetGroups : [];
+                const groupHit = groups.some(g => Utils.smartNormalize(g).includes(q));
+                let matchType = null;
+
+                if (normSub.includes(q) || groupHit) {
+                    matchType = 'session';
+                } else if (!isNaN(rawInput) && rawInput.length >= 3) {
+                    const pSnap = await getDocs(query(
+                        collection(db, 'active_sessions', docId, 'participants'),
+                        where('id', '==', rawInput), where('status', '==', 'active')));
+                    if (!pSnap.empty) { matchType = 'student'; data.friendName = pSnap.docs[0].data().name; }
+                }
+
+                if (!matchType) continue;
+
+                try {
+                    const cnt = await getCountFromServer(query(
+                        collection(db, 'active_sessions', docId, 'participants'),
+                        where('status', '==', 'active')));
+                    data.liveCount = cnt.data().count;
+                } catch { data.liveCount = '?'; }
+
+                results.push({ ...data, matchType, doctorId: docId });
+            }
+
+            content.innerHTML = '';
+            if (!results.length) {
+                content.innerHTML = `<div class="empty-state-modern">
+                    <div class="empty-icon-bg"><i class="fa-solid fa-magnifying-glass-minus" style="font-size:30px;color:#94a3b8;"></i></div>
+                    <h3 style="margin-top:10px;font-size:14px;color:#64748b;">${_t('search_no_results_custom', 'لم يتم العثور على نتائج')}</h3>
+                    <p style="font-size:11px;color:#cbd5e1;">"${rawInput}"</p>
+                </div>`;
+                return;
+            }
+
+            results.forEach(res => content.appendChild(_buildResultCard(res, _t)));
+        } catch (e) {
+            console.error('Smart search error:', e);
+            content.innerHTML = '<div style="color:#ef4444;text-align:center;padding:20px;">حدث خطأ أثناء البحث</div>';
+        } finally {
+            btn.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i>';
+        }
+    }
+
+    function _buildResultCard(res, _t) {
+        const card = document.createElement('div');
+        card.className = 'makani-card no-hover';
+        const docName = res.doctorName || '';
+        const isEng = /^[A-Za-z]/.test(docName);
+        const prefix = isEng ? 'Dr.' : 'د.';
+
+        if (res.matchType === 'session') {
+            card.innerHTML = `
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+                    <div style="flex:1;">
+                        <div style="font-weight:900;font-size:16px;color:#0f172a;margin-bottom:4px;">${res.allowedSubject}</div>
+                        <div style="font-size:13px;color:#64748b;direction:${isEng ? 'ltr' : 'rtl'};text-align:${isEng ? 'left' : 'right'};">${prefix} ${docName}</div>
+                    </div>
+                    <div style="text-align:center;background:#dcfce7;color:#166534;padding:5px 10px;border-radius:10px;font-size:12px;font-weight:bold;margin-right:5px;">
+                        <span class="blink-dot" style="background:#16a34a;"></span> LIVE (${res.liveCount})
                     </div>
                 </div>
-
-                <div>
-                    <label style="font-size: 13px; font-weight: 700; color: #374151; display:block; margin-bottom: 8px;"
-                        data-i18n="priority_label">الأولوية</label>
-                    <div class="segment-control"
-                        style="margin: 0; height: 44px; display: flex; background: #f3f4f6; padding: 3px; border-radius: 10px;">
-
-                        <input type="radio" name="urgency" id="urg_normal" value="normal" checked style="display:none;">
-                        <label for="urg_normal" onclick="document.getElementById('urg_normal').checked=true"
-                            style="flex: 1; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-size: 12px; font-weight: 600; color: #4b5563; cursor: pointer; transition: 0.2s;"
-                            data-i18n="priority_normal">
-                            عادي
-                        </label>
-
-                        <input type="radio" name="urgency" id="urg_high" value="urgent" style="display:none;">
-                        <label for="urg_high" onclick="document.getElementById('urg_high').checked=true"
-                            style="flex: 1; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-size: 12px; font-weight: 600; color: #ef4444; cursor: pointer; transition: 0.2s;"
-                            data-i18n="priority_high">
-                            عاجل 🔥
-                        </label>
+                <div class="hall-badge-formal">
+                    <div style="font-size:10px;color:#94a3b8;">${_t('formal_direction', 'المكان الحالي')}</div>
+                    <div style="font-size:20px;font-weight:900;color:#fff;">HALL: ${res.hall}</div>
+                </div>`;
+        } else {
+            const stdName = res.friendName || '';
+            const isEngStd = /^[A-Za-z]/.test(stdName);
+            card.innerHTML = `
+                <div style="width:100%;direction:${isEngStd ? 'ltr' : 'rtl'};">
+                    <div style="display:flex;align-items:center;gap:15px;margin-bottom:20px;">
+                        <div style="background:#f0f9ff;min-width:55px;height:55px;border-radius:50%;color:#0ea5e9;display:flex;align-items:center;justify-content:center;border:2px solid #bae6fd;flex-shrink:0;">
+                            <i class="fa-solid fa-user-graduate" style="font-size:24px;"></i>
+                        </div>
+                        <div style="flex:1;text-align:${isEngStd ? 'left' : 'right'};">
+                            <div style="font-weight:900;font-size:16px;color:#0f172a;margin-bottom:5px;">${stdName}</div>
+                            <div style="font-size:13px;color:#64748b;font-weight:600;">${isEngStd ? 'Attending:' : 'يحضر الآن:'} <span style="color:#0ea5e9;font-weight:800;">${res.allowedSubject}</span></div>
+                        </div>
                     </div>
-                </div>
-            </div>
-
-            <div style="margin-bottom: 20px;">
-                <label style="font-size: 13px; font-weight: 700; color: #374151; display:block; margin-bottom: 8px;"
-                    data-i18n="needed_time_label">الوقت المطلوب</label>
-                <div style="position: relative;">
-                    <select id="reqTimingSelect" onchange="toggleTimeInput(this.value)"
-                        style="width: 100%; padding: 12px 15px; border-radius: 10px; border: 1px solid #d1d5db; background: #f9fafb; color: #111827; font-size: 14px; font-family: 'Cairo', sans-serif; appearance: none; -webkit-appearance: none;">
-                        <option value="now" data-i18n="time_now_option">الآن (المحاضرة الحالية)</option>
-                        <option value="later" data-i18n="time_later_option">جدولة لوقت لاحق</option>
-                    </select>
-                    <i class="fa-solid fa-chevron-down"
-                        style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); color: #6b7280; pointer-events: none;"></i>
-                </div>
-
-                <div id="reqTimePicker" style="display: none; margin-top: 10px;">
-                    <input type="time" id="reqSpecificTime"
-                        style="width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #d1d5db; background: #fff; color: #111827;">
-                </div>
-            </div>
-
-            <div style="margin-bottom: 25px;">
-                <label style="font-size: 13px; font-weight: 700; color: #374151; display:block; margin-bottom: 8px;"
-                    data-i18n="location_label">الموقع (قاعة / معمل)</label>
-                <div style="position: relative;">
-                    <select id="reqLocationSelect"
-                        style="width: 100%; padding: 12px 15px; border-radius: 10px; border: 1px solid #d1d5db; background: #f9fafb; color: #111827; font-size: 14px; font-weight: 600; font-family: 'Outfit', sans-serif; appearance: none; -webkit-appearance: none;">
-                        <option value="" disabled selected data-i18n="select_location_default">-- اختر الموقع --
-                        </option>
-                    </select>
-                    <i class="fa-solid fa-chevron-down"
-                        style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); color: #6b7280; pointer-events: none;"></i>
-                </div>
-            </div>
-
-            <button onclick="submitLogisticsRequest()" class="btn-main"
-                style="background: #16a34a; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.4); height: 50px; font-size: 16px; font-weight: 700; width: 100%; border: none; border-radius: 12px; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                <span data-i18n="send_request_btn">إرسال الطلب</span> <i class="fa-solid fa-paper-plane"></i>
-            </button>
-
-        </div>
-    </div>
-</div>
-
-<style>
-    #urg_normal:checked+label {
-        background: #ffffff;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        color: #1f2937 !important;
+                    <div class="hall-badge-formal" style="background:linear-gradient(135deg,#6366f1,#4f46e5);border-radius:16px;padding:15px;text-align:center;direction:ltr;">
+                        <div style="font-size:12px;color:#e0e7ff;margin-bottom:2px;font-weight:bold;opacity:0.9;">${_t('radar_current_location', 'الموقع الحالي')}</div>
+                        <div style="font-size:28px;font-weight:900;color:#fff;font-family:'Outfit',sans-serif;letter-spacing:1px;">HALL: ${res.hall}</div>
+                    </div>
+                </div>`;
+        }
+        return card;
     }
 
-    #urg_high:checked+label {
-        background: #fee2e2;
-        box-shadow: 0 1px 3px rgba(239, 68, 68, 0.2);
-        color: #b91c1c !important;
-    }
-</style>
-<div id="feedbackModal" class="modal-overlay" style="z-index: 2147483647; display: none;">
-    <div class="modal-box" style="text-align: center; max-width: 350px;">
-        <div style="margin-bottom: 15px;">
-            <div
-                style="width: 70px; height: 70px; background: #fffbeb; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto; border: 4px solid #fff;">
-                <i class="fa-solid fa-star" style="font-size: 35px; color: #f59e0b;"></i>
-            </div>
-        </div>
+    return { startSmartSearch };
+})();
 
-        <h3 class="modal-title" style="color: #1e293b; margin-bottom: 5px;" data-i18n="feedback_title">رأيك يهمنا</h3>
 
-        <p style="color: #64748b; font-size: 13px; margin-bottom: 20px;">
-            <span data-i18n="feedback_subtitle">يرجى تقييم محاضرة اليوم للمتابعة:</span><br>
-            <b id="feedbackSubjectName" style="color: #0ea5e9; font-size: 15px;">--</b> <br>
+const IdleTimer = (() => {
+    let _ticker = null;
+    let _elapsed = 0;
+    let _isTyping = false;
 
-            <span style="font-size: 12px; background: #f1f5f9; padding: 2px 8px; border-radius: 6px;">
-                <span data-i18n="doctor_prefix">د.</span>
-                <span id="feedbackDocName" class="en-font">--</span>
-            </span>
-        </p>
-
-        <div class="star-rating-container" dir="ltr">
-            <i class="fa-solid fa-star star-btn" data-value="1" onclick="selectStar(1)"></i>
-            <i class="fa-solid fa-star star-btn" data-value="2" onclick="selectStar(2)"></i>
-            <i class="fa-solid fa-star star-btn" data-value="3" onclick="selectStar(3)"></i>
-            <i class="fa-solid fa-star star-btn" data-value="4" onclick="selectStar(4)"></i>
-            <i class="fa-solid fa-star star-btn" data-value="5" onclick="selectStar(5)"></i>
-        </div>
-
-        <div id="ratingText"
-            style="font-size: 12px; font-weight: bold; color: #f59e0b; height: 20px; margin-bottom: 10px;"></div>
-
-        <input type="hidden" id="selectedRating" value="0">
-        <input type="hidden" id="targetAttendanceDocId" value="">
-
-        <div class="privacy-alert-box">
-            <i class="fa-solid fa-user-shield"></i>
-            <span data-i18n="privacy_notice_formal">
-                تنويه: يتم إرسال هذا التقييم للمحاضر بسرية تامة.
-            </span>
-        </div>
-
-        <button onclick="submitFeedback()" class="btn-main"
-            style="width: 100%; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3); background: linear-gradient(135deg, #f59e0b, #d97706);">
-            <span data-i18n="send_feedback_btn">إرسال التقييم</span> <i class="fa-solid fa-paper-plane"></i>
-        </button>
-    </div>
-</div>
-
-<style>
-    .star-rating-container {
-        display: flex;
-        justify-content: center;
-        gap: 12px;
-        margin-bottom: 10px;
+    function start() {
+        stop();
+        _elapsed = _isTyping = false;
+        _ticker = setInterval(() => {
+            if (_isTyping) return;
+            if (++_elapsed >= CFG.ui.idleTimeoutSec) {
+                stop();
+                UI.switchScreen('screenWelcome');
+                UI.showToast('⚠️ كن سريعا في المرة القادمة', 3000, '#f59e0b');
+            }
+        }, 1000);
     }
 
-    .star-btn {
-        font-size: 28px;
-        color: #e2e8f0;
-        cursor: pointer;
-        transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), color 0.2s;
+    function stop() {
+        clearInterval(_ticker);
+        _ticker = _elapsed = 0;
+        _isTyping = false;
+        const input = Utils.$('attendanceCode');
+        if (input) input.value = '';
     }
 
-    .star-btn:active {
-        transform: scale(0.8);
+    function onKeyDown() { _isTyping = true; _elapsed = 0; }
+    function onKeyUp() { _isTyping = false; }
+
+    return { start, stop, onKeyDown, onKeyUp };
+})();
+
+
+const WakeLock = (() => {
+    let _lock = null;
+    async function request() {
+        try { if ('wakeLock' in navigator) _lock = await navigator.wakeLock.request('screen'); } catch { /* silently fail */ }
+    }
+    function release() { _lock?.release().then(() => { _lock = null; }); }
+    return { request, release };
+})();
+
+
+const PWAManager = (() => {
+    let _deferred = null;
+
+    function init() {
+        const box = Utils.$('installAppPrompt');
+        window.addEventListener('beforeinstallprompt', e => {
+            e.preventDefault();
+            _deferred = e;
+            if (box) box.style.display = 'flex';
+        });
+        window.addEventListener('appinstalled', () => {
+            if (box) box.style.display = 'none';
+            _deferred = null;
+            UI.showToast('شكراً لتثبيت التطبيق! 🚀', 4000, '#10b981');
+        });
     }
 
-    .star-btn.active {
-        color: #f59e0b;
-        transform: scale(1.1);
-        text-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
+    function triggerInstall() {
+        if (!_deferred) return;
+        _deferred.prompt();
+        _deferred.userChoice.then(r => {
+            if (r.outcome === 'accepted') Utils.$('installAppPrompt').style.display = 'none';
+            _deferred = null;
+        });
     }
 
-    .privacy-alert-box {
-        background-color: #f8fafc;
-        border: 1px dashed #cbd5e1;
-        border-radius: 12px;
-        padding: 10px 15px;
-        margin-bottom: 20px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        text-align: right;
-        direction: rtl;
+    return { init, triggerInstall };
+})();
+
+
+function initSecurityLayer() {
+    const blocked = ['contextmenu', 'copy', 'cut', 'paste'];
+    const msgs = {
+        contextmenu: 'إجراء محظور لأسباب أمنية.',
+        copy: 'النسخ محظور لأسباب أمنية.',
+        cut: 'القص محظور لأسباب أمنية.',
+        paste: 'اللصق محظور لأسباب أمنية.',
+    };
+    blocked.forEach(evt => {
+        document.addEventListener(evt, e => { e.preventDefault(); UI.showToast(msgs[evt], 2000, '#ef4444'); });
+    });
+
+    window.history.pushState(null, null, window.location.href);
+    window.onpopstate = () => {
+        if (window.processIsActive) window.history.pushState(null, null, window.location.href);
+    };
+}
+
+
+function startClock() {
+    setInterval(() => {
+        const now = new Date();
+        const timeEl = Utils.$('currentTime');
+        const dateEl = Utils.$('currentDate');
+        if (timeEl) timeEl.innerText = now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' });
+        if (dateEl) dateEl.innerText = now.toLocaleDateString('en-GB');
+    }, 1000);
+}
+
+
+Object.assign(window, {
+    getUniqueDeviceId: DeviceManager.getUniqueDeviceId,
+
+    switchScreen: UI.switchScreen,
+    openAuthDrawer: UI.openAuthDrawer,
+    closeAuthDrawer: UI.closeAuthDrawer,
+    toggleAuthMode: UI.toggleAuthMode,
+    togglePass: UI.togglePass,
+    toggleDropdown: UI.toggleDropdown,
+    selectOption: UI.selectOption,
+    validateSignupForm: UI.validateSignupForm,
+    filterModalSubjects: UI.filterModalSubjects,
+    showToast: UI.showToast,
+    resetMainButtonUI: () => {
+        const uid = sessionStorage.getItem('TARGET_DOCTOR_UID') || localStorage.getItem('TARGET_DOCTOR_UID');
+        UI.setMainButton(uid ? 'enter' : 'register');
+    },
+
+    performStudentSignup: AuthManager.performStudentSignup,
+    performStudentLogin: AuthManager.performStudentLogin,
+    performStudentLogout: AuthManager.performStudentLogout,
+
+
+    monitorMyParticipation: SessionManager.monitorMyParticipation,
+    searchForSession: SessionManager.searchForSession,
+    resetSearchSession: SessionManager.resetSearchSession,
+    joinSessionAction: SessionManager.joinSessionAction,
+    startAuthScreenTimer,
+
+    openStudentProfile: ProfileManager.openStudentProfile,
+    openAvatarSelector: ProfileManager.openAvatarSelector,
+    saveNewAvatar: ProfileManager.saveNewAvatar,
+    autoFetchName: ProfileManager.autoFetchName,
+
+    checkForPendingSurveys: FeedbackManager.checkForPendingSurveys,
+    selectStar: FeedbackManager.selectStar,
+    submitFeedback: FeedbackManager.submitFeedback,
+    dismissFeedback: FeedbackManager.dismissFeedback,
+
+    startSmartSearch: SmartSearch.startSmartSearch,
+
+    startCodeEntryIdleTimer: IdleTimer.start,
+    stopCodeEntryIdleTimer: IdleTimer.stop,
+
+    triggerAppInstall: PWAManager.triggerInstall,
+
+    getGPSForJoin: GPSManager.getGPSForJoin,
+    openMapsToRefreshGPS: GPSManager.openMapsToCollegeLocation,
+    getDistanceFromLatLonInKm: Utils.haversineKm,
+
+    changeLanguage: UI.applyLanguage,
+    toggleSystemLanguage: async () => {
+        const auth = window.auth;
+        const db = window.db;
+        const current = Utils.lang();
+        const next = current === 'ar' ? 'en' : 'ar';
+        UI.applyLanguage(next);
+        document.querySelectorAll('.active-lang-text-pro').forEach(s => { s.innerText = next === 'ar' ? 'EN' : 'عربي'; });
+        const user = auth.currentUser;
+        if (user) {
+            try { await setDoc(doc(db, 'user_registrations', user.uid), { preferredLanguage: next }, { merge: true }); }
+            catch (e) { console.warn('Language sync skipped:', e.message); }
+        }
+    },
+
+    handleProfileIconClick: () => {
+        const user = window.auth.currentUser;
+        if (!user) UI.openAuthDrawer();
+        else ProfileManager.openStudentProfile();
+    },
+    showSmartWelcome: name => {
+        const today = new Date().toLocaleDateString('en-GB');
+        if (localStorage.getItem('last_welcome_date') === today) return;
+        const modal = Utils.$('dailyWelcomeModal');
+        const nameSpan = Utils.$('welcomeUserName');
+        if (modal && nameSpan) {
+            nameSpan.innerText = name.split(' ')[0];
+            modal.style.display = 'flex';
+            modal.style.opacity = '1';
+            localStorage.setItem('last_welcome_date', today);
+        }
+    },
+    closeDailyWelcome: () => {
+        const modal = Utils.$('dailyWelcomeModal');
+        if (!modal) return;
+        modal.style.transition = '0.3s ease';
+        modal.style.opacity = '0';
+        setTimeout(() => { modal.style.display = 'none'; }, 300);
+    },
+    goHome: () => {
+        const passModal = Utils.$('studentPassModal');
+        if (passModal) passModal.style.setProperty('display', 'none', 'important');
+        Utils.$('passwordChoicesContainer') && (Utils.$('passwordChoicesContainer').innerHTML = '');
+        Utils.$('studentEnteredPass') && (Utils.$('studentEnteredPass').value = '');
+        const live = Utils.$('screenLiveSession');
+        if (live) { live.style.cssText = ''; live.style.setProperty('display', 'none', 'important'); }
+        UI.switchScreen('screenWelcome');
+        Utils.$('infoBtn') && (Utils.$('infoBtn').style.display = 'flex');
+        document.body.classList.add('on-welcome-screen');
+        document.body.classList.remove('hide-main-icons');
+        document.body.style.overflow = 'auto';
+    },
+    showInfoModal: () => { window.playClick?.(); UI.openModal('infoModal'); },
+    closeSetupModal: () => { UI.closeModal('customTimeModal'); document.body.style.overflow = 'auto'; },
+    goBackToWelcome: async () => {
+        await window.stopCameraSafely?.();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        GPSManager.stopWatcher?.();
+        UI.switchScreen('screenWelcome');
+    },
+    stopCameraSafely: async () => { WakeLock.release(); return true; },
+    startQrScanner: () => UI.showToast('تم إلغاء خاصية الباركود.', 3000, '#f59e0b'),
+    safeClick: btn => { if (btn) { btn.style.opacity = '0.7'; btn.style.pointerEvents = 'none'; } },
+    hideConnectionLostModal: NetworkManager.hideLostModal,
+    expandAvatar: () => {
+        const av = Utils.$('publicAvatar');
+        const icon = av?.getAttribute('data-icon');
+        const color = av?.getAttribute('data-color');
+        if (!icon) return;
+        const container = Utils.$('zoomedAvatarContainer');
+        if (container) { container.innerHTML = `<i class="fa-solid ${icon}"></i>`; container.querySelector('i').style.color = color; }
+        UI.openModal('imageZoomModal');
+    },
+
+    portalClicks: 0,
+    portalTimer: null,
+    handleAdminTripleClick: btn => {
+        window.playClick?.();
+        window.portalClicks++;
+        clearTimeout(window.portalTimer);
+        window.portalTimer = setTimeout(() => { window.portalClicks = 0; }, 2000);
+        if (window.portalClicks === 3) navigator.vibrate?.([50, 50]);
+    },
+    handleReportClick: () => {
+        window.portalClicks = 0;
+        UI.showToast('🔐 القسم محمي', 3000, '#ef4444');
+        navigator.vibrate?.(200);
+    },
+
+    updateUIForMode: () => {
+        const auth = window.auth;
+        document.body.classList.remove('is-dean', 'is-doctor', 'is-student');
+        document.body.classList.add('is-student');
+
+        ['btnToggleSession', 'btnQuickMode', 'btnToolsRequest', 'deanPrivateZone',
+            'btnDataEntry', 'facultyProfileBtn', 'btnLiveFeedback'].forEach(id => {
+                Utils.$(id)?.style.setProperty('display', 'none', 'important');
+            });
+
+        Utils.$('btnViewReport')?.classList.add('locked');
+        Utils.$('mainActionBtn') && (Utils.$('mainActionBtn').style.display = 'flex');
+        Utils.$('makaniSearchBar') && (Utils.$('makaniSearchBar').style.display = 'block');
+        Utils.$('studentProfileBtn') && (Utils.$('studentProfileBtn').style.display = 'flex');
+
+        UI.applyLanguage(Utils.lang());
+    },
+
+    startProcess: async isRetry => {
+        window.playClick?.();
+        const user = window.auth.currentUser;
+        if (!user) { UI.openAuthDrawer(); return; }
+        if (sessionStorage.getItem('TARGET_DOCTOR_UID') || localStorage.getItem('TARGET_DOCTOR_UID')) {
+            UI.switchScreen('screenLiveSession');
+            window.startLiveSnapshotListener?.();
+            return;
+        }
+        UI.switchScreen('screenDataEntry');
+        Utils.$('step2_auth')?.style.setProperty('display', 'none', 'important');
+        const errEl = Utils.$('screenError');
+        if (errEl) errEl.style.display = 'none';
+        const step1 = Utils.$('step1_search');
+        if (step1) step1.style.cssText = 'display:block !important;visibility:visible !important;';
+        setTimeout(() => Utils.$('attendanceCode')?.focus(), 150);
+        IdleTimer.start();
+    },
+
+    forceOpenPinScreen: () => {
+        const user = window.auth.currentUser;
+        if (!user) { UI.showToast('⚠️ عذراً، انتظر', 3000, '#f59e0b'); UI.openAuthDrawer(); return; }
+        UI.switchScreen('screenDataEntry');
+        Utils.$('step2_auth')?.style.setProperty('display', 'none', 'important');
+        const errEl = Utils.$('screenError');
+        if (errEl) errEl.style.display = 'none';
+        const step1 = Utils.$('step1_search');
+        if (step1) step1.style.cssText = 'display:block !important;opacity:1 !important;visibility:visible !important;width:100%;';
+        setTimeout(() => Utils.$('attendanceCode')?.focus(), 150);
+        IdleTimer.start();
+    },
+
+    playClick: () => { },
+    subjectsData: MASTER_SUBJECTS,
+
+    isJoiningProcessActive: false,
+    isProcessingClick: false,
+    studentStatusListener: null,
+    sessionStatusListener: null,
+    HARDWARE_ID: null,
+
+    _authStateLoading: true,
+    renderPasswordChoices: function (correctPassword) {
+        const container = document.getElementById('passwordChoicesContainer');
+        const hiddenInput = document.getElementById('studentEnteredPass');
+        if (!container) return;
+
+        const POOL = 'ابتثجحخدذرزسشصضطظعغفقكلمنهوي';
+
+        const uid = window.auth?.currentUser?.uid || 'guest';
+        const uidSeed = [...uid].reduce((acc, c) => acc + c.charCodeAt(0), 0);
+
+        function seededRand(seed) {
+            let s = seed;
+            return function () {
+                s = (s * 1664525 + 1013904223) & 0xffffffff;
+                return (s >>> 0) / 0xffffffff;
+            };
+        }
+
+        const rand = seededRand(uidSeed + Date.now() % 9999);
+
+        function randChar(exclude = []) {
+            let c, attempts = 0;
+            do {
+                c = POOL[Math.floor(rand() * POOL.length)];
+                attempts++;
+            } while (exclude.includes(c) && attempts < 50);
+            return c;
+        }
+
+        function buildChoice(correct, numCorrect) {
+            const chars = [...correct];
+            const len = chars.length;
+            const result = new Array(len).fill(null);
+            const positions = [...Array(len).keys()].sort(() => rand() - 0.5);
+            const correctPos = positions.slice(0, numCorrect);
+            const wrongPos = positions.slice(numCorrect);
+
+            correctPos.forEach(i => result[i] = { ch: chars[i], ok: true });
+            wrongPos.forEach(i => {
+                const used = result.filter(x => x).map(x => x.ch);
+                result[i] = { ch: randChar([...chars, ...used]), ok: false };
+            });
+            return result;
+        }
+
+        const len = [...correctPassword].length;
+        const correctSlots = [...correctPassword].map(ch => ({ ch, ok: true }));
+
+        const allChoices = [correctSlots];
+        const distributions = [len - 1, Math.max(1, len - 2), Math.ceil(len / 2), 1];
+        distributions.forEach(n => allChoices.push(buildChoice(correctPassword, n)));
+
+        for (let i = allChoices.length - 1; i > 0; i--) {
+            const j = Math.floor(rand() * (i + 1));
+            [allChoices[i], allChoices[j]] = [allChoices[j], allChoices[i]];
+        }
+
+        container.innerHTML = '';
+
+        allChoices.forEach(choice => {
+            const btn = document.createElement('button');
+            btn.style.cssText = `
+            width:100%; padding:22px 12px; border-radius:16px;
+            border:2.5px solid #e2e8f0; background:#f8fafc;
+            font-size:34px; font-weight:900; letter-spacing:12px;
+            color:#0f172a; cursor:pointer; line-height:1;
+            font-family:'Noto Sans Mono',monospace;
+            transition:all 0.15s; box-shadow:0 4px 12px rgba(0,0,0,0.06);
+            display:flex; justify-content:center; gap:4px; margin-bottom:10px;
+        `;
+
+            btn.innerHTML = choice.map(slot =>
+                `<span data-ok="${slot.ok}">${slot.ch}</span>`
+            ).join('');
+
+            btn.onclick = () => {
+                container.querySelectorAll('button').forEach(b => {
+                    b.style.pointerEvents = 'none';
+                    b.style.opacity = '0.4';
+                });
+
+                const isCorrect = choice.every(s => s.ok);
+
+                if (isCorrect) {
+                    btn.style.borderColor = '#10b981';
+                    btn.style.background = '#ecfdf5';
+                    btn.style.color = '#065f46';
+                    btn.style.opacity = '1';
+                    hiddenInput.value = correctPassword;
+                    setTimeout(() => {
+                        document.getElementById('studentPassModal').style.display = 'none';
+                        SessionManager.joinSessionAction();
+                    }, 400);
+                } else {
+                    btn.querySelectorAll('[data-ok="false"]').forEach(s => {
+                        s.style.textDecoration = 'line-through';
+                        s.style.opacity = '0.4';
+                    });
+                    btn.style.borderColor = '#ef4444';
+                    btn.style.background = '#fef2f2';
+                    btn.style.color = '#b91c1c';
+                    btn.style.opacity = '1';
+                    setTimeout(() => {
+                        document.getElementById('studentPassModal').style.display = 'none';
+                        hiddenInput.value = '';
+                        UI.showToast('⛔ كلمة المرور خاطئة!', 4000, '#ef4444');
+                        window.goHome();
+                    }, 800);
+                }
+            };
+
+            container.appendChild(btn);
+        });
+    },
+});
+
+async function _initPersistentSync() {
+    const keysToSync = [
+        'LOGGED_IN_UID',
+        'CURRENT_SESSION_ID',
+        'TARGET_DOCTOR_UID',
+        CFG.device.cacheKey,
+        CFG.device.verifiedCacheKey,
+        'cached_profile_data',
+    ];
+
+    for (const key of keysToSync) {
+        try {
+            const idbVal = await PersistentStore.get(key);
+            if (idbVal !== null && !localStorage.getItem(key)) {
+                localStorage.setItem(key, idbVal);
+            }
+        } catch { }
+    }
+}
+
+
+document.addEventListener('DOMContentLoaded', async () => {
+    await _initPersistentSync();
+
+    try { await DeviceManager.getUniqueDeviceId(); } catch (e) { console.warn('Fingerprint pre-load warning:', e); }
+
+    const quickResult = await SessionGuard.quickCheck();
+    if (quickResult.valid) {
+        console.log('Quick session check passed, restoring session...');
+    }
+});
+
+onAuthStateChanged(window.auth, AuthManager.onAuthChange);
+
+setTimeout(async () => {
+    if (window._authStateLoading) {
+        console.warn('[System] Firebase is taking too long (Slow Network). Triggering Adaptive Recovery...');
+
+        const cachedUID = await PersistentStore.get('LOGGED_IN_UID');
+        const verifiedRaw = await PersistentStore.get(CFG.device.verifiedCacheKey);
+        const verifiedData = Utils.safeJsonParse(verifiedRaw);
+        const isSessionValid = verifiedData && (Date.now() - verifiedData.ts) < CFG.device.verifiedTTL;
+
+        window._authStateLoading = false;
+
+        SessionGuard.markResolved();
+
+        if (!cachedUID || !isSessionValid) {
+            console.log('[System] No local session found after timeout. Prompting login...');
+
+            setTimeout(() => {
+                if (!window.auth.currentUser) {
+                    UI.openAuthDrawer();
+                }
+            }, 500);
+        } else {
+            console.info('[System] Local session detected. Keeping UI silent for background sync.');
+
+            window.updateUIForMode?.();
+        }
+    }
+}, 10000);
+
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+        if (!window._isOpeningMaps && window.processIsActive) location.reload();
+        WakeLock.release();
+    } else {
+        if (window._isOpeningMaps) window._isOpeningMaps = false;
+        if (window.processIsActive) WakeLock.request();
+        _initPersistentSync().catch(() => { });
+    }
+});
+
+window.onload = () => {
+    const pinInput = Utils.$('attendanceCode');
+    if (pinInput) {
+        pinInput.value = '';
+        pinInput.setAttribute('autocomplete', 'off');
+        pinInput.setAttribute('inputmode', 'numeric');
+        pinInput.addEventListener('keydown', IdleTimer.onKeyDown);
+        pinInput.addEventListener('keyup', IdleTimer.onKeyUp);
+        pinInput.addEventListener('input', e => {
+            IdleTimer.onKeyUp();
+            if (e.target.value.length === 1 && !window._codeEntryStarted) {
+                window._codeEntryStarted = Date.now();
+            }
+            if (e.target.value.length === 0) {
+                window._codeEntryStarted = null;
+            }
+            if (e.target.value.trim().length === 6) SessionManager.searchForSession();
+        });
     }
 
-    .privacy-alert-box i {
-        color: #10b981;
-        font-size: 18px;
-        flex-shrink: 0;
+    Utils.$('sessionPass')?.addEventListener('keypress', e => {
+        if (e.key === 'Enter') SessionManager.joinSessionAction();
+    });
+
+    const savedUID = localStorage.getItem('TARGET_DOCTOR_UID');
+    if (savedUID) {
+        sessionStorage.setItem('TARGET_DOCTOR_UID', savedUID);
+        window.resetMainButtonUI();
+    } else {
+        PersistentStore.get('TARGET_DOCTOR_UID').then(uid => {
+            if (uid) {
+                localStorage.setItem('TARGET_DOCTOR_UID', uid);
+                sessionStorage.setItem('TARGET_DOCTOR_UID', uid);
+                window.resetMainButtonUI();
+            }
+        }).catch(() => { });
     }
 
-    .privacy-alert-box span {
-        font-size: 11px;
-        color: #64748b;
-        line-height: 1.4;
-        font-weight: 600;
+    const savedSessionId = localStorage.getItem('CURRENT_SESSION_ID');
+    const savedLoggedUID = localStorage.getItem('LOGGED_IN_UID');
+    if (savedSessionId && savedLoggedUID) {
+        AuthManager.startSessionWatcher(savedLoggedUID, savedSessionId);
+    } else {
+        Promise.all([
+            PersistentStore.get('CURRENT_SESSION_ID'),
+            PersistentStore.get('LOGGED_IN_UID'),
+        ]).then(([sid, luid]) => {
+            if (sid && luid) {
+                AuthManager.startSessionWatcher(luid, sid);
+            }
+        }).catch(() => { });
     }
 
-    .privacy-alert-box strong {
-        color: #334155;
-    }
-</style>
-<div id="publicProfileModal" class="modal-overlay" style="z-index: 2147483647 !important;">
-    <div class="modal-box social-profile-box extended-card" style="font-family: 'Outfit', 'Cairo', sans-serif;">
+    NetworkManager.initGlobalGuard();
+    window.updateUIForMode();
+    GPSManager.startWatcher();
+    UI.renderHallOptions();
+    NetworkManager.fetchIP();
+    PWAManager.init();
+    startClock();
 
-        <button onclick="document.getElementById('publicProfileModal').style.display='none'" class="btn-close-absolute">
-            <i class="fa-solid fa-xmark"></i>
-        </button>
+    Utils.$('hallSearchInput')?.addEventListener('input', e => UI.renderHallOptions(e.target.value));
 
-        <div class="social-avatar-wrapper" style="pointer-events: none;">
-            <div id="publicAvatar" class="social-avatar-img"></div>
-        </div>
+    const groupInput = Utils.$('regGroup');
+    groupInput?.addEventListener('input', function () {
+        this.value = this.value.toUpperCase().replace(/[^0-9GPNCDTBH]/g, '');
+        UI.validateSignupForm();
+    });
+    Utils.$('regLevel')?.addEventListener('change', UI.validateSignupForm);
 
-        <h2 id="publicName" class="social-name" style="font-family: 'Cairo', sans-serif;">--</h2>
-        <div id="publicRoleBadge" class="social-role-badge">--</div>
+    const savedLang = Utils.lang();
+    UI.applyLanguage(savedLang);
+    document.querySelectorAll('.active-lang-text-pro').forEach(s => { s.innerText = savedLang === 'ar' ? 'EN' : 'عربي'; });
 
-        <div class="stats-tri-grid">
-        </div>
+    window.listenToSessionState?.();
+};
 
-        <div class="social-info-grid">
-            <div class="s-info-item">
-                <span class="lbl" data-i18n="profile_level">Level / Year</span>
-                <span class="val" id="publicLevel">--</span>
-            </div>
-            <div class="s-info-item">
-                <span class="lbl" data-i18n="profile_code">Student ID</span>
-                <span class="val en-font" id="publicCode">--</span>
-            </div>
-        </div>
+document.addEventListener('click', e => {
+    if (!e.target.closest('.custom-dropdown'))
+        document.querySelectorAll('.dropdown-list').forEach(el => el.classList.remove('show'));
+});
 
-        <div id="publicExamsSection"
-            style="margin-top: 15px; width: 100%; border-top: 1px solid #f1f5f9; padding-top: 10px; display:none;">
-            <h4
-                style="margin: 0 0 10px 0; font-size: 14px; color: #334155; text-align: left; display: flex; align-items: center; gap: 8px;">
-                <i class="fa-solid fa-graduation-cap" style="color: #6366f1;"></i>
-                <span data-i18n="exam_results_title">Exam Results</span>
-            </h4>
-            <div id="publicExamsList" style="display: flex; flex-direction: column; gap: 8px;">
-            </div>
-        </div>
+document.addEventListener('DOMContentLoaded', () => {
+    ['regEmail', 'regEmailConfirm', 'regPass', 'regPassConfirm', 'regGender', 'regLevel', 'regGroup',
+        'regStudentID', 'regFullName'].forEach(id => {
+            Utils.$(id)?.addEventListener('input', UI.validateSignupForm);
+            Utils.$(id)?.addEventListener('change', UI.validateSignupForm);
+        });
 
-    </div>
-</div>
+    window.addEventListener('pageshow', () => {
+        const pin = Utils.$('attendanceCode');
+        if (pin) pin.value = '';
+    });
+});
 
-<div id="imageZoomModal" class="modal-overlay" style="z-index: 2147483665 !important; background: rgba(0,0,0,0.95);"
-    onclick="this.style.display='none'">
-    <div id="zoomedAvatarContainer" class="zoomed-img-box"></div>
-</div>
+initSecurityLayer();
 
-<style>
-    .halo-container-v2 {
-        position: absolute !important;
-        top: -150px !important;
-        left: 50% !important;
-        transform: translateX(-50%) !important;
-        width: 250px !important;
-        height: 100px !important;
-        z-index: 50 !important;
-        pointer-events: none !important;
-    }
+NetworkManager.initNetworkIndicator();
 
-    .halo-item {
-        position: absolute !important;
-        width: 45px !important;
-        height: 45px !important;
-        border-radius: 50% !important;
-        background: #ffffff !important;
-        border: 1px solid #e2e8f0 !important;
-        box-shadow: 0 5px 15px rgba(14, 165, 233, 0.2) !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        cursor: pointer !important;
-        pointer-events: auto !important;
-        font-size: 18px !important;
-        transition: 0.2s !important;
-    }
-
-    .halo-item:active {
-        transform: scale(0.9);
-    }
-
-
-    .halo-center {
-        top: -76px !important;
-        left: -5% !important;
-        transform: translateX(-50%) !important;
-        z-index: 100 !important;
-
-        background: #ffffff !important;
-        color: #0f172a !important;
-        font-weight: 900 !important;
-        font-size: 12px !important;
-        border-color: #0ea5e9 !important;
-        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1) !important;
-    }
-
-    .halo-left {
-        top: 35px !important;
-        left: 20px !important;
-        color: #0ea5e9 !important;
-    }
-
-    .halo-right {
-        top: 35px !important;
-        right: 20px !important;
-        color: #f59e0b !important;
-    }
-
-    .halo-badge-v2 {
-        position: absolute;
-        top: -3px;
-        right: -3px;
-        background: #ef4444;
-        color: white;
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        font-size: 10px;
-        font-weight: bold;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border: 2px solid white;
-    }
-</style>
-<div id="sessionActionModal" class="modal-overlay">
-    <div class="modal-box" style="max-width: 400px; text-align: center;">
-        <div style="margin-bottom: 20px;">
-            <div class="icon-box-large" style="background: #f0f9ff; color: #0ea5e9; margin: 0 auto 15px;">
-                <i class="fa-solid fa-pause-circle" style="font-size: 30px;"></i>
-            </div>
-            <h3 style="color: #0f172a; margin: 0;" data-i18n="session_decisions_title">Session Decisions</h3>
-            <p style="color: #64748b; font-size: 13px; margin-top: 5px;" data-i18n="session_decisions_subtitle">
-                Has the lecture ended completely or do you want to take a break?
-            </p>
-        </div>
-
-        <button onclick="performSessionPause()" class="btn-main"
-            style="background: linear-gradient(135deg, #f59e0b, #d97706); margin-bottom: 10px;"
-            data-i18n="btn_take_break">
-            <i class="fa-solid fa-mug-hot"></i> Pause & Resume (Break)
-        </button>
-
-        <button onclick="closeSessionImmediately()" class="btn-main" style="background: #ef4444; margin-bottom: 10px;"
-            data-i18n="btn_end_session">
-            <i class="fa-solid fa-floppy-disk"></i> End & Save
-        </button>
-
-        <button onclick="document.getElementById('sessionActionModal').style.display='none'" class="btn-sheet-cancel"
-            data-i18n="btn_cancel_close">
-            Cancel <i class="fa-solid fa-xmark"></i>
-        </button>
-    </div>
-</div>
-<div id="breakModal" class="modal-overlay" style="z-index: 999999999; display: none;">
-    <div class="modal-box" style="text-align: center; padding: 30px 20px; border-bottom: 5px solid #f59e0b;">
-
-        <div
-            style="background: #fffbeb; width: 90px; height: 90px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto; border: 4px solid #fff; box-shadow: 0 4px 6px -1px rgba(245, 158, 11, 0.2);">
-            <i class="fa-solid fa-mug-hot" style="font-size: 40px; color: #f59e0b;"></i>
-        </div>
-
-        <h2 style="margin: 0; color: #1e293b; font-size: 22px; font-weight: 900; font-family: 'Cairo', sans-serif;">
-            استراحة محارب ☕
-        </h2>
-
-        <p style="color: #64748b; font-size: 14px; margin: 10px 0 25px 0; line-height: 1.6;">
-            تم إيقاف المحاضرة مؤقتاً من قبل الدكتور.<br>
-            يرجى الانتظار حتى يتم استئناف الجلسة، ثم <b>أعد الدخول</b>.
-        </p>
-
-        <button onclick="location.reload()" class="btn-main"
-            style="width: 100%; background: #f59e0b; color: white; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);">
-            حسناً، العودة للرئيسية
-        </button>
-    </div>
-</div>
-
-<div id="signupSuccessModal" class="modal-overlay">
-    <div class="modal-box" style="text-align: center; padding: 30px;">
-        <div
-            style="width: 70px; height: 70px; background: #dcfce7; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
-            <i class="fa-solid fa-envelope-circle-check fa-bounce" style="font-size: 35px; color: #16a34a;"></i>
-        </div>
-
-        <h3 id="successModalTitle" style="font-size: 20px; font-weight: 900; color: #1e293b; margin-bottom: 10px;">
-            تم إنشاء الحساب بنجاح!
-        </h3>
-
-        <div id="successModalBody" style="font-size: 14px; color: #64748b; line-height: 1.6;">
-        </div>
-
-        <button
-            onclick="document.getElementById('signupSuccessModal').style.display='none'; openAuthDrawer(); toggleAuthMode('login');"
-            class="btn-main" style="width: 100%; margin-top: 25px; justify-content: center;">
-            تسجيل الدخول الآن <i class="fa-solid fa-arrow-right-to-bracket"></i>
-        </button>
-    </div>
-</div>
-<div id="verificationModal" class="modal-overlay">
-    <div class="modal-box" style="text-align: center; padding: 25px;">
-        <div
-            style="width: 60px; height: 60px; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
-            <i class="fa-solid fa-envelope-open-text fa-shake" style="font-size: 30px; color: #ef4444;"></i>
-        </div>
-
-        <h3 style="font-size: 18px; font-weight: 800; color: #b91c1c; margin-bottom: 8px;">
-            الحساب غير مفعل!
-        </h3>
-
-        <p style="font-size: 13px; color: #64748b; margin-bottom: 20px;">
-            لقد تم إنشاء حسابك ولكن لم تقم بتفعيله.<br>
-            يرجى مراجعة بريدك الإلكتروني والضغط على رابط التفعيل.
-        </p>
-
-        <button onclick="document.getElementById('verificationModal').style.display='none';" class="btn-main"
-            style="width: 100%; background: #ef4444; border: none;">
-            حسناً، سأتحقق الآن <i class="fa-solid fa-check"></i>
-        </button>
-    </div>
-</div>
-<div id="expulsionModal" class="modal-overlay" style="z-index: 2147483650 !important;">
-    <div class="modal-box" style="text-align: center; padding: 30px; border-top: 5px solid #ef4444;">
-
-        <div
-            style="width: 70px; height: 70px; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
-            <i class="fa-solid fa-ban fa-beat" style="font-size: 35px; color: #b91c1c;"></i>
-        </div>
-
-        <h3 id="expelTitle" style="font-size: 22px; font-weight: 900; color: #b91c1c; margin-bottom: 10px;">
-            تم استبعادك!
-        </h3>
-
-        <p id="expelBody" style="font-size: 14px; color: #64748b; line-height: 1.6; margin-bottom: 25px;">
-            قام المحاضر باستبعادك من الجلسة الحالية.<br>
-            لا يمكنك العودة لهذه المحاضرة مرة أخرى.
-        </p>
-
-        <button onclick="location.reload()" class="btn-main"
-            style="width: 100%; background: #ef4444; border: none; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);">
-            مغادرة القاعة <i class="fa-solid fa-arrow-right-from-bracket"></i>
-        </button>
-    </div>
-</div>
-<div class="floating-refresh-btn" onclick="if(navigator.vibrate) navigator.vibrate(50); location.reload();">
-    <i class="fa-solid fa-rotate-right"></i>
-</div>
-
-<div id="superWifiIndicator" class="wifi-status-hidden">
-    <div class="wifi-icon-box">
-        <i class="fa-solid fa-wifi fa-fade"></i>
-        <i class="fa-solid fa-slash wifi-slash" id="wifiSlashIcon"></i>
-    </div>
-    <span class="wifi-text">System Initializing...</span>
-</div>
-<script src="ramadan_theme.js"></script>
-<script src="./screen-guard.js"></script>
-
-
-<div id="academicRecordModal" class="modal-overlay" style="z-index: 2147483647; display: none;">
-    <div class="modal-box"
-        style="max-width: 380px; padding: 0; border-radius: 20px; overflow: hidden; background: #fff;">
-
-        <div
-            style="background: linear-gradient(135deg, #0ea5e9, #3b82f6); padding: 20px; color: white; display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                <h3 style="margin: 0; font-size: 16px; font-weight: 900;" data-i18n="academic_record_title">Academic
-                    Record</h3>
-                <p style="margin: 4px 0 0 0; font-size: 11px; opacity: 0.8;" data-i18n="academic_record_sub">Theory
-                    subjects only</p>
-            </div>
-
-            <div style="display: flex; gap: 8px; align-items: center;">
-                <button onclick="window.refreshAcademicData()"
-                    style="background: rgba(255,255,255,0.2); border: none; color: white; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center;">
-                    <i id="refreshBtnIcon" class="fa-solid fa-rotate-right"></i>
-                </button>
-
-                <button onclick="document.getElementById('academicRecordModal').style.display='none'"
-                    style="background: rgba(255,255,255,0.2); border: none; color: white; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;">
-                    ✕
-                </button>
-            </div>
-        </div>
-
-        <div id="academicStatsContainer"
-            style="background: #f8fafc; padding: 10px 5px; border-bottom: 1px solid #e2e8f0; min-height: 50px;">
-        </div>
-
-        <div style="display: flex; border-bottom: 2px solid #f1f5f9; background: white;">
-            <button id="tabAttendance" onclick="switchAcademicTab('attendance')" class="tab-active-att"
-                style="flex: 1; padding: 12px; border: none; font-weight: 800; cursor: pointer; font-size: 14px; transition: 0.3s;">
-                ✅ <span data-i18n="academic_tab_attendance">Attendance</span>
-                <span id="attendanceTabCount"
-                    style="background: rgba(16, 185, 129, 0.1); color: #10b981; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 5px;">0</span>
-            </button>
-            <button id="tabAbsence" onclick="switchAcademicTab('absence')" class="tab-inactive"
-                style="flex: 1; padding: 12px; border: none; font-weight: 800; cursor: pointer; font-size: 14px; transition: 0.3s;">
-                ❌ <span data-i18n="academic_tab_absence">Absence</span>
-                <span id="absenceTabCount"
-                    style="background: #f1f5f9; color: #64748b; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 5px;">0</span>
-            </button>
-        </div>
-
-        <div id="academicRecordContent" style="max-height: 400px; overflow-y: auto; padding: 15px; background: #fff;">
-            <div style="text-align: center; padding: 30px; color: #94a3b8;">
-                <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 30px;"></i>
-                <p data-i18n="academic_loading">Loading Records...</p>
-            </div>
-        </div>
-    </div>
-</div>
-<style>
-    .tab-active-att {
-        color: #10b981 !important;
-        border-bottom: 3px solid #10b981 !important;
-        background: white !important;
-    }
-
-    .tab-active-abs {
-        color: #ef4444 !important;
-        border-bottom: 3px solid #ef4444 !important;
-        background: white !important;
-    }
-
-    .tab-inactive {
-        color: #94a3b8 !important;
-        border-bottom: none !important;
-        background: #f8fafc !important;
-    }
-
-    #academicStatsContainer::-webkit-scrollbar {
-        display: none;
-    }
-
-    #academicStatsContainer {
-        -ms-overflow-style: none;
-        scrollbar-width: none;
-    }
-</style>
-
-<script type="module" src="academic-record.js?v=3.0.0"></script>
-<script type="module" src="offline-handler.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@3/dist/fp.min.js"></script>
-</body>
-
-
-
-
-</html>
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js?v=3', { scope: './' })
+            .then(() => console.log('ServiceWorker registered'))
+            .catch(err => console.error('ServiceWorker registration failed:', err));
+    });
+}
