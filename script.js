@@ -2759,270 +2759,400 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 (function initPatternLock() {
-    // 1. طبقة التصميم الاحترافي (CSS) - معالجة كافة مشاكل التموضع والترجمة
-    const style = document.createElement('style');
-    style.textContent = `
+    'use strict';
+
+    const CSS = `
+        /* Force LTR على الـ container بالكامل — يحمي من RTL و direction أي كان */
+        #patternLockContainer,
+        #patternLockContainer * {
+            direction: ltr !important;
+            unicode-bidi: isolate !important;
+        }
+
         #patternLockContainer {
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
             width: 100%;
-            max-width: 400px;
-            margin: 0 auto;
             user-select: none;
             -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
         }
-        #patternGrid { 
-            touch-action: none; 
-            position: relative; 
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            grid-template-rows: repeat(4, 1fr);
-            gap: 15px;
-            padding: 20px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 20px;
-            width: 280px; /* حجم ثابت للشبكة لضمان الدقة */
+
+        /* الشبكة: حجم ثابت + grid حقيقي */
+        #patternGrid {
+            position: relative;
+            display: grid !important;
+            grid-template-columns: repeat(4, 1fr) !important;
+            grid-template-rows: repeat(4, 1fr) !important;
+            gap: 0 !important;
+            width: 280px;
             height: 280px;
-            margin: 0 auto;
+            touch-action: none;
+            -ms-touch-action: none;
+            cursor: crosshair;
+            /* حماية من Google Translate التي تُضيف font tags */
+            font-size: 0 !important;
         }
-        /* منع ترجمة جوجل من العبث بالنقاط */
-        .dot-cell { 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
+
+        .plk-cell {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            /* translate="no" على مستوى CSS أيضاً */
+            font-size: 0 !important;
         }
-        .dot-node {
-            width: 14px;
-            height: 14px;
+
+        .plk-dot {
+            width: 18px;
+            height: 18px;
             border-radius: 50%;
-            background: #cbd5e1;
-            border: 2px solid #94a3b8;
-            transition: all 0.2s ease;
-            z-index: 5;
+            background: #e2e8f0;
+            border: 2px solid #cbd5e1;
             pointer-events: none;
+            transition: transform 0.15s ease, background 0.15s ease,
+                        border-color 0.15s ease, box-shadow 0.15s ease;
+            /* منع أي تدخل من الـ browser في حجم العنصر */
+            flex-shrink: 0;
+            flex-grow: 0;
         }
-        .dot-node.active {
+
+        .plk-dot.active {
             background: #3b82f6 !important;
             border-color: #2563eb !important;
-            transform: scale(1.5);
-            box-shadow: 0 0 20px rgba(59, 130, 246, 0.6);
+            transform: scale(1.6) !important;
+            box-shadow: 0 0 18px rgba(59,130,246,0.55) !important;
         }
-        .dot-node.error {
+
+        .plk-dot.error {
             background: #ef4444 !important;
             border-color: #b91c1c !important;
-            box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
+            transform: scale(1.6) !important;
+            box-shadow: 0 0 18px rgba(239,68,68,0.55) !important;
         }
-        #patternSvg { 
-            pointer-events: none; 
-            position: absolute; 
-            top: 0; left: 0; 
-            width: 100%; height: 100%; 
-            z-index: 2; 
+
+        /* SVG يغطي الشبكة بالكامل */
+        #patternSvg {
+            position: absolute !important;
+            inset: 0 !important;
+            top: 0 !important; left: 0 !important;
+            right: 0 !important; bottom: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            pointer-events: none;
+            z-index: 10;
             overflow: visible;
         }
-        .pattern-line {
-            fill: none;
-            stroke: #3b82f6;
-            stroke-width: 4;
-            stroke-linecap: round;
-            stroke-linejoin: round;
-            transition: stroke 0.3s;
-        }
-        .pattern-line.error { stroke: #ef4444; }
     `;
-    document.head.appendChild(style);
 
-    const COLS = 4, ROWS = 4;
-    let drawing = false, path = [], dotsPositions = [];
+    let styleEl = document.getElementById('plk-styles');
+    if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = 'plk-styles';
+        document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = CSS;
 
-    // 2. المحرك الذكي لحساب الإحداثيات (بدقة البكسل الفعلي)
-    function calculateDots() {
+    let drawing = false;
+    let path = [];      
+    let dotPositions = [];       
+    let rafId = null;     
+    let activePointer = null;     
+
+    function calcPositions() {
         const grid = document.getElementById('patternGrid');
-        const nodes = document.querySelectorAll('.dot-node');
-        if (!grid || nodes.length === 0) return;
+        if (!grid) return;
 
         const gridRect = grid.getBoundingClientRect();
-        dotsPositions = [];
+        if (gridRect.width === 0) return;
 
-        nodes.forEach((node, i) => {
-            const nodeRect = node.getBoundingClientRect();
-            // حساب المركز الحقيقي للنقطة بالنسبة لإحداثيات الشبكة
-            dotsPositions.push({
-                x: (nodeRect.left + nodeRect.width / 2) - gridRect.left,
-                y: (nodeRect.top + nodeRect.height / 2) - gridRect.top,
-                idx: parseInt(node.dataset.idx)
+        const dots = grid.querySelectorAll('.plk-dot');
+        if (dots.length !== 16) return;
+
+        dotPositions = [];
+        dots.forEach((dot, i) => {
+            const r = dot.getBoundingClientRect();
+            dotPositions.push({
+                idx: i,
+                x: (r.left + r.right) / 2 - gridRect.left,
+                y: (r.top + r.bottom) / 2 - gridRect.top
             });
         });
     }
 
-    // 3. بناء الشبكة مع حماية "notranslate"
     function buildGrid() {
         const dotsEl = document.getElementById('patternDots');
         const svg = document.getElementById('patternSvg');
         if (!dotsEl || !svg) return;
 
-        dotsEl.innerHTML = '';
-        dotsEl.classList.add('notranslate'); // منع ترجمة جوجل
-        svg.innerHTML = '';
-        path = [];
         drawing = false;
+        path = [];
+        if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+
+        dotsEl.innerHTML = '';
+        svg.innerHTML = '';
+        svg.removeAttribute('data-state');
+
+        dotsEl.setAttribute('translate', 'no');
+        dotsEl.classList.add('notranslate');
 
         for (let i = 0; i < 16; i++) {
             const cell = document.createElement('div');
-            cell.className = 'dot-cell';
+            cell.className = 'plk-cell';
+            cell.setAttribute('translate', 'no');
+
             const dot = document.createElement('div');
-            dot.className = 'dot-node';
-            dot.dataset.idx = i;
+            dot.className = 'plk-dot';
+            dot.dataset.idx = String(i);
+            dot.setAttribute('translate', 'no');
+
             cell.appendChild(dot);
             dotsEl.appendChild(cell);
         }
 
-        // استخدام RequestAnimationFrame لضمان رسم العناصر قبل الحساب
-        requestAnimationFrame(() => {
-            setTimeout(calculateDots, 50);
-        });
+        requestAnimationFrame(() => requestAnimationFrame(calcPositions));
     }
 
-    function getDotAt(x, y) {
+    function hitTest(clientX, clientY) {
         const grid = document.getElementById('patternGrid');
-        if (!grid) return -1;
-        const rect = grid.getBoundingClientRect();
-        const rx = x - rect.left;
-        const ry = y - rect.top;
+        if (!grid || dotPositions.length === 0) return -1;
 
-        // البحث عن أقرب نقطة بناءً على المسافة الفعلية (أكثر دقة من المربعات الافتراضية)
-        for (let dot of dotsPositions) {
-            const dist = Math.hypot(rx - dot.x, ry - dot.y);
-            if (dist < 25) return dot.idx; // 25 بكسل منطقة الحساسية
+        const gr = grid.getBoundingClientRect();
+        const rx = clientX - gr.left;
+        const ry = clientY - gr.top;
+
+        let best = -1, bestDist = 32; 
+        for (const dp of dotPositions) {
+            const d = Math.hypot(rx - dp.x, ry - dp.y);
+            if (d < bestDist) { bestDist = d; best = dp.idx; }
         }
-        return -1;
+        return best;
     }
 
-    function drawLines(currentTouch = null) {
+    function renderLines(liveX, liveY) {
         const svg = document.getElementById('patternSvg');
         if (!svg) return;
 
-        let linesHTML = '';
-        if (path.length > 0) {
-            let points = path.map(idx => `${dotsPositions[idx].x},${dotsPositions[idx].y}`).join(' ');
+        const isError = svg.dataset.state === 'error';
+        const stroke = isError ? '#ef4444' : '#3b82f6';
 
-            // الخطوط الثابتة بين النقاط الموصلة
-            linesHTML += `<polyline class="pattern-line ${svg.dataset.state === 'error' ? 'error' : ''}" points="${points}" />`;
+        let html = '';
 
-            // الخط المتحرك الذي يتبع الإصبع
-            if (drawing && currentTouch) {
-                const gridRect = document.getElementById('patternGrid').getBoundingClientRect();
-                const lastDot = dotsPositions[path[path.length - 1]];
-                const tx = currentTouch.clientX - gridRect.left;
-                const ty = currentTouch.clientY - gridRect.top;
-                linesHTML += `<line class="pattern-line" x1="${lastDot.x}" y1="${lastDot.y}" x2="${tx}" y2="${ty}" opacity="0.5" />`;
+        for (let k = 0; k < path.length - 1; k++) {
+            const a = dotPositions[path[k]];
+            const b = dotPositions[path[k + 1]];
+            if (a && b) {
+                html += `<line
+                    x1="${a.x}" y1="${a.y}"
+                    x2="${b.x}" y2="${b.y}"
+                    stroke="${stroke}" stroke-width="3.5"
+                    stroke-linecap="round" opacity="${isError ? 0.7 : 1}"
+                />`;
             }
         }
-        svg.innerHTML = linesHTML;
-    }
 
-    // 4. معالجة الأحداث (Events) - دعم كامل للمس والماوس
-    function onStart(e) {
-        e.preventDefault();
-        calculateDots(); // إعادة الحساب عند كل لمسة لضمان الدقة في حالة حدوث layout shift
-        const pt = e.touches ? e.touches[0] : e;
-        const idx = getDotAt(pt.clientX, pt.clientY);
-
-        if (idx !== -1) {
-            drawing = true;
-            path = [idx];
-            const node = document.querySelector(`.dot-node[data-idx="${idx}"]`);
-            node?.classList.add('active');
-            if (navigator.vibrate) navigator.vibrate(20);
-            drawLines(pt);
+        if (drawing && liveX !== undefined && path.length > 0) {
+            const last = dotPositions[path[path.length - 1]];
+            const gr = document.getElementById('patternGrid').getBoundingClientRect();
+            if (last) {
+                html += `<line
+                    x1="${last.x}" y1="${last.y}"
+                    x2="${liveX - gr.left}" y2="${liveY - gr.top}"
+                    stroke="${stroke}" stroke-width="3"
+                    stroke-linecap="round" opacity="0.4"
+                    stroke-dasharray="6 4"
+                />`;
+            }
         }
+
+        svg.innerHTML = html;
     }
 
-    function onMove(e) {
-        if (!drawing) return;
-        const pt = e.touches ? e.touches[0] : e;
-        const idx = getDotAt(pt.clientX, pt.clientY);
-
-        if (idx !== -1 && !path.includes(idx)) {
-            path.push(idx);
-            const node = document.querySelector(`.dot-node[data-idx="${idx}"]`);
-            node?.classList.add('active');
-            if (navigator.vibrate) navigator.vibrate(15);
-        }
-        drawLines(pt);
+    function activateDot(idx) {
+        const dot = document.querySelector(`.plk-dot[data-idx="${idx}"]`);
+        dot?.classList.add('active');
+        if (navigator.vibrate) navigator.vibrate(12);
     }
 
-    function onEnd() {
-        if (!drawing) return;
+    function showError(msg) {
         drawing = false;
-
-        if (path.length < 3) {
-            handleError("Draw at least 3 dots");
-            return;
-        }
-
-        // إرسال البيانات
-        const passInput = document.getElementById('sessionPass');
-        if (passInput) passInput.value = JSON.stringify({ type: 'pattern', path });
-
-        // استدعاء دالة الجوين الموجودة في ملفك الأصلي
-        window.joinSessionAction().catch(err => {
-            handleError();
-            console.error("Join error:", err);
-        });
-    }
-
-    function handleError(msg) {
         const svg = document.getElementById('patternSvg');
         const hint = document.getElementById('patternHint');
-        const nodes = document.querySelectorAll('.dot-node.active');
 
-        svg.dataset.state = 'error';
-        nodes.forEach(n => n.classList.add('error'));
-        drawLines();
+        if (svg) svg.dataset.state = 'error';
+        document.querySelectorAll('.plk-dot.active').forEach(d => {
+            d.classList.remove('active');
+            d.classList.add('error');
+        });
+        renderLines();
 
         if (hint && msg) {
             hint.style.color = '#ef4444';
             hint.textContent = msg;
         }
 
-        if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+        if (navigator.vibrate) navigator.vibrate([60, 40, 60]);
 
         setTimeout(() => {
-            svg.dataset.state = '';
             buildGrid();
             if (hint) {
                 hint.style.color = '';
                 hint.textContent = 'Drag between dots';
             }
-        }, 800);
+        }, 900);
     }
 
-    // 5. واجهة التشغيل العامة
+    function onPointerDown(e) {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        if (activePointer !== null) return;
+
+        calcPositions(); 
+
+        const idx = hitTest(e.clientX, e.clientY);
+        if (idx === -1) return;
+
+        e.preventDefault();
+        e.target.setPointerCapture?.(e.pointerId);
+        activePointer = e.pointerId;
+
+        drawing = true;
+        path = [idx];
+        activateDot(idx);
+        renderLines(e.clientX, e.clientY);
+    }
+
+    function onPointerMove(e) {
+        if (!drawing || e.pointerId !== activePointer) return;
+        e.preventDefault();
+
+        const idx = hitTest(e.clientX, e.clientY);
+        if (idx !== -1 && !path.includes(idx)) {
+            path.push(idx);
+            activateDot(idx);
+        }
+
+        if (rafId) cancelAnimationFrame(rafId);
+        const cx = e.clientX, cy = e.clientY;
+        rafId = requestAnimationFrame(() => renderLines(cx, cy));
+    }
+
+    function onPointerUp(e) {
+        if (!drawing || e.pointerId !== activePointer) return;
+        activePointer = null;
+        drawing = false;
+        if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+        renderLines();
+        finalizePattern();
+    }
+
+    function finalizePattern() {
+        if (path.length < 3) {
+            showError('Draw at least 3 dots');
+            return;
+        }
+
+        const passInput = document.getElementById('sessionPass');
+        if (passInput) passInput.value = JSON.stringify({ type: 'pattern', path });
+
+        if (typeof window.joinSessionAction !== 'function') return;
+
+        window.joinSessionAction()
+            .then(() => { window._patternAttempts = 0; })
+            .catch(() => {
+                window._patternAttempts = (window._patternAttempts || 0) + 1;
+                if (window._patternAttempts >= 2) {
+                    window._patternAttempts = 0;
+                    window.resetSearchSession?.();
+                    if (typeof UI !== 'undefined') UI.switchScreen('screenWelcome');
+                } else {
+                    showError(null);
+                }
+            });
+    }
+
+    function attachEvents() {
+        const grid = document.getElementById('patternGrid');
+        if (!grid) return;
+
+        grid.addEventListener('pointerdown', onPointerDown, { passive: false });
+        grid.addEventListener('pointermove', onPointerMove, { passive: false });
+        grid.addEventListener('pointerup', onPointerUp, { passive: false });
+        grid.addEventListener('pointercancel', onPointerUp, { passive: false });
+
+        if (!('PointerEvent' in window)) {
+            grid.addEventListener('mousedown', e => onPointerDown({ ...e, pointerId: 'mouse', pointerType: 'mouse' }));
+            grid.addEventListener('mousemove', e => onPointerMove({ ...e, pointerId: 'mouse' }));
+            grid.addEventListener('mouseup', e => onPointerUp({ ...e, pointerId: 'mouse' }));
+            grid.addEventListener('touchstart', e => {
+                const t = e.touches[0];
+                onPointerDown({ clientX: t.clientX, clientY: t.clientY, pointerId: t.identifier, pointerType: 'touch', preventDefault: () => e.preventDefault(), target: grid });
+            }, { passive: false });
+            grid.addEventListener('touchmove', e => {
+                const t = e.touches[0];
+                e.preventDefault();
+                onPointerMove({ clientX: t.clientX, clientY: t.clientY, pointerId: t.identifier });
+            }, { passive: false });
+            grid.addEventListener('touchend', e => {
+                const t = e.changedTouches[0];
+                onPointerUp({ clientX: t.clientX, clientY: t.clientY, pointerId: t.identifier });
+            }, { passive: false });
+        }
+    }
+
+    let resizeTimer = null;
+
+    function onResize() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(calcPositions, 100);
+    }
+
+    function watchResize() {
+        if ('ResizeObserver' in window) {
+            const grid = document.getElementById('patternGrid');
+            if (grid) {
+                new ResizeObserver(onResize).observe(grid);
+            }
+        }
+        window.addEventListener('resize', onResize);
+        window.addEventListener('orientationchange', () => setTimeout(calcPositions, 300));
+    }
+
+    function watchMutations() {
+        const grid = document.getElementById('patternGrid');
+        if (!grid || !('MutationObserver' in window)) return;
+
+        new MutationObserver(mutations => {
+            let needsRecalc = false;
+            for (const m of mutations) {
+                if (m.type === 'childList' && m.addedNodes.length > 0) {
+                    needsRecalc = true;
+                }
+            }
+            if (needsRecalc) {
+                requestAnimationFrame(() => requestAnimationFrame(calcPositions));
+            }
+        }).observe(grid, { childList: true, subtree: true });
+    }
+
     window.renderPasswordChoices = function (sessionData) {
         window._patternAttempts = 0;
+
         const container = document.getElementById('patternLockContainer');
-        if (container) container.style.display = 'flex';
+        if (container) container.style.display = '';
+
         buildGrid();
 
-        const grid = document.getElementById('patternGrid');
-        if (grid) {
-            // حذف الأحداث القديمة منعاً للتكرار
-            grid.onmousedown = grid.ontouchstart = null;
-
-            grid.addEventListener('mousedown', onStart);
-            grid.addEventListener('touchstart', onStart, { passive: false });
-        }
+        requestAnimationFrame(() => {
+            attachEvents();
+            watchResize();
+            watchMutations();
+        });
     };
 
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('touchmove', onMove, { passive: false });
-    document.addEventListener('mouseup', onEnd);
-    document.addEventListener('touchend', onEnd);
-
-    window.addEventListener('resize', calculateDots);
+    if (document.getElementById('patternGrid')) {
+        window.renderPasswordChoices();
+    }
 
 })();
 initSecurityLayer();
