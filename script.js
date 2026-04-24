@@ -2759,69 +2759,130 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 (function initPatternLock() {
+    // 1. طبقة التصميم الاحترافي (CSS) - معالجة كافة مشاكل التموضع والترجمة
     const style = document.createElement('style');
     style.textContent = `
-        #patternDots [data-idx].active {
-            background: #3b82f6 !important;
-            border-color: #2563eb !important;
-            transform: scale(1.2);
-            box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
-            transition: none !important;
+        #patternLockContainer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+            user-select: none;
+            -webkit-user-select: none;
         }
         #patternGrid { 
             touch-action: none; 
-            user-select: none; 
             position: relative; 
-            -webkit-user-select: none;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(4, 1fr);
+            gap: 15px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            width: 280px; /* حجم ثابت للشبكة لضمان الدقة */
+            height: 280px;
+            margin: 0 auto;
+        }
+        /* منع ترجمة جوجل من العبث بالنقاط */
+        .dot-cell { 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+        }
+        .dot-node {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #cbd5e1;
+            border: 2px solid #94a3b8;
+            transition: all 0.2s ease;
+            z-index: 5;
+            pointer-events: none;
+        }
+        .dot-node.active {
+            background: #3b82f6 !important;
+            border-color: #2563eb !important;
+            transform: scale(1.5);
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.6);
+        }
+        .dot-node.error {
+            background: #ef4444 !important;
+            border-color: #b91c1c !important;
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
         }
         #patternSvg { 
             pointer-events: none; 
             position: absolute; 
             top: 0; left: 0; 
             width: 100%; height: 100%; 
-            z-index: 1; 
+            z-index: 2; 
+            overflow: visible;
         }
+        .pattern-line {
+            fill: none;
+            stroke: #3b82f6;
+            stroke-width: 4;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            transition: stroke 0.3s;
+        }
+        .pattern-line.error { stroke: #ef4444; }
     `;
     document.head.appendChild(style);
 
-    const COLS = 4, ROWS = 4, DOT_RADIUS = 28;
+    const COLS = 4, ROWS = 4;
     let drawing = false, path = [], dotsPositions = [];
 
+    // 2. المحرك الذكي لحساب الإحداثيات (بدقة البكسل الفعلي)
     function calculateDots() {
         const grid = document.getElementById('patternGrid');
-        if (!grid) return;
-        const rect = grid.getBoundingClientRect();
-        if (rect.width === 0) return;
+        const nodes = document.querySelectorAll('.dot-node');
+        if (!grid || nodes.length === 0) return;
 
+        const gridRect = grid.getBoundingClientRect();
         dotsPositions = [];
-        for (let i = 0; i < 16; i++) {
+
+        nodes.forEach((node, i) => {
+            const nodeRect = node.getBoundingClientRect();
+            // حساب المركز الحقيقي للنقطة بالنسبة لإحداثيات الشبكة
             dotsPositions.push({
-                x: (i % COLS) * (rect.width / COLS) + (rect.width / COLS / 2),
-                y: Math.floor(i / COLS) * (rect.height / ROWS) + (rect.height / ROWS / 2),
-                idx: i
+                x: (nodeRect.left + nodeRect.width / 2) - gridRect.left,
+                y: (nodeRect.top + nodeRect.height / 2) - gridRect.top,
+                idx: parseInt(node.dataset.idx)
             });
-        }
+        });
     }
 
+    // 3. بناء الشبكة مع حماية "notranslate"
     function buildGrid() {
         const dotsEl = document.getElementById('patternDots');
         const svg = document.getElementById('patternSvg');
         if (!dotsEl || !svg) return;
+
         dotsEl.innerHTML = '';
+        dotsEl.classList.add('notranslate'); // منع ترجمة جوجل
         svg.innerHTML = '';
         path = [];
         drawing = false;
 
         for (let i = 0; i < 16; i++) {
             const cell = document.createElement('div');
-            cell.style.cssText = 'display:flex;align-items:center;justify-content:center;';
+            cell.className = 'dot-cell';
             const dot = document.createElement('div');
+            dot.className = 'dot-node';
             dot.dataset.idx = i;
-            dot.style.cssText = `width:26px;height:26px;border-radius:50%;background:#e2e8f0;border:2px solid #cbd5e1;z-index:2;pointer-events:none;`;
             cell.appendChild(dot);
             dotsEl.appendChild(cell);
         }
-        setTimeout(calculateDots, 100);
+
+        // استخدام RequestAnimationFrame لضمان رسم العناصر قبل الحساب
+        requestAnimationFrame(() => {
+            setTimeout(calculateDots, 50);
+        });
     }
 
     function getDotAt(x, y) {
@@ -2831,66 +2892,64 @@ document.addEventListener('DOMContentLoaded', () => {
         const rx = x - rect.left;
         const ry = y - rect.top;
 
+        // البحث عن أقرب نقطة بناءً على المسافة الفعلية (أكثر دقة من المربعات الافتراضية)
         for (let dot of dotsPositions) {
-            if (Math.hypot(rx - dot.x, ry - dot.y) < DOT_RADIUS) return dot.idx;
+            const dist = Math.hypot(rx - dot.x, ry - dot.y);
+            if (dist < 25) return dot.idx; // 25 بكسل منطقة الحساسية
         }
         return -1;
     }
 
     function drawLines(currentTouch = null) {
         const svg = document.getElementById('patternSvg');
-        if (!svg || path.length === 0) {
-            if (svg) svg.innerHTML = '';
-            return;
-        }
+        if (!svg) return;
 
         let linesHTML = '';
-        for (let k = 0; k < path.length - 1; k++) {
-            const a = dotsPositions[path[k]], b = dotsPositions[path[k + 1]];
-            if (a && b) {
-                linesHTML += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#3b82f6" stroke-width="4" stroke-linecap="round" />`;
-            }
-        }
+        if (path.length > 0) {
+            let points = path.map(idx => `${dotsPositions[idx].x},${dotsPositions[idx].y}`).join(' ');
 
-        if (drawing && currentTouch && path.length > 0) {
-            const lastDotIdx = path[path.length - 1];
-            const last = dotsPositions[lastDotIdx];
-            const grid = document.getElementById('patternGrid');
-            const rect = grid.getBoundingClientRect();
+            // الخطوط الثابتة بين النقاط الموصلة
+            linesHTML += `<polyline class="pattern-line ${svg.dataset.state === 'error' ? 'error' : ''}" points="${points}" />`;
 
-            const tx = currentTouch.clientX - rect.left;
-            const ty = currentTouch.clientY - rect.top;
-
-            if (tx >= 0 && ty >= 0 && tx <= rect.width && ty <= rect.height) {
-                linesHTML += `<line x1="${last.x}" y1="${last.y}" x2="${tx}" y2="${ty}" stroke="rgba(59,130,246,0.4)" stroke-width="3" />`;
+            // الخط المتحرك الذي يتبع الإصبع
+            if (drawing && currentTouch) {
+                const gridRect = document.getElementById('patternGrid').getBoundingClientRect();
+                const lastDot = dotsPositions[path[path.length - 1]];
+                const tx = currentTouch.clientX - gridRect.left;
+                const ty = currentTouch.clientY - gridRect.top;
+                linesHTML += `<line class="pattern-line" x1="${lastDot.x}" y1="${lastDot.y}" x2="${tx}" y2="${ty}" opacity="0.5" />`;
             }
         }
         svg.innerHTML = linesHTML;
     }
 
+    // 4. معالجة الأحداث (Events) - دعم كامل للمس والماوس
     function onStart(e) {
+        e.preventDefault();
+        calculateDots(); // إعادة الحساب عند كل لمسة لضمان الدقة في حالة حدوث layout shift
         const pt = e.touches ? e.touches[0] : e;
         const idx = getDotAt(pt.clientX, pt.clientY);
 
         if (idx !== -1) {
             drawing = true;
             path = [idx];
-            document.querySelector(`[data-idx="${idx}"]`)?.classList.add('active');
-            if (navigator.vibrate) navigator.vibrate(15);
+            const node = document.querySelector(`.dot-node[data-idx="${idx}"]`);
+            node?.classList.add('active');
+            if (navigator.vibrate) navigator.vibrate(20);
             drawLines(pt);
         }
     }
 
     function onMove(e) {
         if (!drawing) return;
-        e.preventDefault();
         const pt = e.touches ? e.touches[0] : e;
         const idx = getDotAt(pt.clientX, pt.clientY);
 
         if (idx !== -1 && !path.includes(idx)) {
             path.push(idx);
-            document.querySelector(`[data-idx="${idx}"]`)?.classList.add('active');
-            if (navigator.vibrate) navigator.vibrate(10);
+            const node = document.querySelector(`.dot-node[data-idx="${idx}"]`);
+            node?.classList.add('active');
+            if (navigator.vibrate) navigator.vibrate(15);
         }
         drawLines(pt);
     }
@@ -2898,50 +2957,72 @@ document.addEventListener('DOMContentLoaded', () => {
     function onEnd() {
         if (!drawing) return;
         drawing = false;
-        drawLines();
 
-        const hint = document.getElementById('patternHint');
         if (path.length < 3) {
-            if (hint) { hint.style.color = '#ef4444'; hint.textContent = 'Draw at least 3 dots'; }
-            setTimeout(buildGrid, 800);
+            handleError("Draw at least 3 dots");
             return;
         }
 
-        document.getElementById('sessionPass').value = JSON.stringify({ type: 'pattern', path });
+        // إرسال البيانات
+        const passInput = document.getElementById('sessionPass');
+        if (passInput) passInput.value = JSON.stringify({ type: 'pattern', path });
 
-        window.joinSessionAction().then(() => {
-            window._patternAttempts = 0;
-        }).catch(() => {
-            if (window._patternAttempts === undefined) window._patternAttempts = 0;
-            window._patternAttempts++;
-
-            if (window._patternAttempts >= 2) {
-                window.resetSearchSession?.();
-                if (typeof UI !== 'undefined') UI.switchScreen('screenWelcome');
-            } else {
-                document.querySelectorAll('#patternDots .active').forEach(d => d.style.background = '#ef4444');
-                setTimeout(buildGrid, 1000);
-            }
+        // استدعاء دالة الجوين الموجودة في ملفك الأصلي
+        window.joinSessionAction().catch(err => {
+            handleError();
+            console.error("Join error:", err);
         });
     }
 
+    function handleError(msg) {
+        const svg = document.getElementById('patternSvg');
+        const hint = document.getElementById('patternHint');
+        const nodes = document.querySelectorAll('.dot-node.active');
+
+        svg.dataset.state = 'error';
+        nodes.forEach(n => n.classList.add('error'));
+        drawLines();
+
+        if (hint && msg) {
+            hint.style.color = '#ef4444';
+            hint.textContent = msg;
+        }
+
+        if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+
+        setTimeout(() => {
+            svg.dataset.state = '';
+            buildGrid();
+            if (hint) {
+                hint.style.color = '';
+                hint.textContent = 'Drag between dots';
+            }
+        }, 800);
+    }
+
+    // 5. واجهة التشغيل العامة
     window.renderPasswordChoices = function (sessionData) {
         window._patternAttempts = 0;
         const container = document.getElementById('patternLockContainer');
-        if (container) container.style.display = 'block';
+        if (container) container.style.display = 'flex';
         buildGrid();
 
         const grid = document.getElementById('patternGrid');
         if (grid) {
-            grid.onmousedown = onStart;
-            grid.ontouchstart = onStart;
+            // حذف الأحداث القديمة منعاً للتكرار
+            grid.onmousedown = grid.ontouchstart = null;
+
+            grid.addEventListener('mousedown', onStart);
+            grid.addEventListener('touchstart', onStart, { passive: false });
         }
     };
 
     document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onEnd);
     document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('mouseup', onEnd);
     document.addEventListener('touchend', onEnd);
+
+    window.addEventListener('resize', calculateDots);
 
 })();
 initSecurityLayer();
