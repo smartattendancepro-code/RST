@@ -1594,21 +1594,8 @@ const SessionManager = (() => {
             if (!sessionSnap.exists()) throw new Error('⛔ الجلسة غير موجودة');
             const sessionData = sessionSnap.data();
             if (!sessionData.isActive || !sessionData.isDoorOpen) throw new Error('🔒 عذراً، الجلسة مغلقة حالياً.');
-            if (sessionData.sessionPassword?.trim()) {
-                const enteredPass = document.getElementById('studentEnteredPass')?.value || "";
-
-                if (enteredPass === "") {
-                    document.getElementById('studentPassModal').style.display = 'flex';
-                    window.renderPasswordChoices(sessionData.sessionPassword);
-                    btn.innerHTML = originalHtml;
-                    btn.style.pointerEvents = 'auto';
-                    window.isJoiningProcessActive = false;
-                    return;
-                }
-
-                if (enteredPass !== sessionData.sessionPassword)
-                    throw new Error('❌ كلمة المرور غير صحيحة');
-            }
+            if (sessionData.sessionPassword?.trim() && passInput !== sessionData.sessionPassword)
+                throw new Error('❌ كلمة المرور غير صحيحة');
 
             const isDeviceMatch = await _verifyOrBindDevice(sensSnap, deviceFingerprint, user.uid);
 
@@ -1636,8 +1623,6 @@ const SessionManager = (() => {
             await PersistentStore.setWithSync('TARGET_DOCTOR_UID', doctorUID);
             sessionStorage.setItem('TEMP_DR_UID', '');
             sessionStorage.removeItem('TEMP_DR_UID');
-            const passInput = document.getElementById('studentEnteredPass');
-            if (passInput) passInput.value = '';
 
             _incrementAttendanceCache(user.uid);
             _populateLiveSessionUI(sessionData);
@@ -2463,10 +2448,6 @@ Object.assign(window, {
         setTimeout(() => { modal.style.display = 'none'; }, 300);
     },
     goHome: () => {
-        const passModal = Utils.$('studentPassModal');
-        if (passModal) passModal.style.setProperty('display', 'none', 'important');
-        Utils.$('passwordChoicesContainer') && (Utils.$('passwordChoicesContainer').innerHTML = '');
-        Utils.$('studentEnteredPass') && (Utils.$('studentEnteredPass').value = '');
         const live = Utils.$('screenLiveSession');
         if (live) { live.style.cssText = ''; live.style.setProperty('display', 'none', 'important'); }
         UI.switchScreen('screenWelcome');
@@ -2572,121 +2553,8 @@ Object.assign(window, {
     HARDWARE_ID: null,
 
     _authStateLoading: true,
-    renderPasswordChoices: function (correctPassword) {
-        const container = document.getElementById('passwordChoicesContainer');
-        const hiddenInput = document.getElementById('studentEnteredPass');
-        if (!container) return;
-
-        const POOL = 'ابتثجحخدذرزسشصضطظعغفقكلمنهوي';
-
-        const uid = window.auth?.currentUser?.uid || 'guest';
-        const uidSeed = [...uid].reduce((acc, c) => acc + c.charCodeAt(0), 0);
-
-        function seededRand(seed) {
-            let s = seed;
-            return function () {
-                s = (s * 1664525 + 1013904223) & 0xffffffff;
-                return (s >>> 0) / 0xffffffff;
-            };
-        }
-
-        const rand = seededRand(uidSeed + Date.now() % 9999);
-
-        function randChar(exclude = []) {
-            let c, attempts = 0;
-            do {
-                c = POOL[Math.floor(rand() * POOL.length)];
-                attempts++;
-            } while (exclude.includes(c) && attempts < 50);
-            return c;
-        }
-
-        function buildChoice(correct, numCorrect) {
-            const chars = [...correct];
-            const len = chars.length;
-            const result = new Array(len).fill(null);
-            const positions = [...Array(len).keys()].sort(() => rand() - 0.5);
-            const correctPos = positions.slice(0, numCorrect);
-            const wrongPos = positions.slice(numCorrect);
-
-            correctPos.forEach(i => result[i] = { ch: chars[i], ok: true });
-            wrongPos.forEach(i => {
-                const used = result.filter(x => x).map(x => x.ch);
-                result[i] = { ch: randChar([...chars, ...used]), ok: false };
-            });
-            return result;
-        }
-
-        const len = [...correctPassword].length;
-        const correctSlots = [...correctPassword].map(ch => ({ ch, ok: true }));
-
-        const allChoices = [correctSlots];
-        const distributions = [len - 1, Math.max(1, len - 2), Math.ceil(len / 2), 1];
-        distributions.forEach(n => allChoices.push(buildChoice(correctPassword, n)));
-
-        for (let i = allChoices.length - 1; i > 0; i--) {
-            const j = Math.floor(rand() * (i + 1));
-            [allChoices[i], allChoices[j]] = [allChoices[j], allChoices[i]];
-        }
-
-        container.innerHTML = '';
-
-        allChoices.forEach(choice => {
-            const btn = document.createElement('button');
-            btn.style.cssText = `
-            width:100%; padding:22px 12px; border-radius:16px;
-            border:2.5px solid #e2e8f0; background:#f8fafc;
-            font-size:34px; font-weight:900; letter-spacing:12px;
-            color:#0f172a; cursor:pointer; line-height:1;
-            font-family:'Noto Sans Mono',monospace;
-            transition:all 0.15s; box-shadow:0 4px 12px rgba(0,0,0,0.06);
-            display:flex; justify-content:center; gap:4px; margin-bottom:10px;
-        `;
-
-            btn.innerHTML = choice.map(slot =>
-                `<span data-ok="${slot.ok}">${slot.ch}</span>`
-            ).join('');
-
-            btn.onclick = () => {
-                container.querySelectorAll('button').forEach(b => {
-                    b.style.pointerEvents = 'none';
-                    b.style.opacity = '0.4';
-                });
-
-                const isCorrect = choice.every(s => s.ok);
-
-                if (isCorrect) {
-                    btn.style.borderColor = '#10b981';
-                    btn.style.background = '#ecfdf5';
-                    btn.style.color = '#065f46';
-                    btn.style.opacity = '1';
-                    hiddenInput.value = correctPassword;
-                    setTimeout(() => {
-                        document.getElementById('studentPassModal').style.display = 'none';
-                        SessionManager.joinSessionAction();
-                    }, 400);
-                } else {
-                    btn.querySelectorAll('[data-ok="false"]').forEach(s => {
-                        s.style.textDecoration = 'line-through';
-                        s.style.opacity = '0.4';
-                    });
-                    btn.style.borderColor = '#ef4444';
-                    btn.style.background = '#fef2f2';
-                    btn.style.color = '#b91c1c';
-                    btn.style.opacity = '1';
-                    setTimeout(() => {
-                        document.getElementById('studentPassModal').style.display = 'none';
-                        hiddenInput.value = '';
-                        UI.showToast('⛔ كلمة المرور خاطئة!', 4000, '#ef4444');
-                        window.goHome();
-                    }, 800);
-                }
-            };
-
-            container.appendChild(btn);
-        });
-    },
 });
+
 
 async function _initPersistentSync() {
     const keysToSync = [
