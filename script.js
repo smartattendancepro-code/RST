@@ -1519,7 +1519,7 @@ const SessionManager = (() => {
             if (noPassword) {
                 setTimeout(() => joinSessionAction(), 300);
             } else {
-                setTimeout(() => Utils.$('sessionPass')?.focus(), 400);
+                window.renderPasswordChoices?.(sessionData);
             }
 
             window.startAuthScreenTimer?.(doctorUID);
@@ -1594,8 +1594,23 @@ const SessionManager = (() => {
             if (!sessionSnap.exists()) throw new Error('⛔ الجلسة غير موجودة');
             const sessionData = sessionSnap.data();
             if (!sessionData.isActive || !sessionData.isDoorOpen) throw new Error('🔒 عذراً، الجلسة مغلقة حالياً.');
-            if (sessionData.sessionPassword?.trim() && passInput !== sessionData.sessionPassword)
-                throw new Error('❌ كلمة المرور غير صحيحة');
+            if (sessionData.sessionPassword?.trim()) {
+                const serverPass = Utils.safeJsonParse(sessionData.sessionPassword);
+                const studentInput = Utils.safeJsonParse(passInput);
+
+                if (serverPass?.type === 'pattern' && studentInput?.type === 'pattern') {
+                    const serverPath = serverPass.path.map(p => {
+                        return Object.keys(serverPass.mapping).find(k => serverPass.mapping[k] === p);
+                    }).map(Number);
+
+                    const match = serverPath.length === studentInput.path.length &&
+                        serverPath.every((v, i) => v === studentInput.path[i]);
+
+                    if (!match) throw new Error('❌ النمط غير صحيح، حاول مرة أخرى');
+                } else if (passInput !== sessionData.sessionPassword) {
+                    throw new Error('❌ كلمة المرور غير صحيحة');
+                }
+            }
 
             const isDeviceMatch = await _verifyOrBindDevice(sensSnap, deviceFingerprint, user.uid);
 
@@ -1629,6 +1644,8 @@ const SessionManager = (() => {
 
             UI.setMainButton('enter');
             setTimeout(() => window.monitorMyParticipation?.(), 100);
+            clearTimeout(window._patternTimer);
+            window._patternAttempts = 0;
             UI.switchScreen('screenLiveSession');
             window.startLiveSnapshotListener?.();
 
@@ -1639,6 +1656,7 @@ const SessionManager = (() => {
             if (msg.includes('Failed to fetch')) msg = 'فشل الاتصال بالسيرفر! تأكد من الإنترنت.';
             UI.showToast(['❌', '⛔', '🔒'].some(p => msg.startsWith(p)) ? msg : `⚠️ ${msg}`, 4000, '#ef4444');
             if (msg.includes('غير موجودة') || msg.includes('مغلقة')) setTimeout(() => location.reload(), 1500);
+            throw e; // ← ده اللي بيخلي .catch() في onEnd يشتغل
         } finally {
             if (document.querySelector('.section.active')?.id !== 'screenLiveSession') {
                 btn.innerHTML = originalHtml;
@@ -2724,7 +2742,190 @@ document.addEventListener('DOMContentLoaded', () => {
         if (pin) pin.value = '';
     });
 });
+(function initPatternLock() {
+    const COLS = 4, GAP = 52, OFFSET = 26;
+    let drawing = false, path = [], lastDot = -1;
 
+    function dotCenter(i) {
+        return {
+            x: OFFSET + (i % COLS) * GAP,
+            y: OFFSET + Math.floor(i / COLS) * GAP
+        };
+    }
+
+    function buildGrid() {
+        const dotsEl = document.getElementById('patternDots');
+        const svg = document.getElementById('patternSvg');
+        if (!dotsEl) return;
+
+        dotsEl.innerHTML = '';
+        svg.innerHTML = '';
+        path = [];
+        lastDot = -1;
+
+        for (let i = 0; i < 16; i++) {
+            const cell = document.createElement('div');
+            cell.style.cssText = 'display:flex;align-items:center;justify-content:center;';
+            const dot = document.createElement('div');
+            dot.dataset.idx = i;
+            dot.style.cssText = `
+                width:28px;height:28px;border-radius:50%;
+                background:#e2e8f0;border:2px solid #cbd5e1;
+                transition:background .2s,transform .2s,box-shadow .2s;
+                position:relative;z-index:2;user-select:none;
+                box-shadow:0 2px 6px rgba(0,0,0,0.08);
+            `;
+            cell.appendChild(dot);
+            dotsEl.appendChild(cell);
+        }
+    }
+
+    function getDotAt(x, y) {
+        const grid = document.getElementById('patternGrid');
+        if (!grid) return -1;
+        const rect = grid.getBoundingClientRect();
+        const rx = x - rect.left, ry = y - rect.top;
+        for (let i = 0; i < 16; i++) {
+            const c = dotCenter(i);
+            if (Math.hypot(rx - c.x, ry - c.y) < 18) return i;
+        }
+        return -1;
+    }
+
+    function activateDot(idx) {
+        const dot = document.querySelector(`#patternDots [data-idx="${idx}"]`);
+        if (!dot) return;
+        dot.style.background = '#3b82f6';
+        dot.style.borderColor = '#2563eb';
+        dot.style.transform = 'scale(1.3)';
+        dot.style.boxShadow = '0 0 0 6px rgba(59,130,246,0.2)';
+        dot.textContent = '';
+    }
+
+    function drawLines() {
+        const svg = document.getElementById('patternSvg');
+        if (!svg) return;
+        svg.innerHTML = '';
+        for (let k = 0; k < path.length - 1; k++) {
+            const a = dotCenter(path[k]), b = dotCenter(path[k + 1]);
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
+            line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
+            line.setAttribute('stroke', '#3b82f6');
+            line.setAttribute('stroke-width', '3');
+            line.setAttribute('stroke-linecap', 'round');
+            line.setAttribute('opacity', '0.6');
+            svg.appendChild(line);
+        }
+    }
+
+    function onStart(e) {
+        e.preventDefault();
+        drawing = true;
+        const pt = e.touches ? e.touches[0] : e;
+        const idx = getDotAt(pt.clientX, pt.clientY);
+        if (idx !== -1) { path.push(idx); lastDot = idx; activateDot(idx); }
+    }
+
+    function onMove(e) {
+        e.preventDefault();
+        if (!drawing) return;
+        const pt = e.touches ? e.touches[0] : e;
+        const idx = getDotAt(pt.clientX, pt.clientY);
+        if (idx !== -1 && idx !== lastDot && !path.includes(idx)) {
+            path.push(idx); lastDot = idx; activateDot(idx); drawLines();
+        }
+    }
+
+    function onEnd(e) {
+        e.preventDefault();
+        if (!drawing) return;
+        drawing = false;
+
+        if (path.length < 3) {
+            document.getElementById('patternHint').style.color = '#ef4444';
+            document.getElementById('patternHint').textContent = 'Draw at least 3 dots';
+            setTimeout(buildGrid, 1000);
+            return;
+        }
+
+        document.getElementById('sessionPass').value = JSON.stringify({ type: 'pattern', path });
+
+        const hint = document.getElementById('patternHint');
+        hint.style.color = '#f59e0b';
+        hint.textContent = 'Verifying...';
+
+        window.joinSessionAction().then(() => {
+            clearTimeout(window._patternTimer);
+            window._patternAttempts = 0;
+        }).catch(() => {
+            if (!window._patternAttempts) window._patternAttempts = 0;
+            window._patternAttempts++;
+
+            if (window._patternAttempts >= 2) {
+                hint.style.color = '#ef4444';
+                hint.textContent = '❌ Too many attempts. Exiting...';
+                navigator.vibrate?.([300, 100, 300]);
+                clearTimeout(window._patternTimer);
+                setTimeout(() => {
+                    window._patternAttempts = 0;
+                    window.resetSearchSession?.();
+                    UI.switchScreen('screenWelcome');
+                    UI.showToast('❌ Wrong pattern. You have been removed.', 4000, '#ef4444');
+                }, 1000);
+            } else {
+                hint.style.color = '#ef4444';
+                hint.textContent = '✗ Wrong pattern. Try again.';
+                navigator.vibrate?.(200);
+                setTimeout(buildGrid, 1200);
+            }
+        });
+    }
+
+    window.renderPasswordChoices = function (sessionData) {
+        window._patternAttempts = 0;
+        const container = document.getElementById('patternLockContainer');
+        const noPassMsg = document.getElementById('noPasswordMsg');
+        const passData = Utils.safeJsonParse(sessionData.sessionPassword);
+
+        if (passData?.type === 'pattern') {
+            if (container) container.style.display = 'block';
+            if (noPassMsg) noPassMsg.style.display = 'none';
+            buildGrid();
+            const grid = document.getElementById('patternGrid');
+            if (grid) {
+                const newGrid = grid.cloneNode(true);
+                grid.parentNode.replaceChild(newGrid, grid);
+                newGrid.addEventListener('mousedown', onStart);
+                newGrid.addEventListener('touchstart', onStart, { passive: false });
+            }
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onEnd);
+            document.removeEventListener('touchmove', onMove);
+            document.removeEventListener('touchend', onEnd);
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onEnd);
+            document.addEventListener('touchmove', onMove, { passive: false });
+            document.addEventListener('touchend', onEnd, { passive: false });
+
+            clearTimeout(window._patternTimer);
+            window._patternTimer = setTimeout(() => {
+                if (!window.isJoiningProcessActive) {
+                    UI.showToast('⏰ Time is up. Exiting...', 3000, '#ef4444');
+                    window._patternAttempts = 0;
+                    window.resetSearchSession?.();
+                }
+            }, 25000);
+
+        } else {
+            if (container) container.style.display = 'none';
+            if (noPassMsg) noPassMsg.style.display = 'block';
+        }
+    };
+    // التحقق من النمط وقت joinSessionAction
+    const _originalJoin = window.joinSessionAction;
+    // التحقق بيتم في joinSessionAction الأصلي لأن sessionPass.value اتعبى
+})();
 initSecurityLayer();
 
 NetworkManager.initNetworkIndicator();
