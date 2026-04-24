@@ -2743,85 +2743,126 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 (function initPatternLock() {
-    const COLS = 4, GAP = 52, OFFSET = 26;
-    let drawing = false, path = [], lastDot = -1;
+    const style = document.createElement('style');
+    style.textContent = `
+        #patternDots [data-idx].active {
+            background: #3b82f6 !important;
+            border-color: #2563eb !important;
+            transform: scale(1.2);
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+            transition: none !important;
+        }
+        #patternGrid { 
+            touch-action: none; 
+            user-select: none; 
+            position: relative; 
+            -webkit-user-select: none;
+        }
+        #patternSvg { 
+            pointer-events: none; 
+            position: absolute; 
+            top: 0; left: 0; 
+            width: 100%; height: 100%; 
+            z-index: 1; 
+        }
+    `;
+    document.head.appendChild(style);
 
-    function dotCenter(i) {
-        return {
-            x: OFFSET + (i % COLS) * GAP,
-            y: OFFSET + Math.floor(i / COLS) * GAP
-        };
+    const COLS = 4, ROWS = 4, DOT_RADIUS = 28;
+    let drawing = false, path = [], dotsPositions = [];
+
+    function calculateDots() {
+        const grid = document.getElementById('patternGrid');
+        if (!grid) return;
+        const rect = grid.getBoundingClientRect();
+        if (rect.width === 0) return; 
+
+        dotsPositions = [];
+        for (let i = 0; i < 16; i++) {
+            dotsPositions.push({
+                x: (i % COLS) * (rect.width / COLS) + (rect.width / COLS / 2),
+                y: Math.floor(i / COLS) * (rect.height / ROWS) + (rect.height / ROWS / 2),
+                idx: i
+            });
+        }
     }
 
     function buildGrid() {
         const dotsEl = document.getElementById('patternDots');
         const svg = document.getElementById('patternSvg');
-        if (!dotsEl) return;
+        if (!dotsEl || !svg) return;
         dotsEl.innerHTML = '';
         svg.innerHTML = '';
         path = [];
-        lastDot = -1;
+        drawing = false;
+
         for (let i = 0; i < 16; i++) {
             const cell = document.createElement('div');
             cell.style.cssText = 'display:flex;align-items:center;justify-content:center;';
             const dot = document.createElement('div');
             dot.dataset.idx = i;
-            dot.style.cssText = `
-                width:28px;height:28px;border-radius:50%;
-                background:#e2e8f0;border:2px solid #cbd5e1;
-                transition:background .2s,transform .2s,box-shadow .2s;
-                position:relative;z-index:2;user-select:none;
-                box-shadow:0 2px 6px rgba(0,0,0,0.08);
-            `;
+            dot.style.cssText = `width:26px;height:26px;border-radius:50%;background:#e2e8f0;border:2px solid #cbd5e1;z-index:2;pointer-events:none;`;
             cell.appendChild(dot);
             dotsEl.appendChild(cell);
         }
+        setTimeout(calculateDots, 100);
     }
 
     function getDotAt(x, y) {
         const grid = document.getElementById('patternGrid');
         if (!grid) return -1;
         const rect = grid.getBoundingClientRect();
-        const rx = x - rect.left, ry = y - rect.top;
-        for (let i = 0; i < 16; i++) {
-            const c = dotCenter(i);
-            if (Math.hypot(rx - c.x, ry - c.y) < 18) return i;
+        const rx = x - rect.left;
+        const ry = y - rect.top;
+
+        for (let dot of dotsPositions) {
+            if (Math.hypot(rx - dot.x, ry - dot.y) < DOT_RADIUS) return dot.idx;
         }
         return -1;
     }
 
-    function activateDot(idx) {
-        const dot = document.querySelector(`#patternDots [data-idx="${idx}"]`);
-        if (!dot) return;
-        dot.style.background = '#3b82f6';
-        dot.style.borderColor = '#2563eb';
-        dot.style.transform = 'scale(1.3)';
-        dot.style.boxShadow = '0 0 0 6px rgba(59,130,246,0.2)';
-    }
-
-    function drawLines() {
+    function drawLines(currentTouch = null) {
         const svg = document.getElementById('patternSvg');
-        if (!svg) return;
-        svg.innerHTML = '';
-        for (let k = 0; k < path.length - 1; k++) {
-            const a = dotCenter(path[k]), b = dotCenter(path[k + 1]);
-            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-            line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
-            line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
-            line.setAttribute('stroke', '#3b82f6');
-            line.setAttribute('stroke-width', '3');
-            line.setAttribute('stroke-linecap', 'round');
-            line.setAttribute('opacity', '0.6');
-            svg.appendChild(line);
+        if (!svg || path.length === 0) {
+            if (svg) svg.innerHTML = '';
+            return;
         }
+
+        let linesHTML = '';
+        for (let k = 0; k < path.length - 1; k++) {
+            const a = dotsPositions[path[k]], b = dotsPositions[path[k + 1]];
+            if (a && b) {
+                linesHTML += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#3b82f6" stroke-width="4" stroke-linecap="round" />`;
+            }
+        }
+
+        if (drawing && currentTouch && path.length > 0) {
+            const lastDotIdx = path[path.length - 1];
+            const last = dotsPositions[lastDotIdx];
+            const grid = document.getElementById('patternGrid');
+            const rect = grid.getBoundingClientRect();
+
+            const tx = currentTouch.clientX - rect.left;
+            const ty = currentTouch.clientY - rect.top;
+
+            if (tx >= 0 && ty >= 0 && tx <= rect.width && ty <= rect.height) {
+                linesHTML += `<line x1="${last.x}" y1="${last.y}" x2="${tx}" y2="${ty}" stroke="rgba(59,130,246,0.4)" stroke-width="3" />`;
+            }
+        }
+        svg.innerHTML = linesHTML;
     }
 
     function onStart(e) {
-        e.preventDefault();
-        drawing = true;
         const pt = e.touches ? e.touches[0] : e;
         const idx = getDotAt(pt.clientX, pt.clientY);
-        if (idx !== -1) { path.push(idx); lastDot = idx; activateDot(idx); }
+
+        if (idx !== -1) {
+            drawing = true;
+            path = [idx];
+            document.querySelector(`[data-idx="${idx}"]`)?.classList.add('active');
+            if (navigator.vibrate) navigator.vibrate(15);
+            drawLines(pt);
+        }
     }
 
     function onMove(e) {
@@ -2829,49 +2870,41 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         const pt = e.touches ? e.touches[0] : e;
         const idx = getDotAt(pt.clientX, pt.clientY);
-        if (idx !== -1 && idx !== lastDot && !path.includes(idx)) {
-            path.push(idx); lastDot = idx; activateDot(idx); drawLines();
+
+        if (idx !== -1 && !path.includes(idx)) {
+            path.push(idx);
+            document.querySelector(`[data-idx="${idx}"]`)?.classList.add('active');
+            if (navigator.vibrate) navigator.vibrate(10);
         }
+        drawLines(pt);
     }
 
-    function onEnd(e) {
-        if (!drawing) return;  
-        e.preventDefault();
+    function onEnd() {
+        if (!drawing) return;
         drawing = false;
+        drawLines(); 
 
+        const hint = document.getElementById('patternHint');
         if (path.length < 3) {
-            const hint = document.getElementById('patternHint');
             if (hint) { hint.style.color = '#ef4444'; hint.textContent = 'Draw at least 3 dots'; }
-            setTimeout(buildGrid, 1000);
+            setTimeout(buildGrid, 800);
             return;
         }
 
         document.getElementById('sessionPass').value = JSON.stringify({ type: 'pattern', path });
 
-        const hint = document.getElementById('patternHint');
-        if (hint) { hint.style.color = '#f59e0b'; hint.textContent = 'Verifying...'; }
-
         window.joinSessionAction().then(() => {
-            clearTimeout(window._patternTimer);
             window._patternAttempts = 0;
         }).catch(() => {
-            if (!window._patternAttempts) window._patternAttempts = 0;
+            if (window._patternAttempts === undefined) window._patternAttempts = 0;
             window._patternAttempts++;
 
             if (window._patternAttempts >= 2) {
-                if (hint) { hint.style.color = '#ef4444'; hint.textContent = '❌ Too many attempts. Exiting...'; }
-                navigator.vibrate?.([300, 100, 300]);
-                clearTimeout(window._patternTimer);
-                setTimeout(() => {
-                    window._patternAttempts = 0;
-                    window.resetSearchSession?.();
-                    UI.switchScreen('screenWelcome');
-                    UI.showToast('❌ Wrong pattern. You have been removed.', 4000, '#ef4444');
-                }, 1000);
+                window.resetSearchSession?.();
+                if (typeof UI !== 'undefined') UI.switchScreen('screenWelcome');
             } else {
-                if (hint) { hint.style.color = '#ef4444'; hint.textContent = '✗ Wrong pattern. Try again.'; }
-                navigator.vibrate?.(200);
-                setTimeout(buildGrid, 1200);
+                document.querySelectorAll('#patternDots .active').forEach(d => d.style.background = '#ef4444');
+                setTimeout(buildGrid, 1000);
             }
         });
     }
@@ -2879,89 +2912,21 @@ document.addEventListener('DOMContentLoaded', () => {
     window.renderPasswordChoices = function (sessionData) {
         window._patternAttempts = 0;
         const container = document.getElementById('patternLockContainer');
-        const noPassMsg = document.getElementById('noPasswordMsg');
-        const passData = Utils.safeJsonParse(sessionData.sessionPassword);
+        if (container) container.style.display = 'block';
+        buildGrid();
 
-        const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
-            || ('ontouchstart' in window && screen.width <= 1024);
-
-        if (passData?.type === 'pattern') {
-            if (!isMobile) {
-                if (container) container.style.display = 'none';
-                if (noPassMsg) noPassMsg.style.display = 'none';
-
-                let desktopPassWrap = document.getElementById('_desktopPatternInput');
-                if (!desktopPassWrap) {
-                    desktopPassWrap = document.createElement('div');
-                    desktopPassWrap.id = '_desktopPatternInput';
-                    desktopPassWrap.style.cssText = 'margin:15px 0;';
-                    desktopPassWrap.innerHTML = `
-                        <p style="font-size:12px;color:#94a3b8;text-align:center;margin-bottom:10px;">
-                            Pattern lock is available on mobile only.<br>Enter the session password manually:
-                        </p>
-                        <input type="text" id="_desktopPassField" class="modern-input"
-                            placeholder="Enter password"
-                            style="text-align:center;font-size:18px;letter-spacing:3px;
-                                   font-weight:bold;color:#0f172a !important;
-                                   border-color:#cbd5e1 !important;">
-                    `;
-                    const joinBtn = document.getElementById('btnJoinFinal');
-                    if (joinBtn) joinBtn.parentNode.insertBefore(desktopPassWrap, joinBtn);
-                }
-                desktopPassWrap.style.display = 'block';
-
-                const field = document.getElementById('_desktopPassField');
-                if (field) {
-                    field.value = '';
-                    field.oninput = () => {
-                        document.getElementById('sessionPass').value = field.value;
-                    };
-                }
-                return;
-            }
-
-            const desktopWrap = document.getElementById('_desktopPatternInput');
-            if (desktopWrap) desktopWrap.style.display = 'none';
-
-            if (container) container.style.display = 'block';
-            if (noPassMsg) noPassMsg.style.display = 'none';
-            buildGrid();
-
-            const grid = document.getElementById('patternGrid');
-            if (grid) {
-                const newGrid = grid.cloneNode(true);
-                grid.parentNode.replaceChild(newGrid, grid);
-
-                newGrid.addEventListener('touchstart', onStart, { passive: false });
-                newGrid.addEventListener('touchmove', onMove, { passive: false });
-                newGrid.addEventListener('touchend', onEnd, { passive: false });
-                newGrid.addEventListener('mousedown', onStart);
-            }
-
-            document.removeEventListener('mousemove', onMove);
-            document.removeEventListener('mouseup', onEnd);
-            document.removeEventListener('touchmove', onMove);
-            document.removeEventListener('touchend', onEnd);
-
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', onEnd);
-
-            clearTimeout(window._patternTimer);
-            window._patternTimer = setTimeout(() => {
-                if (!window.isJoiningProcessActive) {
-                    UI.showToast('⏰ Time is up. Exiting...', 3000, '#ef4444');
-                    window._patternAttempts = 0;
-                    window.resetSearchSession?.();
-                }
-            }, 25000);
-
-        } else {
-            if (container) container.style.display = 'none';
-            const desktopWrap = document.getElementById('_desktopPatternInput');
-            if (desktopWrap) desktopWrap.style.display = 'none';
-            if (noPassMsg) noPassMsg.style.display = 'block';
+        const grid = document.getElementById('patternGrid');
+        if (grid) {
+            grid.onmousedown = onStart;
+            grid.ontouchstart = onStart;
         }
     };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
+
 })();
 initSecurityLayer();
 
