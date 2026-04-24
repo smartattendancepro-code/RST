@@ -2757,12 +2757,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const dotsEl = document.getElementById('patternDots');
         const svg = document.getElementById('patternSvg');
         if (!dotsEl) return;
-
         dotsEl.innerHTML = '';
         svg.innerHTML = '';
         path = [];
         lastDot = -1;
-
         for (let i = 0; i < 16; i++) {
             const cell = document.createElement('div');
             cell.style.cssText = 'display:flex;align-items:center;justify-content:center;';
@@ -2799,7 +2797,6 @@ document.addEventListener('DOMContentLoaded', () => {
         dot.style.borderColor = '#2563eb';
         dot.style.transform = 'scale(1.3)';
         dot.style.boxShadow = '0 0 0 6px rgba(59,130,246,0.2)';
-        dot.textContent = '';
     }
 
     function drawLines() {
@@ -2828,8 +2825,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function onMove(e) {
-        e.preventDefault();
         if (!drawing) return;
+        e.preventDefault();
         const pt = e.touches ? e.touches[0] : e;
         const idx = getDotAt(pt.clientX, pt.clientY);
         if (idx !== -1 && idx !== lastDot && !path.includes(idx)) {
@@ -2838,13 +2835,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function onEnd(e) {
+        if (!drawing) return;  
         e.preventDefault();
-        if (!drawing) return;
         drawing = false;
 
         if (path.length < 3) {
-            document.getElementById('patternHint').style.color = '#ef4444';
-            document.getElementById('patternHint').textContent = 'Draw at least 3 dots';
+            const hint = document.getElementById('patternHint');
+            if (hint) { hint.style.color = '#ef4444'; hint.textContent = 'Draw at least 3 dots'; }
             setTimeout(buildGrid, 1000);
             return;
         }
@@ -2852,8 +2849,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('sessionPass').value = JSON.stringify({ type: 'pattern', path });
 
         const hint = document.getElementById('patternHint');
-        hint.style.color = '#f59e0b';
-        hint.textContent = 'Verifying...';
+        if (hint) { hint.style.color = '#f59e0b'; hint.textContent = 'Verifying...'; }
 
         window.joinSessionAction().then(() => {
             clearTimeout(window._patternTimer);
@@ -2863,8 +2859,7 @@ document.addEventListener('DOMContentLoaded', () => {
             window._patternAttempts++;
 
             if (window._patternAttempts >= 2) {
-                hint.style.color = '#ef4444';
-                hint.textContent = '❌ Too many attempts. Exiting...';
+                if (hint) { hint.style.color = '#ef4444'; hint.textContent = '❌ Too many attempts. Exiting...'; }
                 navigator.vibrate?.([300, 100, 300]);
                 clearTimeout(window._patternTimer);
                 setTimeout(() => {
@@ -2874,8 +2869,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     UI.showToast('❌ Wrong pattern. You have been removed.', 4000, '#ef4444');
                 }, 1000);
             } else {
-                hint.style.color = '#ef4444';
-                hint.textContent = '✗ Wrong pattern. Try again.';
+                if (hint) { hint.style.color = '#ef4444'; hint.textContent = '✗ Wrong pattern. Try again.'; }
                 navigator.vibrate?.(200);
                 setTimeout(buildGrid, 1200);
             }
@@ -2888,25 +2882,69 @@ document.addEventListener('DOMContentLoaded', () => {
         const noPassMsg = document.getElementById('noPasswordMsg');
         const passData = Utils.safeJsonParse(sessionData.sessionPassword);
 
+        const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
+            || ('ontouchstart' in window && screen.width <= 1024);
+
         if (passData?.type === 'pattern') {
+            if (!isMobile) {
+                if (container) container.style.display = 'none';
+                if (noPassMsg) noPassMsg.style.display = 'none';
+
+                let desktopPassWrap = document.getElementById('_desktopPatternInput');
+                if (!desktopPassWrap) {
+                    desktopPassWrap = document.createElement('div');
+                    desktopPassWrap.id = '_desktopPatternInput';
+                    desktopPassWrap.style.cssText = 'margin:15px 0;';
+                    desktopPassWrap.innerHTML = `
+                        <p style="font-size:12px;color:#94a3b8;text-align:center;margin-bottom:10px;">
+                            Pattern lock is available on mobile only.<br>Enter the session password manually:
+                        </p>
+                        <input type="text" id="_desktopPassField" class="modern-input"
+                            placeholder="Enter password"
+                            style="text-align:center;font-size:18px;letter-spacing:3px;
+                                   font-weight:bold;color:#0f172a !important;
+                                   border-color:#cbd5e1 !important;">
+                    `;
+                    const joinBtn = document.getElementById('btnJoinFinal');
+                    if (joinBtn) joinBtn.parentNode.insertBefore(desktopPassWrap, joinBtn);
+                }
+                desktopPassWrap.style.display = 'block';
+
+                const field = document.getElementById('_desktopPassField');
+                if (field) {
+                    field.value = '';
+                    field.oninput = () => {
+                        document.getElementById('sessionPass').value = field.value;
+                    };
+                }
+                return;
+            }
+
+            const desktopWrap = document.getElementById('_desktopPatternInput');
+            if (desktopWrap) desktopWrap.style.display = 'none';
+
             if (container) container.style.display = 'block';
             if (noPassMsg) noPassMsg.style.display = 'none';
             buildGrid();
+
             const grid = document.getElementById('patternGrid');
             if (grid) {
                 const newGrid = grid.cloneNode(true);
                 grid.parentNode.replaceChild(newGrid, grid);
-                newGrid.addEventListener('mousedown', onStart);
+
                 newGrid.addEventListener('touchstart', onStart, { passive: false });
+                newGrid.addEventListener('touchmove', onMove, { passive: false });
+                newGrid.addEventListener('touchend', onEnd, { passive: false });
+                newGrid.addEventListener('mousedown', onStart);
             }
+
             document.removeEventListener('mousemove', onMove);
             document.removeEventListener('mouseup', onEnd);
             document.removeEventListener('touchmove', onMove);
             document.removeEventListener('touchend', onEnd);
+
             document.addEventListener('mousemove', onMove);
             document.addEventListener('mouseup', onEnd);
-            document.addEventListener('touchmove', onMove, { passive: false });
-            document.addEventListener('touchend', onEnd, { passive: false });
 
             clearTimeout(window._patternTimer);
             window._patternTimer = setTimeout(() => {
@@ -2919,12 +2957,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } else {
             if (container) container.style.display = 'none';
+            const desktopWrap = document.getElementById('_desktopPatternInput');
+            if (desktopWrap) desktopWrap.style.display = 'none';
             if (noPassMsg) noPassMsg.style.display = 'block';
         }
     };
-    // التحقق من النمط وقت joinSessionAction
-    const _originalJoin = window.joinSessionAction;
-    // التحقق بيتم في joinSessionAction الأصلي لأن sessionPass.value اتعبى
 })();
 initSecurityLayer();
 
