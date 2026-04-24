@@ -19,6 +19,9 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Outfit:wght@500;700;900&family=Reem+Kufi:wght@700&display=swap"
         rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Noto+Sans+Mono:wght@900&family=Outfit:wght@500;700;900&family=Reem+Kufi:wght@700&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <link rel="stylesheet" href="style.css">
@@ -729,12 +732,19 @@
                                 </div>
 
                                 <div class="auth-input-zone" style="margin-top: 25px;">
-                                    <div class="floating-group">
-                                        <i class="fa-solid fa-lock icon-inside"></i>
-                                        <input type="text" id="sessionPass" class="floating-input en-font"
-                                            placeholder=" " required>
-                                        <label class="floating-label">Session Password</label>
-                                    </div>
+                                    <button onclick="joinSessionAction()" style="
+        width:100%; padding:16px; border-radius:16px;
+        border:2px dashed #0ea5e9; background:#f0f9ff;
+        color:#0284c7; font-size:15px; font-weight:800;
+        cursor:pointer; display:flex; align-items:center;
+        justify-content:center; gap:10px;
+        font-family:'Cairo',sans-serif;
+        transition:all 0.2s;
+    ">
+                                        <i class="fa-solid fa-lock"></i>
+                                        <span data-i18n="choose_password_btn">اضغط لاختيار كلمة المرور</span>
+                                        <i class="fa-solid fa-chevron-left" style="font-size:12px;"></i>
+                                    </button>
                                 </div>
 
                                 <div class="auth-action-area">
@@ -764,7 +774,7 @@
             <script type="module" src="./setup.js"></script>
             <script type="module" src="security.js"></script>
             <script type="module" src="admin-session.js?v=3.2.0"></script>
-            <script type="module" src="script.js?v=7.6.2"></script>
+            <script type="module" src="script.js?v=7.6.1"></script>
             <script type="module" src="profile-system.js"></script>
 
 
