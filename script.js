@@ -1358,6 +1358,27 @@ const SessionManager = (() => {
             }
             targetDoctorUID = await _recoverActiveSession(user.uid);
             if (!targetDoctorUID) { UI.setMainButton('register'); return; }
+        } else {
+            if (mainBtn) {
+                mainBtn.innerHTML = '<i class="fa-solid fa-arrows-rotate fa-spin"></i> جاري المزامنة...';
+                mainBtn.style.opacity = '0.7';
+                mainBtn.style.pointerEvents = 'none';
+            }
+            try {
+                const [sessionSnap, pSnap] = await Promise.all([
+                    getDoc(doc(db, 'active_sessions', targetDoctorUID)),
+                    getDoc(doc(db, 'active_sessions', targetDoctorUID, 'participants', user.uid)),
+                ]);
+                const isValidSession = sessionSnap.exists() && sessionSnap.data().isActive;
+                const isActiveParticipant = pSnap.exists() && pSnap.data().status === 'active';
+                if (!isValidSession || !isActiveParticipant) {
+                    await PersistentStore.removeWithSync('TARGET_DOCTOR_UID');
+                    localStorage.removeItem('TARGET_DOCTOR_UID');
+                    sessionStorage.removeItem('TARGET_DOCTOR_UID');
+                    targetDoctorUID = await _recoverActiveSession(user.uid);
+                    if (!targetDoctorUID) { UI.setMainButton('register'); return; }
+                }
+            } catch (e) { console.warn('Session validation warning:', e); }
         }
 
         localStorage.setItem('TARGET_DOCTOR_UID', targetDoctorUID);
@@ -1403,6 +1424,8 @@ const SessionManager = (() => {
     function _handleParticipantChange(snap, doctorUID) {
         if (!snap.exists()) {
             sessionStorage.removeItem('TARGET_DOCTOR_UID');
+            localStorage.removeItem('TARGET_DOCTOR_UID');
+            PersistentStore.removeWithSync('TARGET_DOCTOR_UID');
             UI.setMainButton('register');
             if (document.querySelector('.section.active')?.id === 'screenLiveSession') {
                 UI.showToast('⚠️ تم إغلاق الجلسة أو إخراجك منها', 4000, '#f59e0b');
@@ -2673,16 +2696,9 @@ window.onload = () => {
     });
 
     const savedUID = localStorage.getItem('TARGET_DOCTOR_UID');
-    if (savedUID) {
-        sessionStorage.setItem('TARGET_DOCTOR_UID', savedUID);
-        window.resetMainButtonUI();
-    } else {
+    if (!savedUID) {
         PersistentStore.get('TARGET_DOCTOR_UID').then(uid => {
-            if (uid) {
-                localStorage.setItem('TARGET_DOCTOR_UID', uid);
-                sessionStorage.setItem('TARGET_DOCTOR_UID', uid);
-                window.resetMainButtonUI();
-            }
+            if (uid) { localStorage.setItem('TARGET_DOCTOR_UID', uid); }
         }).catch(() => { });
     }
 
@@ -2775,7 +2791,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const grid = document.getElementById('patternGrid');
         if (!grid) return;
         const rect = grid.getBoundingClientRect();
-        if (rect.width === 0) return; 
+        if (rect.width === 0) return;
 
         dotsPositions = [];
         for (let i = 0; i < 16; i++) {
@@ -2882,7 +2898,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function onEnd() {
         if (!drawing) return;
         drawing = false;
-        drawLines(); 
+        drawLines();
 
         const hint = document.getElementById('patternHint');
         if (path.length < 3) {
