@@ -431,7 +431,6 @@
                                 </button>
                             </div>
                         </div>
-                        <!-- 1. حاوية زر الأوفلاين (مخفية افتراضياً ويتحكم بها الـ JS) -->
                         <div id="offlineActionsWrapper" style="display: none; width: 90%; margin: 15px auto;">
                             <button onclick="openOfflineRegistrationModal()" class="btn-main"
                                 style="background: linear-gradient(135deg, #475569, #1e293b); border: 1px solid #94a3b8; box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-size: 13px; height: 45px;">
@@ -440,55 +439,108 @@
                             </button>
                         </div>
 
-                        <!-- 2. مودال التسجيل الأوفلاين المطور -->
-                        <div id="offlineRegModal" class="modal-overlay" style="z-index: 2147483647; display: none;">
-                            <div class="modal-box"
-                                style="max-width: 340px; padding: 25px; border-top: 5px solid #475569;">
+                        <div id="offlineRegModal" style="
+    display:none; position:fixed; inset:0; z-index:2147483647;
+    background:rgba(0,0,0,0.6);
+    backdrop-filter:blur(4px);
+    align-items:center; justify-content:center; padding:20px;
+">
+                            <div style="
+        background:linear-gradient(145deg, #e0f2fe, #f0f9ff);
+        border:1px solid #7dd3fc;
+        border-radius:24px;
+        padding:28px 24px;
+        max-width:300px; width:100%;
+        text-align:center;
+        box-shadow:0 25px 60px rgba(0,0,0,0.3);
+        animation: fadeInUp 0.25s ease;
+        position:relative;
+    ">
+                                <!-- زرار الإغلاق X -->
+                                <button onclick="cancelOfflineRegistration()" style="
+            position:absolute; top:12px; left:12px;
+            width:32px; height:32px;
+            border:none; border-radius:50%;
+            background:rgba(14,165,233,0.1);
+            color:#0284c7; font-size:16px;
+            cursor:pointer;
+            display:flex; align-items:center; justify-content:center;
+        ">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
 
-                                <!-- أ. واجهة إدخال الكود (تظهر أولاً) -->
+                                <div style="
+            font-size:11px; font-weight:700;
+            color:#0284c7; letter-spacing:1px;
+            margin-bottom:16px;
+            display:flex; align-items:center;
+            justify-content:center; gap:6px;
+        ">
+                                    <i class="fa-solid fa-wifi" style="text-decoration:line-through;"></i>
+                                    OFFLINE MODE
+                                </div>
+
+                                <div style="
+            width:56px; height:56px; border-radius:50%;
+            display:flex; align-items:center; justify-content:center;
+            margin:0 auto 16px;
+            background:rgba(14,165,233,0.15);
+            border:2px solid rgba(14,165,233,0.3);
+        ">
+                                    <i class="fa-solid fa-clock-rotate-left" style="font-size:24px; color:#0ea5e9;"></i>
+                                </div>
+
+                                <div style="
+            color:#0c4a6e; font-size:16px; font-weight:800;
+            margin-bottom:4px; font-family:'Outfit', sans-serif;
+        " data-i18n="offline_modal_title">تسجيل بدون إنترنت</div>
+                                <div style="
+            color:#0369a1; font-size:12px; font-weight:500;
+            margin-bottom:20px;
+        " data-i18n="offline_modal_subtitle">أدخل كود الجلسة للحفظ المؤقت</div>
+
                                 <div id="offlineInputView">
-                                    <div class="icon-glow"
-                                        style="background: #f1f5f9; color: #475569; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
-                                        <i class="fa-solid fa-wifi-slash" style="font-size: 25px;"></i>
-                                    </div>
-                                    <h3 style="font-weight: 900; color: #1e293b; margin-bottom: 5px;"
-                                        data-i18n="offline_modal_title">Offline Registration</h3>
-                                    <p style="font-size: 11px; color: #64748b; margin-bottom: 20px;"
-                                        data-i18n="offline_modal_subtitle">أدخل كود المحاضرة المكون من 6 أرقام</p>
+                                    <input type="text" id="offSessionPin" inputmode="numeric" placeholder="••••••"
+                                        oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 6);" style="
+                width:100%; padding:14px; border-radius:14px;
+                border:2px solid #bae6fd;
+                background:#fff;
+                color:#0c4a6e; font-size:22px; font-weight:800;
+                text-align:center; letter-spacing:6px;
+                font-family:'Outfit', sans-serif;
+                outline:none; box-sizing:border-box;
+                margin-bottom:12px;
+            " />
 
-                                    <div class="input-group" style="margin-bottom: 20px;">
-                                        <!-- تم إضافة oninput لضمان عدم تجاوز 6 أرقام برمجياً -->
-                                        <input type="number" id="offSessionPin" class="modern-input"
-                                            data-i18n-placeholder="offline_pin_placeholder" placeholder="6-Digit PIN"
-                                            style="text-align: center; border-color: #cbd5e1 !important; color: #0f172a !important; font-size: 22px; font-weight: bold; letter-spacing: 4px;"
-                                            oninput="if(this.value.length > 6) this.value = this.value.slice(0, 6);">
-                                    </div>
-
-                                    <button onclick="processOfflineQueue()" class="btn-main"
-                                        style="background: #1e293b; width: 100%; margin-bottom: 10px;">
-                                        <span data-i18n="offline_confirm_btn">تأكيد الانضمام</span>
+                                    <button onclick="processOfflineQueue()" style="
+                width:100%; padding:14px; border:none;
+                border-radius:14px;
+                background:linear-gradient(135deg,#0ea5e9,#0284c7);
+                color:#fff; font-size:14px; font-weight:700;
+                cursor:pointer;
+                display:flex; align-items:center; justify-content:center; gap:8px;
+                box-shadow:0 4px 15px rgba(14,165,233,0.4);
+                font-family:'Outfit', sans-serif;
+            ">
                                         <i class="fa-solid fa-paper-plane"></i>
+                                        <span data-i18n="offline_confirm_btn">تأكيد الكود</span>
                                     </button>
                                 </div>
 
-                                <!-- ب. واجهة العداد التنازلي (تظهر عند الحفظ) -->
-                                <div id="offlineProcessView"
-                                    style="display: none; text-align: center; padding: 20px 0;">
+                                <div id="offlineProcessView" style="display:none; text-align:center; padding:20px 0;">
                                     <i class="fa-solid fa-circle-notch fa-spin"
-                                        style="font-size: 40px; color: #0ea5e9; margin-bottom: 15px;"></i>
-                                    <h4 style="margin: 0; color: #1e293b;" data-i18n="offline_securing_msg">جاري تأمين
-                                        الطلب...</h4>
-                                    <p style="font-size: 13px; color: #64748b; margin-top: 10px;">
+                                        style="font-size:40px; color:#0ea5e9; margin-bottom:15px;"></i>
+                                    <div style="
+                color:#0c4a6e; font-size:15px; font-weight:700;
+                margin-bottom:8px; font-family:'Outfit', sans-serif;
+            " data-i18n="offline_securing_msg">جاري تأمين الطلب...</div>
+                                    <p style="font-size:13px; color:#0369a1; margin-top:10px;">
                                         <span data-i18n="offline_timer_text">سيتم الحفظ خلال</span>
-                                        <span id="offTimer" style="font-weight: bold; color: #0ea5e9;">3</span>
+                                        <span id="offTimer"
+                                            style="font-weight:800; color:#0ea5e9; font-size:18px;">3</span>
                                         <span data-i18n="offline_seconds">ثواني</span>
                                     </p>
                                 </div>
-
-                                <!-- ج. زر الإلغاء -->
-                                <button id="btnCancelOffline"
-                                    onclick="document.getElementById('offlineRegModal').style.display='none'"
-                                    class="btn-cancel-modern" style="width: 100%;" data-i18n="cancel_btn">إلغاء</button>
                             </div>
                         </div>
                         <div id="makaniResultsModal" class="modal-overlay" style="z-index: 2147483647; display: none;"
@@ -2678,6 +2730,77 @@
     }
 </style>
 
+<div id="offlineAlertModal" style="
+    display:none; position:fixed; inset:0; z-index:999999;
+    background:rgba(0,0,0,0.6);
+    backdrop-filter:blur(4px);
+    align-items:center; justify-content:center; padding:20px;
+">
+    <div style="
+        background:linear-gradient(145deg, #e0f2fe, #f0f9ff);
+        border:1px solid #7dd3fc;
+        border-radius:24px;
+        padding:28px 24px;
+        max-width:300px; width:100%;
+        text-align:center;
+        box-shadow:0 25px 60px rgba(0,0,0,0.3);
+        animation: fadeInUp 0.25s ease;
+    ">
+        <div style="
+            font-size:11px; font-weight:700;
+            color:#0284c7; letter-spacing:1px;
+            margin-bottom:12px;
+            display:flex; align-items:center;
+            justify-content:center; gap:6px;
+        ">
+            <i class="fa-solid fa-wifi" style="text-decoration:line-through;"></i>
+            OFFLINE MODE
+        </div>
+
+        <div id="offlineAlertIconWrap" style="
+            width:56px; height:56px; border-radius:50%;
+            display:flex; align-items:center; justify-content:center;
+            margin:0 auto 16px;
+            background:rgba(239,68,68,0.15);
+            border:2px solid rgba(239,68,68,0.3);
+        ">
+            <i id="offlineAlertIcon" class="fa-solid fa-circle-exclamation" style="font-size:26px; color:#ef4444;"></i>
+        </div>
+
+        <div id="offlineAlertMsg" style="
+            color:#0c4a6e;
+            font-size:14px; font-weight:700;
+            margin-bottom:24px; line-height:1.9;
+            font-family:'Outfit', sans-serif;
+        "></div>
+
+        <button onclick="document.getElementById('offlineAlertModal').style.display='none'" style="
+            width:48px; height:48px;
+            border:none; border-radius:50%;
+            background:linear-gradient(135deg,#0ea5e9,#0284c7);
+            color:#fff; font-size:18px;
+            cursor:pointer; margin:0 auto;
+            display:flex; align-items:center; justify-content:center;
+            box-shadow:0 4px 15px rgba(14,165,233,0.4);
+        ">
+            <i class="fa-solid fa-check"></i>
+        </button>
+    </div>
+</div>
+
+<style>
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
 <script type="module" src="academic-record.js?v=3.0.0"></script>
 <script type="module" src="offline-handler.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@3/dist/fp.min.js"></script>
