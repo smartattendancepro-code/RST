@@ -232,10 +232,8 @@ function _checkRateLimit() {
 
         if (raw.lockedUntil && now < raw.lockedUntil) {
             const mins = Math.ceil((raw.lockedUntil - now) / 60_000);
-            alert(t(
-                `⛔ تم تجاوز عدد المحاولات المسموح به.\nحاول مجدداً بعد ${mins} دقيقة.`,
-                `⛔ Too many attempts.\nPlease try again in ${mins} minute(s).`
-            ));
+            offlineAlert(t(`⛔ تم تجاوز عدد المحاولات المسموح به.\nحاول مجدداً بعد ${mins} دقيقة.`, `⛔ Too many attempts. Try again in ${mins} minute(s).`), 'warning');
+
             return false;
         }
 
@@ -251,10 +249,8 @@ function _checkRateLimit() {
                 count,
                 lockedUntil: now + OA.LOCKOUT_MS,
             }));
-            alert(t(
-                `⛔ تم تجاوز ${OA.MAX_PIN_ATTEMPTS} محاولات. محظور لمدة 5 دقايق.`,
-                `⛔ ${OA.MAX_PIN_ATTEMPTS} failed attempts. Locked for 5 minutes.`
-            ));
+            offlineAlert(t(`⛔ تم تجاوز ${OA.MAX_PIN_ATTEMPTS} محاولات. محظور لمدة 5 دقايق.`, `⛔ ${OA.MAX_PIN_ATTEMPTS} failed attempts. Locked for 5 minutes.`), 'warning');
+
             return false;
         }
 
@@ -337,17 +333,17 @@ window.processOfflineQueue = async function () {
 
     const sessionPin = pinEl.value.trim();
 
-    const studentData = _getStudentFromCache();
+    const studentData = await _getStudentFromCache();
+
     if (!studentData) {
-        alert(t(
-            "⚠️ يجب تسجيل الدخول أولاً أثناء وجود إنترنت",
-            "⚠️ Please Login First while online"
-        ));
+        offlineAlert(t("⚠️ يجب تسجيل الدخول أولاً", "⚠️ Please Login First"), 'warning');
+
         return;
     }
 
     if (!/^\d{6}$/.test(sessionPin)) {
-        alert(t("⚠️ الكود يجب أن يكون 6 أرقام فقط", "⚠️ PIN must be exactly 6 digits"));
+        offlineAlert(t("⚠️ الكود يجب أن يكون 6 أرقام", "⚠️ PIN must be 6 digits"), 'warning');
+
         return;
     }
 
@@ -357,15 +353,14 @@ window.processOfflineQueue = async function () {
     const key = entryKey(studentData.id, sessionPin);
 
     if (queue.some(item => entryKey(item.studentID, item.sessionPin) === key)) {
-        alert(t("⚠️ لقد سجّلت هذه الجلسة بالفعل", "⚠️ You already registered this session offline"));
+        offlineAlert(t("⚠️ سجّلت هذه الجلسة بالفعل", "⚠️ Already registered"), 'warning');
+
         return;
     }
 
     if (queue.length >= OA.MAX_QUEUE_SIZE) {
-        alert(t(
-            "⚠️ قائمة الانتظار ممتلئة، يرجى الاتصال بالإنترنت أولاً",
-            "⚠️ Queue full, please sync first"
-        ));
+        offlineAlert(t("⚠️ قائمة الانتظار ممتلئة، يرجى الاتصال بالإنترنت أولاً", "⚠️ Queue full, please sync first"), 'warning');
+
         return;
     }
 
@@ -527,7 +522,9 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
 
             if (!codeSnap.exists()) {
                 log('warn', `PIN ${entry.sessionPin} is invalid.`);
-                toast(t(`❌ كود غير صحيح (${entry.sessionPin})`, `❌ Invalid PIN`), 5000, "#ef4444");
+                offlineAlert(t(`❌ كود غير صحيح (${entry.sessionPin})`, `❌ Invalid PIN`));
+
+
                 quarantineEntry(entry);
                 return false;
             }
@@ -537,18 +534,20 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
             const college = codeData.college || "NURS";
             const rawSubject = codeData.subject;
 
+
             const openedAtMs = _toMs(codeData.openedAt);
-            const expiresAtMs = codeData.expiresAt === -1 ? Infinity : _toMs(codeData.expiresAt);
-            const submitted = entry.submissionTime;
+            const OFFLINE_WINDOW_MS = 15_000;
+            const offlineDeadline = openedAtMs + OFFLINE_WINDOW_MS;
             const LOOSE_DRIFT = 4000;
 
-            if (submitted < (openedAtMs - LOOSE_DRIFT) || submitted > (expiresAtMs + LOOSE_DRIFT)) {
-                log('warn', 'Strict Reject: Outside allowed time window.');
-                toast(
-                    t(`❌ فشل: سجلت الكود خارج الوقت المسموح للمحاضرة`,
-                        `❌ Failed: Code expired (Outside allowed window)`),
-                    6000, "#ef4444"
-                );
+            const submitted = entry.submissionTime;
+
+
+            if (submitted < (openedAtMs - LOOSE_DRIFT) ||
+                submitted > (offlineDeadline + LOOSE_DRIFT)) {
+                log('warn', 'Offline window exceeded — must register in first 15s');
+            
+                offlineAlert(t("❌ فشل: لازم تسجل في أول 15 ثانية", "❌ Failed: Must register within first 15 seconds"));
                 return false;
             }
 
@@ -726,38 +725,68 @@ function _sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function _getStudentFromCache() {
+async function _getStudentFromCache() {
     try {
-        const raw = localStorage.getItem('cached_profile_data');
-        if (!raw) {
-            log('info', 'No profile data found in storage.');
-            return null;
-        }
-
-        const p = JSON.parse(raw);
         const currentUser = window.auth?.currentUser;
 
-        if (navigator.onLine && currentUser) {
-            if (p.uid !== currentUser.uid) {
-                log('warn', 'Security alert: UID mismatch between cache and auth. Sync blocked.');
-                return null;
+        const raw = localStorage.getItem('cached_profile_data');
+        if (raw) {
+            const p = JSON.parse(raw);
+            if (currentUser && p.uid !== currentUser.uid) return null;
+            if (p.studentID) return {
+                id: String(p.studentID).trim(),
+                name: p.fullName || 'Student',
+                avatar: p.avatarClass || 'fa-user-graduate',
+                uid: p.uid,
+            };
+        }
+
+        if (window.PersistentStore) {
+            const idbRaw = await window.PersistentStore.get('cached_profile_data');
+            if (idbRaw) {
+                const p = JSON.parse(idbRaw);
+                if (p.studentID) {
+                    try { localStorage.setItem('cached_profile_data', idbRaw); } catch { }
+                    return {
+                        id: String(p.studentID).trim(),
+                        name: p.fullName || 'Student',
+                        avatar: p.avatarClass || 'fa-user-graduate',
+                        uid: p.uid,
+                    };
+                }
             }
         }
 
-        if (!p.studentID) {
-            log('warn', 'Cache corrupted: studentID missing.');
-            return null;
+        if (currentUser && navigator.onLine) {
+            const { getDoc, doc } = await import(OA.FIRESTORE_CDN);
+            const snap = await getDoc(doc(window.db, 'user_registrations', currentUser.uid));
+            if (!snap.exists()) return null;
+
+            const data = snap.data();
+            const info = data.registrationInfo || data;
+            const profile = {
+                uid: currentUser.uid,
+                studentID: info.studentID,
+                fullName: info.fullName || 'Student',
+                avatarClass: data.avatarClass || 'fa-user-graduate',
+            };
+
+            const profileStr = JSON.stringify(profile);
+            try { localStorage.setItem('cached_profile_data', profileStr); } catch { }
+            window.PersistentStore?.set('cached_profile_data', profileStr);
+
+            return {
+                id: String(profile.studentID).trim(),
+                name: profile.fullName,
+                avatar: profile.avatarClass,
+                uid: profile.uid,
+            };
         }
 
-        return {
-            id: String(p.studentID).trim(),
-            name: p.fullName || "Student",
-            avatar: p.avatarClass || "fa-user-graduate",
-            uid: p.uid,
-        };
+        return null;
 
     } catch (e) {
-        log('error', 'Failed to parse student cache:', e.message);
+        log('error', 'Failed to get student data:', e.message);
         return null;
     }
 }
@@ -864,3 +893,27 @@ window.inspectOfflineQueue = async function () {
 
     localStorage.removeItem(OLD_KEY);
 })();
+function offlineAlert(msg, type = 'error') {
+    const modal = document.getElementById('offlineAlertModal');
+    const msgEl = document.getElementById('offlineAlertMsg');
+    const icon = document.getElementById('offlineAlertIcon');
+    const wrap = document.getElementById('offlineAlertIconWrap');
+
+    if (!modal) { alert(msg); return; }
+
+    msgEl.innerText = msg;
+
+    const styles = {
+        error: ['fa-circle-exclamation', '#ef4444', 'rgba(239,68,68,0.15)', 'rgba(239,68,68,0.3)'],
+        success: ['fa-circle-check', '#10b981', 'rgba(16,185,129,0.15)', 'rgba(16,185,129,0.3)'],
+        warning: ['fa-triangle-exclamation', '#f59e0b', 'rgba(245,158,11,0.15)', 'rgba(245,158,11,0.3)'],
+    };
+
+    const [ic, color, bg, border] = styles[type] || styles.error;
+    icon.className = `fa-solid ${ic}`;
+    icon.style.color = color;
+    wrap.style.background = bg;
+    wrap.style.borderColor = border;
+
+    modal.style.display = 'flex';
+}
