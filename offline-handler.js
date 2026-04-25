@@ -546,7 +546,7 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
             if (submitted < (openedAtMs - LOOSE_DRIFT) ||
                 submitted > (offlineDeadline + LOOSE_DRIFT)) {
                 log('warn', 'Offline window exceeded — must register in first 15s');
-            
+
                 offlineAlert(t("❌ فشل: لازم تسجل في أول 15 ثانية", "❌ Failed: Must register within first 15 seconds"));
                 return false;
             }
@@ -610,16 +610,15 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
                     syncStatus: "SUCCESS_POST_SESSION_v3.2",
                     attempts: attempt,
                 });
+
+                postBatch.delete(doc(db, `attendance_${college}`, `${entry.studentID}_${dateKey}_${cleanSubKey}_ABSENT`));
+                postBatch.delete(doc(db, "attendance", `${entry.studentID}_${dateKey}_${cleanSubKey}_ABSENT`));
                 await postBatch.commit();
 
-                toast(
-                    t(`✅ تم تسجيل حضورك (الجلسة كانت مغلقة)`,
-                        `✅ Attendance recorded (session was closed)`),
-                    5000, "#10b981"
-                );
+                offlineAlert(t(`✅ تم تسجيل حضورك (الجلسة كانت مغلقة)`, `✅ Attendance recorded (session was closed)`), 'success');
                 beep();
                 log('info', `✅ Post-session offline sync complete: ${recID}`);
-                return true;   // ✅ يُحذف من الـ queue
+                return true;
             }
 
             const subDate = new Date(entry.submissionTime);
@@ -672,13 +671,14 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
                 syncStatus: "SUCCESS_RESILIENT_v3.2",
                 attempts: attempt
             });
-
+            batch.delete(doc(db, `attendance_${college}`, `${entry.studentID}_${dateKey}_${cleanSubKey}_ABSENT`));
+            batch.delete(doc(db, "attendance", `${entry.studentID}_${dateKey}_${cleanSubKey}_ABSENT`));
             await batch.commit();
 
             localStorage.setItem('TARGET_DOCTOR_UID', doctorUID);
             sessionStorage.setItem('TARGET_DOCTOR_UID', doctorUID);
 
-            toast(t(`✅ تم تأكيد حضورك بنجاح`, `✅ Attendance confirmed`), 5000, "#10b981");
+            offlineAlert(t(`✅ تم تأكيد حضورك بنجاح`, `✅ Attendance confirmed`), 'success');
             beep();
 
             if (typeof window.switchScreen === 'function')
