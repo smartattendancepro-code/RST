@@ -586,7 +586,7 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
 
 
             const openedAtMs = _toMs(codeData.openedAt);
-            const OFFLINE_WINDOW_MS = 15_000;
+            const OFFLINE_WINDOW_MS = 25_000;
             const offlineDeadline = openedAtMs + OFFLINE_WINDOW_MS;
             const LOOSE_DRIFT = 4000;
 
@@ -595,9 +595,9 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
 
             if (submitted < (openedAtMs - LOOSE_DRIFT) ||
                 submitted > (offlineDeadline + LOOSE_DRIFT)) {
-                log('warn', 'Offline window exceeded — must register in first 15s');
+                log('warn', 'Offline window exceeded — must register in first 25s');
 
-                offlineAlert(t("❌ فشل: لازم تسجل في أول 15 ثانية", "❌ Failed: Must register within first 15 seconds"));
+                offlineAlert(t("❌ فشل: لازم تسجل في أول 25 ثانية", "❌ Failed: Must register within first 25 seconds"));
                 return false;
             }
 
