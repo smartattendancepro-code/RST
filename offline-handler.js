@@ -603,10 +603,6 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
 
                 const postBatch = writeBatch(db);
 
-                const absentRecID = `${entry.studentID}_${dateKey}_${cleanSubKey}_ABSENT`;
-                postBatch.set(doc(db, `attendance_${college}`, absentRecID), postPayload);
-                postBatch.set(doc(db, "attendance", absentRecID), postPayload);
-
                 postBatch.set(doc(db, `attendance_${college}`, recID), postPayload);
                 postBatch.set(doc(db, "attendance", recID), postPayload);
                 postBatch.set(doc(db, "offline_attendance_log", recID), {
@@ -655,10 +651,6 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
 
             batch.set(doc(db, `attendance_${college}`, recID), payload);
             batch.set(doc(db, "attendance", recID), payload);
-
-            const absentRecID = `${entry.studentID}_${dateKey}_${cleanSubKey}_ABSENT`;
-            batch.set(doc(db, `attendance_${college}`, absentRecID), payload);
-            batch.set(doc(db, "attendance", absentRecID), payload);
 
             batch.set(doc(db, "active_sessions", doctorUID, "participants", user.uid), {
                 id: entry.studentID,
