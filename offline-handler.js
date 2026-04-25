@@ -140,7 +140,6 @@ async function _decryptQueue(raw, uid) {
             log('warn', 'Queue decrypted with ANONYMOUS_DEVICE fallback');
             return Array.isArray(parsed) ? parsed : [];
         } catch {
-            // legacy fallback
             try {
                 const legacyDecoded = decodeURIComponent(escape(atob(raw)));
                 const parsed = JSON.parse(legacyDecoded);
@@ -174,7 +173,7 @@ async function _signEntry(entry, uid) {
 }
 
 async function _verifyEntry(entry, uid) {
-    if (!entry._sig) return true;  // entry قديمة بدون signature → قبول
+    if (!entry._sig) return true;  
 
     const expected = await _signEntry({ ...entry, _sig: undefined }, uid);
     return expected === entry._sig;
@@ -334,16 +333,13 @@ window.processOfflineQueue = async function () {
     const sessionPin = pinEl.value.trim();
 
     const studentData = await _getStudentFromCache();
-
     if (!studentData) {
         offlineAlert(t("⚠️ يجب تسجيل الدخول أولاً", "⚠️ Please Login First"), 'warning');
-
         return;
     }
 
     if (!/^\d{6}$/.test(sessionPin)) {
         offlineAlert(t("⚠️ الكود يجب أن يكون 6 أرقام", "⚠️ PIN must be 6 digits"), 'warning');
-
         return;
     }
 
@@ -353,21 +349,31 @@ window.processOfflineQueue = async function () {
     const key = entryKey(studentData.id, sessionPin);
 
     if (queue.some(item => entryKey(item.studentID, item.sessionPin) === key)) {
-        offlineAlert(t("⚠️ سجّلت هذه الجلسة بالفعل", "⚠️ Already registered"), 'warning');
-
+        offlineAlert(t("⚠️ سجّلت هذه الجلسة بالفعل", "⚠️ Already registered this session"), 'warning');
         return;
     }
 
     if (queue.length >= OA.MAX_QUEUE_SIZE) {
-        offlineAlert(t("⚠️ قائمة الانتظار ممتلئة، يرجى الاتصال بالإنترنت أولاً", "⚠️ Queue full, please sync first"), 'warning');
-
+        offlineAlert(t(
+            "⚠️ قائمة الانتظار ممتلئة، يرجى الاتصال بالإنترنت أولاً",
+            "⚠️ Queue full, please sync first"
+        ), 'warning');
         return;
     }
 
-    _setView('process');
-    _runCountdown(OA.COUNTDOWN_SEC, () => _saveEntry(studentData, sessionPin));
-};
+    const patternToggle = document.getElementById('btnOfflinePattern');
+    const isPatternOn = patternToggle?.dataset.on === 'true';
 
+    if (isPatternOn) {
+        window._pendingOfflineStudent = studentData;
+        window._pendingOfflinePin = sessionPin;
+        window._offlinePatternAttempts = 0;
+        openOfflinePatternModal();
+    } else {
+        _setView('process');
+        _runCountdown(OA.COUNTDOWN_SEC, () => _saveEntry(studentData, sessionPin));
+    }
+};
 
 async function _saveEntry(studentData, sessionPin) {
     const submissionTime = Date.now();
@@ -378,6 +384,7 @@ async function _saveEntry(studentData, sessionPin) {
         avatarClass: studentData.avatar,
         sessionPin: sessionPin,
         submissionTime: submissionTime,
+        patternInput: window.getOfflinePattern?.() || null,
         deviceId: window.HARDWARE_ID || "DEVICE_OFFLINE",
         appVersion: window.APP_VERSION || "3.0",
     };
@@ -505,6 +512,35 @@ async function _doSync(queue, user) {
     }
 }
 
+function _verifyPattern(entryPatternRaw, sessionPasswordRaw) {
+    if (!sessionPasswordRaw) return true;
+
+    if (!entryPatternRaw) return false;
+
+    try {
+        const doctorPwd = JSON.parse(sessionPasswordRaw);
+        const studentPwd = JSON.parse(entryPatternRaw);
+
+        if (doctorPwd.type !== 'pattern' || studentPwd.type !== 'pattern') return false;
+
+        const doctorPath = doctorPwd.path;
+        const studentPath = studentPwd.path;
+
+        if (!Array.isArray(doctorPath) || !Array.isArray(studentPath)) return false;
+        if (doctorPath.length !== studentPath.length) return false;
+
+        if (doctorPwd.mapping) {
+            const mappedStudentPath = studentPath.map(idx => doctorPwd.mapping[idx]);
+            return JSON.stringify(mappedStudentPath) === JSON.stringify(doctorPath);
+        }
+
+        return JSON.stringify(studentPath) === JSON.stringify(doctorPath);
+
+    } catch (e) {
+        log('warn', '_verifyPattern parse error:', e.message);
+        return false;
+    }
+}
 
 async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db, user }) {
 
@@ -533,6 +569,20 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
             const doctorUID = codeData.doctorId;
             const college = codeData.college || "NURS";
             const rawSubject = codeData.subject;
+
+            const sessionPassword = codeData.sessionPassword || null;
+            if (!_verifyPattern(entry.patternInput || null, sessionPassword)) {
+                log('warn', `Pattern mismatch — PIN ${entry.sessionPin} rejected`);
+                offlineAlert(
+                    t(
+                        '❌ النمط غير مطابق — تم رفض التسجيل',
+                        '❌ Pattern mismatch — registration rejected'
+                    ),
+                    'error'
+                );
+                quarantineEntry({ ...entry, quarantineReason: 'pattern-mismatch' });
+                return false;
+            }
 
 
             const openedAtMs = _toMs(codeData.openedAt);
@@ -584,7 +634,7 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
 
                 const postPayload = {
                     id: entry.studentID,
-                    sessionPin: entry.sessionPin, // 👈 أضف هذا السطر هنا (مهم جداً للـ Rules)
+                    sessionPin: entry.sessionPin, 
                     name: entry.studentName,
                     subject: rawSubject,
                     college: college,
@@ -917,3 +967,505 @@ function offlineAlert(msg, type = 'error') {
 
     modal.style.display = 'flex';
 }
+(function initOfflinePattern() {
+    'use strict';
+
+    const CSS = `
+        #offlinePatternModal,
+        #offlinePatternModal * {
+            direction: ltr !important;
+            unicode-bidi: isolate !important;
+        }
+
+        #offlinePatternGrid {
+            position: relative;
+            display: grid !important;
+            grid-template-columns: repeat(4, 1fr) !important;
+            grid-template-rows: repeat(4, 1fr) !important;
+            gap: 0 !important;
+            width: 260px;
+            height: 260px;
+            touch-action: none;
+            -ms-touch-action: none;
+            cursor: crosshair;
+            font-size: 0 !important;
+        }
+
+        .oplk-cell {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            font-size: 0 !important;
+        }
+
+        .oplk-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #bae6fd;
+            border: 2px solid #7dd3fc;
+            pointer-events: none;
+            transition: transform 0.15s ease, background 0.15s ease,
+                        border-color 0.15s ease, box-shadow 0.15s ease;
+            flex-shrink: 0;
+            flex-grow: 0;
+        }
+
+        .oplk-dot.active {
+            background: #6366f1 !important;
+            border-color: #4f46e5 !important;
+            transform: scale(1.6) !important;
+            box-shadow: 0 0 12px rgba(99,102,241,0.6) !important;
+        }
+
+        .oplk-dot.error {
+            background: #ef4444 !important;
+            border-color: #b91c1c !important;
+            transform: scale(1.6) !important;
+            box-shadow: 0 0 12px rgba(239,68,68,0.5) !important;
+        }
+
+        #offlinePatternSvg {
+            position: absolute !important;
+            inset: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            pointer-events: none;
+            z-index: 10;
+            overflow: visible;
+        }
+    `;
+
+    let styleEl = document.getElementById('oplk-styles');
+    if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = 'oplk-styles';
+        document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = CSS;
+
+    let _drawing = false;
+    let _path = [];
+    let _dotPositions = [];
+    let _rafId = null;
+    let _activePointer = null;
+    let _timerTick = null;
+    let _savedPattern = null;
+    let _resizeTimer = null;
+    let _attempts = 0;
+
+    const _lang = () => localStorage.getItem('sys_lang') || 'ar';
+    const _t = (ar, en) => _lang() === 'ar' ? ar : en;
+
+    function calcPositions() {
+        const grid = document.getElementById('offlinePatternGrid');
+        if (!grid) return;
+
+        const gr = grid.getBoundingClientRect();
+        if (gr.width === 0 || gr.height === 0) {
+            requestAnimationFrame(calcPositions);
+            return;
+        }
+
+        const dots = grid.querySelectorAll('.oplk-dot');
+        if (dots.length !== 16) return;
+
+        _dotPositions = [];
+        dots.forEach((dot, i) => {
+            const r = dot.getBoundingClientRect();
+            _dotPositions.push({
+                idx: i,
+                x: (r.left + r.right) / 2 - gr.left,
+                y: (r.top + r.bottom) / 2 - gr.top,
+            });
+        });
+    }
+
+    function buildGrid() {
+        const grid = document.getElementById('offlinePatternGrid');
+        const svg = document.getElementById('offlinePatternSvg');
+        if (!grid || !svg) return;
+
+        _drawing = false;
+        _path = [];
+        _dotPositions = [];
+        if (_rafId) { cancelAnimationFrame(_rafId); _rafId = null; }
+
+        grid.innerHTML = '';
+        svg.innerHTML = '';
+        svg.removeAttribute('data-state');
+
+        grid.setAttribute('translate', 'no');
+        grid.classList.add('notranslate');
+
+        for (let i = 0; i < 16; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'oplk-cell';
+            cell.setAttribute('translate', 'no');
+
+            const dot = document.createElement('div');
+            dot.className = 'oplk-dot';
+            dot.dataset.idx = String(i);
+            dot.setAttribute('translate', 'no');
+
+            cell.appendChild(dot);
+            grid.appendChild(cell);
+        }
+
+        requestAnimationFrame(() => requestAnimationFrame(calcPositions));
+    }
+
+    function hitTest(clientX, clientY) {
+        const grid = document.getElementById('offlinePatternGrid');
+        if (!grid || _dotPositions.length === 0) return -1;
+
+        const gr = grid.getBoundingClientRect();
+        const dynamicRadius = Math.min(gr.width, gr.height) / 8;
+        const rx = clientX - gr.left;
+        const ry = clientY - gr.top;
+
+        let best = -1, bestDist = dynamicRadius;
+        for (const dp of _dotPositions) {
+            const d = Math.hypot(rx - dp.x, ry - dp.y);
+            if (d < bestDist) { bestDist = d; best = dp.idx; }
+        }
+        return best;
+    }
+
+    function renderLines(liveX, liveY) {
+        const svg = document.getElementById('offlinePatternSvg');
+        if (!svg) return;
+
+        const isError = svg.dataset.state === 'error';
+        const stroke = isError ? '#ef4444' : '#6366f1';
+        let html = '';
+
+        for (let k = 0; k < _path.length - 1; k++) {
+            const a = _dotPositions[_path[k]];
+            const b = _dotPositions[_path[k + 1]];
+            if (a && b) {
+                html += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"
+                    stroke="${stroke}" stroke-width="3.5"
+                    stroke-linecap="round" opacity="${isError ? 0.7 : 1}"/>`;
+            }
+        }
+
+        if (_drawing && liveX !== undefined && _path.length > 0) {
+            const last = _dotPositions[_path[_path.length - 1]];
+            const gr = document.getElementById('offlinePatternGrid')?.getBoundingClientRect();
+            if (last && gr) {
+                html += `<line x1="${last.x}" y1="${last.y}"
+                    x2="${liveX - gr.left}" y2="${liveY - gr.top}"
+                    stroke="${stroke}" stroke-width="3"
+                    stroke-linecap="round" opacity="0.4"
+                    stroke-dasharray="6 4"/>`;
+            }
+        }
+
+        svg.innerHTML = html;
+    }
+
+    function activateDot(idx) {
+        const dot = document.querySelector(`.oplk-dot[data-idx="${idx}"]`);
+        dot?.classList.add('active');
+        navigator.vibrate?.(12);
+    }
+
+    function showError(msg) {
+        _drawing = false;
+        const svg = document.getElementById('offlinePatternSvg');
+        const hint = document.getElementById('offlinePatternHint');
+
+        if (svg) svg.dataset.state = 'error';
+        document.querySelectorAll('.oplk-dot.active').forEach(d => {
+            d.classList.remove('active');
+            d.classList.add('error');
+        });
+        renderLines();
+
+        if (hint && msg) { hint.style.color = '#ef4444'; hint.innerText = msg; }
+        navigator.vibrate?.([60, 40, 60]);
+
+        _attempts++;
+
+        if (_attempts >= 2) {
+            clearInterval(_timerTick);
+            setTimeout(() => {
+                const modal = document.getElementById('offlinePatternModal');
+                if (modal) modal.style.display = 'none';
+
+                window._pendingOfflineStudent = null;
+                window._pendingOfflinePin = null;
+                _attempts = 0;
+                _savedPattern = null;
+
+                const btn = document.getElementById('btnOfflinePattern');
+                const thumb = document.getElementById('offlinePatternThumb');
+                const icon = document.getElementById('offlinePatternBtnIcon');
+                if (btn) { btn.style.background = '#cbd5e1'; btn.style.borderColor = '#94a3b8'; btn.dataset.on = 'false'; }
+                if (thumb) thumb.style.left = '1px';
+                if (icon) { icon.className = 'fa-solid fa-lock'; icon.style.color = '#94a3b8'; }
+
+                if (typeof offlineAlert === 'function') {
+                    offlineAlert(_t(
+                        '❌ تجاوزت عدد المحاولات المسموحة — أعد المحاولة من البداية',
+                        '❌ Pattern attempts exceeded — please try again'
+                    ), 'error');
+                }
+            }, 900);
+            return;
+        }
+
+        setTimeout(() => {
+            buildGrid();
+            if (hint) {
+                hint.style.color = '#f59e0b';
+                hint.innerText = _t(
+                    '⚠️ محاولة أخيرة — ارسم النمط بعناية',
+                    '⚠️ Last attempt — draw carefully'
+                );
+            }
+        }, 900);
+    }
+
+    function onPointerDown(e) {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        if (_activePointer !== null) return;
+
+        calcPositions();
+        const idx = hitTest(e.clientX, e.clientY);
+        if (idx === -1) return;
+
+        e.preventDefault();
+        e.target?.setPointerCapture?.(e.pointerId);
+        _activePointer = e.pointerId;
+        _drawing = true;
+        _path = [idx];
+        activateDot(idx);
+        renderLines(e.clientX, e.clientY);
+    }
+
+    function onPointerMove(e) {
+        if (!_drawing || e.pointerId !== _activePointer) return;
+        e.preventDefault();
+
+        const idx = hitTest(e.clientX, e.clientY);
+        if (idx !== -1 && !_path.includes(idx)) {
+            _path.push(idx);
+            activateDot(idx);
+        }
+
+        if (_rafId) cancelAnimationFrame(_rafId);
+        const cx = e.clientX, cy = e.clientY;
+        _rafId = requestAnimationFrame(() => renderLines(cx, cy));
+    }
+
+    function onPointerUp(e) {
+        if (!_drawing || e.pointerId !== _activePointer) return;
+        _activePointer = null;
+        _drawing = false;
+        if (_rafId) { cancelAnimationFrame(_rafId); _rafId = null; }
+        renderLines();
+        finalizePattern();
+    }
+
+    function attachEvents() {
+        const grid = document.getElementById('offlinePatternGrid');
+        if (!grid) return;
+
+        grid.addEventListener('pointerdown', onPointerDown, { passive: false });
+        grid.addEventListener('pointermove', onPointerMove, { passive: false });
+        grid.addEventListener('pointerup', onPointerUp, { passive: false });
+        grid.addEventListener('pointercancel', onPointerUp, { passive: false });
+
+        if (!('PointerEvent' in window)) {
+            grid.addEventListener('mousedown', e => onPointerDown({ ...e, pointerId: 'mouse', pointerType: 'mouse' }));
+            grid.addEventListener('mousemove', e => onPointerMove({ ...e, pointerId: 'mouse' }));
+            grid.addEventListener('mouseup', e => onPointerUp({ ...e, pointerId: 'mouse' }));
+
+            grid.addEventListener('touchstart', e => {
+                const t = e.touches[0];
+                onPointerDown({
+                    clientX: t.clientX, clientY: t.clientY,
+                    pointerId: t.identifier, pointerType: 'touch',
+                    button: 0,
+                    preventDefault: () => e.preventDefault(),
+                    target: grid
+                });
+            }, { passive: false });
+
+            grid.addEventListener('touchmove', e => {
+                const t = e.touches[0];
+                e.preventDefault();
+                onPointerMove({ clientX: t.clientX, clientY: t.clientY, pointerId: t.identifier });
+            }, { passive: false });
+
+            grid.addEventListener('touchend', e => {
+                const t = e.changedTouches[0];
+                onPointerUp({ clientX: t.clientX, clientY: t.clientY, pointerId: t.identifier });
+            }, { passive: false });
+        }
+    }
+
+    function watchResize() {
+        const grid = document.getElementById('offlinePatternGrid');
+        if (!grid) return;
+
+        if ('ResizeObserver' in window) {
+            new ResizeObserver(() => {
+                clearTimeout(_resizeTimer);
+                _resizeTimer = setTimeout(calcPositions, 100);
+            }).observe(grid);
+        }
+
+        window.addEventListener('resize', () => {
+            clearTimeout(_resizeTimer);
+            _resizeTimer = setTimeout(calcPositions, 100);
+        });
+
+        window.addEventListener('orientationchange', () => {
+            setTimeout(calcPositions, 300);
+        });
+    }
+
+    function watchMutations() {
+        const grid = document.getElementById('offlinePatternGrid');
+        if (!grid || !('MutationObserver' in window)) return;
+
+        new MutationObserver(mutations => {
+            for (const m of mutations) {
+                if (m.type === 'childList' && m.addedNodes.length > 0) {
+                    requestAnimationFrame(() => requestAnimationFrame(calcPositions));
+                    break;
+                }
+            }
+        }).observe(grid, { childList: true, subtree: true });
+    }
+
+    function startTimer() {
+        let remaining = 20;
+        const timerEl = document.getElementById('offlinePatternTimer');
+        clearInterval(_timerTick);
+        _timerTick = setInterval(() => {
+            remaining--;
+            if (timerEl) timerEl.innerText = remaining;
+            if (remaining <= 5 && timerEl) timerEl.style.color = '#ef4444';
+            if (remaining <= 0) {
+                clearInterval(_timerTick);
+                const modal = document.getElementById('offlinePatternModal');
+                if (modal) modal.style.display = 'none';
+                if (typeof offlineAlert === 'function') {
+                    offlineAlert(_t('⏰ انتهى وقت رسم النمط', '⏰ Pattern time expired'), 'warning');
+                }
+            }
+        }, 1000);
+    }
+
+    function finalizePattern() {
+        if (_path.length < 3) {
+            showError(_t('ارسم على الأقل 3 نقاط', 'Draw at least 3 dots'));
+            return;
+        }
+
+        _savedPattern = JSON.stringify({ type: 'pattern', path: _path });
+        clearInterval(_timerTick);
+
+        const btn = document.getElementById('btnOfflinePattern');
+        const thumb = document.getElementById('offlinePatternThumb');
+        const icon = document.getElementById('offlinePatternBtnIcon');
+        if (btn) { btn.style.background = '#10b981'; btn.style.borderColor = '#059669'; btn.dataset.on = 'true'; }
+        if (thumb) thumb.style.left = '24px';
+        if (icon) { icon.className = 'fa-solid fa-lock-open'; icon.style.color = '#10b981'; }
+
+        const modal = document.getElementById('offlinePatternModal');
+        if (modal) modal.style.display = 'none';
+
+        const student = window._pendingOfflineStudent;
+        const pin = window._pendingOfflinePin;
+        window._pendingOfflineStudent = null;
+        window._pendingOfflinePin = null;
+        _attempts = 0;
+
+        if (student && pin) {
+            if (typeof _setView === 'function') _setView('process');
+            if (typeof _runCountdown === 'function' && typeof OA !== 'undefined') {
+                _runCountdown(OA.COUNTDOWN_SEC, () => {
+                    if (typeof _saveEntry === 'function') _saveEntry(student, pin);
+                });
+            }
+        }
+    }
+
+    window.openOfflinePatternModal = function () {
+        _savedPattern = null;
+        _attempts = 0;
+        const modal = document.getElementById('offlinePatternModal');
+        if (!modal) return;
+        modal.style.display = 'flex';
+
+        setTimeout(() => {
+            buildGrid();
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    attachEvents();
+                    watchResize();
+                    watchMutations();
+                    startTimer();
+                });
+            });
+        }, 50);
+    };
+
+    window.resetOfflinePattern = function () {
+        buildGrid();
+        requestAnimationFrame(() => requestAnimationFrame(attachEvents));
+    };
+
+    window.skipOfflinePattern = function () {
+        clearInterval(_timerTick);
+        _savedPattern = null;
+        _attempts = 0;
+        window._pendingOfflineStudent = null;
+        window._pendingOfflinePin = null;
+
+        const btn = document.getElementById('btnOfflinePattern');
+        const thumb = document.getElementById('offlinePatternThumb');
+        const icon = document.getElementById('offlinePatternBtnIcon');
+        if (btn) { btn.style.background = '#cbd5e1'; btn.style.borderColor = '#94a3b8'; btn.dataset.on = 'false'; }
+        if (thumb) thumb.style.left = '1px';
+        if (icon) { icon.className = 'fa-solid fa-lock'; icon.style.color = '#94a3b8'; }
+
+        const modal = document.getElementById('offlinePatternModal');
+        if (modal) modal.style.display = 'none';
+    };
+
+    window.getOfflinePattern = function () {
+        return _savedPattern;
+    };
+
+    window.toggleOfflinePattern = function () {
+        const btn = document.getElementById('btnOfflinePattern');
+        const thumb = document.getElementById('offlinePatternThumb');
+        const icon = document.getElementById('offlinePatternBtnIcon');
+        if (!btn) return;
+
+        const isOn = btn.dataset.on === 'true';
+        if (!isOn) {
+            btn.style.background = '#6366f1';
+            btn.style.borderColor = '#4f46e5';
+            thumb.style.left = '24px';
+            icon.className = 'fa-solid fa-lock-open';
+            icon.style.color = '#6366f1';
+            btn.dataset.on = 'true';
+        } else {
+            btn.style.background = '#cbd5e1';
+            btn.style.borderColor = '#94a3b8';
+            thumb.style.left = '1px';
+            icon.className = 'fa-solid fa-lock';
+            icon.style.color = '#94a3b8';
+            btn.dataset.on = 'false';
+            _savedPattern = null;
+        }
+    };
+
+})();
