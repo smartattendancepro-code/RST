@@ -610,9 +610,6 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
                     syncStatus: "SUCCESS_POST_SESSION_v3.2",
                     attempts: attempt,
                 });
-
-                postBatch.delete(doc(db, `attendance_${college}`, `${entry.studentID}_${dateKey}_${cleanSubKey}_ABSENT`));
-                postBatch.delete(doc(db, "attendance", `${entry.studentID}_${dateKey}_${cleanSubKey}_ABSENT`));
                 await postBatch.commit();
 
                 offlineAlert(t(`✅ تم تسجيل حضورك (الجلسة كانت مغلقة)`, `✅ Attendance recorded (session was closed)`), 'success');
@@ -671,8 +668,7 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
                 syncStatus: "SUCCESS_RESILIENT_v3.2",
                 attempts: attempt
             });
-            batch.delete(doc(db, `attendance_${college}`, `${entry.studentID}_${dateKey}_${cleanSubKey}_ABSENT`));
-            batch.delete(doc(db, "attendance", `${entry.studentID}_${dateKey}_${cleanSubKey}_ABSENT`));
+
             await batch.commit();
 
             localStorage.setItem('TARGET_DOCTOR_UID', doctorUID);
