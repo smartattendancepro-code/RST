@@ -5,7 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
 const RamadanManager = {
     config: {
         start: new Date('2026-02-15T00:00:00'),
-        end: new Date('2026-03-20T23:59:59')
+        end: new Date('2026-09-20T23:59:59')
     },
 
     init: function () {
