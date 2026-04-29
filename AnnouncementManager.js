@@ -260,7 +260,7 @@ function _patternIconSVG(size = 36) {
 }
 
 const _SAP_ANN_CONTENT = {
-    title:       'مرحباً بك في SAP ',
+    title:       ' SAP ',
     subtitle:    ' بنفكرك ',
     i1t: 'ضبط الوقت التلقائي',
     i1b: 'تأكد أنك مفعل ضبط الوقت التلقائي علي جهازك  لضمان تسجيل حضورك بدقة كاملة.',
