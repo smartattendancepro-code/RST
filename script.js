@@ -11,8 +11,6 @@ import {
 import { i18n, t, changeLanguage } from './i18n.js';
 import { AuditManager } from './AuditManager.js';
 import { initPushNotifications, refreshPushSubscription, unsubscribePush, SAP_PUSH_VERSION } from './PushManager.js';
-import { AnnouncementManager } from './AnnouncementManager.js';
-
 
 console.info(`🔔 ${SAP_PUSH_VERSION.platform} | Push Manager v${SAP_PUSH_VERSION.version}`);
 
@@ -891,11 +889,6 @@ const AuthManager = (() => {
             if (!snap.exists()) return;
 
             const data = snap.data();
-
-            const level = data.registrationInfo?.level || data.level || '';
-            setTimeout(() => {
-                AnnouncementManager.init(db, user.uid, { level, role: 'student' });
-            }, 4000);
 
             const name = data.registrationInfo?.fullName || data.fullName || 'Student';
 
@@ -2862,10 +2855,10 @@ document.addEventListener('DOMContentLoaded', () => {
     styleEl.textContent = CSS;
 
     let drawing = false;
-    let path = [];
-    let dotPositions = [];
-    let rafId = null;
-    let activePointer = null;
+    let path = [];      
+    let dotPositions = [];       
+    let rafId = null;     
+    let activePointer = null;     
 
     function calcPositions() {
         const grid = document.getElementById('patternGrid');
@@ -2929,7 +2922,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const rx = clientX - gr.left;
         const ry = clientY - gr.top;
 
-        let best = -1, bestDist = 32;
+        let best = -1, bestDist = 32; 
         for (const dp of dotPositions) {
             const d = Math.hypot(rx - dp.x, ry - dp.y);
             if (d < bestDist) { bestDist = d; best = dp.idx; }
@@ -3014,7 +3007,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.pointerType === 'mouse' && e.button !== 0) return;
         if (activePointer !== null) return;
 
-        calcPositions();
+        calcPositions(); 
 
         const idx = hitTest(e.clientX, e.clientY);
         if (idx === -1) return;
