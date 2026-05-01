@@ -740,7 +740,7 @@ const NetworkManager = (() => {
             if (await isReallyOnline()) hideLostModal();
             else if (!onLiveScreen) showLostModal();
             else hideLostModal();
-        }, 2000);
+        }, 15_000);
 
         if (!isMobileDevice()) {
             Utils.$('desktop-blocker').style.display = 'flex';
@@ -1624,23 +1624,6 @@ const SessionManager = (() => {
             if (!sessionSnap.exists()) throw new Error('⛔ الجلسة غير موجودة');
             const sessionData = sessionSnap.data();
             if (!sessionData.isActive || !sessionData.isDoorOpen) throw new Error('🔒 عذراً، الجلسة مغلقة حالياً.');
-            if (sessionData.sessionPassword?.trim()) {
-                const serverPass = Utils.safeJsonParse(sessionData.sessionPassword);
-                const studentInput = Utils.safeJsonParse(passInput);
-
-                if (serverPass?.type === 'pattern' && studentInput?.type === 'pattern') {
-                    const serverPath = serverPass.path.map(p => {
-                        return Object.keys(serverPass.mapping).find(k => serverPass.mapping[k] === p);
-                    }).map(Number);
-
-                    const match = serverPath.length === studentInput.path.length &&
-                        serverPath.every((v, i) => v === studentInput.path[i]);
-
-                    if (!match) throw new Error('❌ النمط غير صحيح، حاول مرة أخرى');
-                } else if (passInput !== sessionData.sessionPassword) {
-                    throw new Error('❌ كلمة المرور غير صحيحة');
-                }
-            }
 
             const isDeviceMatch = await _verifyOrBindDevice(sensSnap, deviceFingerprint, user.uid);
 
@@ -1657,6 +1640,7 @@ const SessionManager = (() => {
                     studentUID: user.uid, sessionDocID: doctorUID,
                     gpsLat: gpsData.lat || 0, gpsLng: gpsData.lng || 0,
                     deviceFingerprint, isDeviceMatch, codeInput: sessionData.sessionCode,
+                    patternPath: window._currentPatternPath || [], // ✅
                 }),
             });
             const result = await res.json();
@@ -3059,14 +3043,17 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const passInput = document.getElementById('sessionPass');
-        if (passInput) passInput.value = JSON.stringify({ type: 'pattern', path });
+        window._currentPatternPath = [...path];
 
         if (typeof window.joinSessionAction !== 'function') return;
 
         window.joinSessionAction()
-            .then(() => { window._patternAttempts = 0; })
+            .then(() => {
+                window._patternAttempts = 0;
+                window._currentPatternPath = null;
+            })
             .catch(() => {
+                window._currentPatternPath = null;
                 window._patternAttempts = (window._patternAttempts || 0) + 1;
                 if (window._patternAttempts >= 2) {
                     window._patternAttempts = 0;
