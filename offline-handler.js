@@ -173,7 +173,7 @@ async function _signEntry(entry, uid) {
 }
 
 async function _verifyEntry(entry, uid) {
-    if (!entry._sig) return true;  
+    if (!entry._sig) return true;
 
     const expected = await _signEntry({ ...entry, _sig: undefined }, uid);
     return expected === entry._sig;
@@ -385,9 +385,12 @@ async function _saveEntry(studentData, sessionPin) {
         sessionPin: sessionPin,
         submissionTime: submissionTime,
         patternInput: window.getOfflinePattern?.() || null,
+        offlineVerifyToken: window._offlineVerifyToken || null, // ✅
         deviceId: window.HARDWARE_ID || "DEVICE_OFFLINE",
         appVersion: window.APP_VERSION || "3.0",
     };
+
+    window._offlineVerifyToken = null;
 
     offlineEntry._sig = await _signEntry(offlineEntry, studentData.uid || _getUidForCrypto());
 
@@ -451,29 +454,43 @@ async function _doSync(queue, user) {
         const remainingQueue = [];
         let successCount = 0;
         let failCount = 0;
+        const uid = user.uid;
 
-        for (const entry of queue) {
-            const uid = user.uid;
-            const isValid = await _verifyEntry(entry, uid);
+        const results = await Promise.allSettled(
+            queue.map(async (entry) => {
+                const isValid = await _verifyEntry(entry, uid);
 
-            if (!isValid) {
-                log('warn', 'Tampered entry detected, quarantining:', entry.sessionPin);
-                toast(
-                    t('⚠️ تم اكتشاف تلاعب في بيانات محفوظة', '⚠️ Tampered entry detected'),
-                    5000, "#ef4444"
-                );
-                quarantineEntry(entry);
+                if (!isValid) {
+                    log('warn', 'Tampered entry detected, quarantining:', entry.sessionPin);
+                    toast(
+                        t('⚠️ تم اكتشاف تلاعب في بيانات محفوظة', '⚠️ Tampered entry detected'),
+                        5000, "#ef4444"
+                    );
+                    quarantineEntry(entry);
+                    return { status: 'quarantine' };
+                }
+
+                const result = await _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db, user });
+                return { status: result, entry };
+            })
+        );
+
+        for (let i = 0; i < results.length; i++) {
+            const r = results[i];
+
+            if (r.status === 'rejected') {
                 failCount++;
                 continue;
             }
 
-            const result = await _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db, user });
-
-            if (result === 'retry') {
-                remainingQueue.push(entry);
+            const val = r.value;
+            if (!val || val.status === 'quarantine') {
                 failCount++;
-            } else if (result === true) {
+            } else if (val.status === true) {
                 successCount++;
+            } else if (val.status === 'retry') {
+                remainingQueue.push(val.entry);
+                failCount++;
             } else {
                 failCount++;
             }
@@ -571,19 +588,70 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
             const rawSubject = codeData.subject;
 
             const sessionPassword = codeData.sessionPassword || null;
-            if (!_verifyPattern(entry.patternInput || null, sessionPassword)) {
-                log('warn', `Pattern mismatch — PIN ${entry.sessionPin} rejected`);
-                offlineAlert(
-                    t(
-                        '❌ النمط غير مطابق — تم رفض التسجيل',
-                        '❌ Pattern mismatch — registration rejected'
-                    ),
-                    'error'
-                );
-                quarantineEntry({ ...entry, quarantineReason: 'pattern-mismatch' });
-                return false;
-            }
 
+            if (sessionPassword) {
+                if (entry.offlineVerifyToken &&
+                    !entry.offlineVerifyToken.startsWith('OFFLINE_VERIFIED_')) {
+                }
+                else if (entry.offlineVerifyToken?.startsWith('OFFLINE_VERIFIED_')) {
+
+                    if (!entry.patternInput) {
+                        log('warn', `Missing pattern data | PIN: ${entry.sessionPin}`);
+                        quarantineEntry({ ...entry, quarantineReason: 'missing-pattern-data' });
+                        return false;
+                    }
+
+                    try {
+                        const currentUser = window.auth?.currentUser;
+                        if (!currentUser) return 'retry';
+
+                        const idToken = await currentUser.getIdToken(true);
+                        const savedPath = JSON.parse(entry.patternInput);
+
+                        if (!savedPath?.path || !Array.isArray(savedPath.path)) {
+                            quarantineEntry({ ...entry, quarantineReason: 'invalid-pattern-format' });
+                            return false;
+                        }
+
+                        const verifyRes = await fetch(
+                            'https://nursing-backend-rej8.vercel.app/api/verifyOfflinePattern',
+                            {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${idToken}`
+                                },
+                                body: JSON.stringify({
+                                    sessionPin: entry.sessionPin,
+                                    patternPath: savedPath.path
+                                }),
+                                signal: AbortSignal.timeout(8000) 
+                            }
+                        );
+
+                        if (!verifyRes.ok) {
+                            log('warn', `Pattern rejected after reconnect | PIN: ${entry.sessionPin}`);
+                            offlineAlert(
+                                t('❌ النمط غلط — تم رفض التسجيل', '❌ Wrong pattern — registration rejected'),
+                                'error'
+                            );
+                            quarantineEntry({ ...entry, quarantineReason: 'pattern-failed-on-sync' });
+                            return false;
+                        }
+
+                        log('info', `✅ Pattern verified after reconnect | PIN: ${entry.sessionPin}`);
+
+                    } catch (e) {
+                        log('warn', `Pattern re-verify network error | PIN: ${entry.sessionPin} | ${e.message}`);
+                        return 'retry';
+                    }
+                }
+                else {
+                    log('warn', `Missing pattern token | PIN: ${entry.sessionPin}`);
+                    quarantineEntry({ ...entry, quarantineReason: 'missing-pattern-token' });
+                    return false;
+                }
+            }
 
             const openedAtMs = _toMs(codeData.openedAt);
             const OFFLINE_WINDOW_MS = 25_000;
@@ -634,7 +702,7 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
 
                 const postPayload = {
                     id: entry.studentID,
-                    sessionPin: entry.sessionPin, 
+                    sessionPin: entry.sessionPin,
                     name: entry.studentName,
                     subject: rawSubject,
                     college: college,
@@ -1361,15 +1429,70 @@ function offlineAlert(msg, type = 'error') {
         }, 1000);
     }
 
-    function finalizePattern() {
+    async function finalizePattern() {
         if (_path.length < 3) {
             showError(_t('ارسم على الأقل 3 نقاط', 'Draw at least 3 dots'));
             return;
         }
 
-        _savedPattern = JSON.stringify({ type: 'pattern', path: _path });
-        clearInterval(_timerTick);
+        const pin = window._pendingOfflinePin;
+        const student = window._pendingOfflineStudent;
+        if (!pin || !student) return;
 
+        if (!navigator.onLine) {
+            _savedPattern = JSON.stringify({ type: 'pattern', path: _path });
+            window._offlineVerifyToken = `OFFLINE_VERIFIED_${Date.now()}`;
+            clearInterval(_timerTick);
+            _continueAfterPattern(student, pin);
+            return;
+        }
+
+        try {
+            const user = window.auth?.currentUser;
+            if (!user) { showError(_t('يجب تسجيل الدخول', 'Please login first')); return; }
+
+            const idToken = await user.getIdToken();
+
+            const verifyRes = await fetch(
+                'https://nursing-backend-rej8.vercel.app/api/verifyOfflinePattern',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${idToken}`
+                    },
+                    body: JSON.stringify({
+                        sessionPin: pin,
+                        patternPath: [..._path]
+                    })
+                }
+            );
+
+            const verifyData = await verifyRes.json();
+
+            if (!verifyRes.ok) {
+                showError(verifyData.error || _t('❌ النمط غير صحيح', '❌ Wrong pattern'));
+                if (verifyData.attemptsLeft === 0) {
+                    setTimeout(() => {
+                        document.getElementById('offlinePatternModal').style.display = 'none';
+                    }, 900);
+                }
+                return;
+            }
+            window._offlineVerifyToken = verifyData.verifyToken;
+            _savedPattern = 'VERIFIED';
+            clearInterval(_timerTick);
+            _continueAfterPattern(student, pin);
+
+        } catch (e) {
+            _savedPattern = JSON.stringify({ type: 'pattern', path: _path });
+            window._offlineVerifyToken = `OFFLINE_VERIFIED_${Date.now()}`;
+            clearInterval(_timerTick);
+            _continueAfterPattern(student, pin);
+        }
+    }
+
+    function _continueAfterPattern(student, pin) {
         const btn = document.getElementById('btnOfflinePattern');
         const thumb = document.getElementById('offlinePatternThumb');
         const icon = document.getElementById('offlinePatternBtnIcon');
@@ -1380,19 +1503,15 @@ function offlineAlert(msg, type = 'error') {
         const modal = document.getElementById('offlinePatternModal');
         if (modal) modal.style.display = 'none';
 
-        const student = window._pendingOfflineStudent;
-        const pin = window._pendingOfflinePin;
         window._pendingOfflineStudent = null;
         window._pendingOfflinePin = null;
         _attempts = 0;
 
-        if (student && pin) {
-            if (typeof _setView === 'function') _setView('process');
-            if (typeof _runCountdown === 'function' && typeof OA !== 'undefined') {
-                _runCountdown(OA.COUNTDOWN_SEC, () => {
-                    if (typeof _saveEntry === 'function') _saveEntry(student, pin);
-                });
-            }
+        if (typeof _setView === 'function') _setView('process');
+        if (typeof _runCountdown === 'function') {
+            _runCountdown(OA.COUNTDOWN_SEC, () => {
+                if (typeof _saveEntry === 'function') _saveEntry(student, pin);
+            });
         }
     }
 
