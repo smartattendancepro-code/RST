@@ -931,7 +931,8 @@ const AuthManager = (() => {
                 sessionStorage.setItem('TARGET_DOCTOR_UID', savedUID);
                 localStorage.setItem('TARGET_DOCTOR_UID', savedUID);
             }
-
+            window.studentStatusListener?.();
+            window.sessionStatusListener?.();
             window.monitorMyParticipation?.();
             setTimeout(() => initPushNotifications(user.uid), 3000);
             setTimeout(() => refreshPushSubscription(user.uid), 5000);
@@ -1406,25 +1407,67 @@ const SessionManager = (() => {
             },
         );
 
-        window.studentStatusListener = onSnapshot(
-            doc(db, 'active_sessions', targetDoctorUID, 'participants', user.uid),
-            snap => _handleParticipantChange(snap, targetDoctorUID),
-            err => { console.warn('Listener error:', err); UI.setMainButton('register'); },
-        );
+        let _pollInterval = null;
+
+        async function _pollStatus() {
+            try {
+                const snap = await getDoc(
+                    doc(db, 'active_sessions', targetDoctorUID, 'participants', user.uid)
+                );
+                _handleParticipantChange(snap, targetDoctorUID);
+            } catch (e) { console.warn('Poll error:', e); }
+        }
+
+        _pollStatus();
+        _pollInterval = setInterval(() => {
+            if (document.visibilityState === 'visible') _pollStatus();
+        }, 10_000);
+
+        window.studentStatusListener = () => {
+            clearInterval(_pollInterval);
+            _pollInterval = null;
+        };
     }
 
     async function _recoverActiveSession(uid) {
+        // ① الطريقة الجديدة السريعة
         try {
-            const q = query(collection(db, 'active_sessions'), where('isActive', '==', true), limit(20));
+            const snap = await getDoc(doc(db, 'user_registrations', uid));
+            const liveState = snap.data()?.liveState;
+
+            if (liveState?.status === 'active' && liveState?.doctorUID) {
+                const sessionSnap = await getDoc(
+                    doc(db, 'active_sessions', liveState.doctorUID)
+                );
+                if (sessionSnap.exists() && sessionSnap.data().isActive) {
+                    await PersistentStore.setWithSync('TARGET_DOCTOR_UID', liveState.doctorUID);
+                    return liveState.doctorUID;
+                }
+            }
+        } catch (e) {
+            console.warn('Fast recovery failed, trying fallback:', e);
+        }
+
+        try {
+            const q = query(
+                collection(db, 'active_sessions'),
+                where('isActive', '==', true),
+                limit(20)
+            );
             const snap = await getDocs(q);
             for (const s of snap.docs) {
-                const pSnap = await getDoc(doc(db, 'active_sessions', s.id, 'participants', uid));
+                const pSnap = await getDoc(
+                    doc(db, 'active_sessions', s.id, 'participants', uid)
+                );
                 if (pSnap.exists() && pSnap.data().status === 'active') {
                     await PersistentStore.setWithSync('TARGET_DOCTOR_UID', s.id);
                     return s.id;
                 }
             }
-        } catch (e) { console.error('Session recovery error:', e); }
+        } catch (e) {
+            console.error('Fallback recovery error:', e);
+        }
+
         return null;
     }
 
