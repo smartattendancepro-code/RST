@@ -1397,8 +1397,20 @@ const SessionManager = (() => {
 
         window.sessionStatusListener = onSnapshot(
             doc(db, 'active_sessions', targetDoctorUID),
-            snap => {
+            async snap => {
                 if (!snap.exists() || !snap.data().isActive) {
+
+                    const user = window.auth.currentUser;
+                    if (user) {
+                        try {
+                            await setDoc(
+                                doc(db, 'user_registrations', user.uid),
+                                { liveState: { status: 'idle', doctorUID: '', joinedAt: null } },
+                                { merge: true }
+                            );
+                        } catch (e) { console.warn('liveState clear:', e); }
+                    }
+
                     PersistentStore.removeWithSync('TARGET_DOCTOR_UID');
                     UI.setMainButton('register');
                     window.studentStatusListener?.();
@@ -1477,6 +1489,18 @@ const SessionManager = (() => {
             localStorage.removeItem('TARGET_DOCTOR_UID');
             PersistentStore.removeWithSync('TARGET_DOCTOR_UID');
             UI.setMainButton('register');
+
+            const user = window.auth?.currentUser;
+            if (user) {
+                import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js")
+                    .then(({ doc, setDoc }) => {
+                        setDoc(
+                            doc(db, 'user_registrations', user.uid),
+                            { liveState: { status: 'idle', doctorUID: '', joinedAt: null } },
+                            { merge: true }
+                        ).catch(e => console.warn('liveState clear:', e));
+                    });
+            }
             if (document.querySelector('.section.active')?.id === 'screenLiveSession') {
                 UI.showToast('⚠️ تم إغلاق الجلسة أو إخراجك منها', 4000, '#f59e0b');
                 window.goHome?.();
