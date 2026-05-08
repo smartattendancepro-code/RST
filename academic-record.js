@@ -5,7 +5,7 @@ import {
 const CONFIG = {
     COLLECTIONS: ["attendance_NURS", "attendance_PT", "attendance"],
     CACHE_KEY: 'academic_master_cache',
-    RECORDS_LIMIT: 200,           
+    RECORDS_LIMIT: 200,
     SEMESTER_START_DATE: "01/02/2026"
 };
 
@@ -88,7 +88,7 @@ function renderList() {
 
     const ui = {
         attendance: { color: '#10b981', bg: '#dcfce7', icon: 'fa-check-double' },
-        absence:    { color: '#ef4444', bg: '#fee2e2', icon: 'fa-xmark' }
+        absence: { color: '#ef4444', bg: '#fee2e2', icon: 'fa-xmark' }
     }[state.currentTab];
 
     let html = '';
@@ -102,8 +102,14 @@ function renderList() {
             html += `
                 <div style="background:white; border:1px solid #f1f5f9; border-left:4px solid ${ui.color}; border-radius:12px; padding:12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
                     <div>
-                        <div style="font-weight:bold; color:#1e293b; font-size:13px;">${item.subject || '---'}</div>
-                        <div style="font-size:11px; color:#94a3b8; margin-top:2px;"><i class="fa-solid fa-user-tie"></i> ${item.doctorName || '---'}</div>
+<div style="font-weight:bold; color:#1e293b; font-size:13px;">
+    ${item.subject || '---'}
+    ${item.isOfflineSync
+                    ? `<span style="font-size:10px; background:#fef3c7; color:#d97706; 
+           padding:2px 7px; border-radius:8px; margin-right:6px; font-weight:700;">
+           📴 أوفلاين</span>`
+                    : ''}
+</div>                        <div style="font-size:11px; color:#94a3b8; margin-top:2px;"><i class="fa-solid fa-user-tie"></i> ${item.doctorName || '---'}</div>
                     </div>
                     <div style="background:${ui.bg}; color:${ui.color}; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px;">
                         <i class="fa-solid ${ui.icon}"></i>
@@ -131,7 +137,7 @@ window.switchAcademicTab = (tab) => {
     state.displayCount = 2;
 
     document.getElementById('tabAttendance').className = tab === 'attendance' ? 'tab-active-att' : 'tab-inactive';
-    document.getElementById('tabAbsence').className    = tab === 'absence'    ? 'tab-active-abs' : 'tab-inactive';
+    document.getElementById('tabAbsence').className = tab === 'absence' ? 'tab-active-abs' : 'tab-inactive';
 
     renderList();
 };
@@ -191,10 +197,10 @@ async function getStudentData(studentID) {
 
 window.openAcademicRecord = async function (forceRefresh = false) {
     const user = window.auth.currentUser;
-    if (!user) return;  
+    if (!user) return;
 
     document.getElementById('academicRecordModal').style.display = 'flex';
-    
+
     document.getElementById('academicRecordContent').innerHTML = `<div style="text-align:center; padding:50px;"><i class="fa-solid fa-circle-notch fa-spin" style="color:#3b82f6; font-size:30px;"></i></div>`;
     document.getElementById('academicStatsContainer').innerHTML = '';
 
@@ -211,10 +217,10 @@ window.openAcademicRecord = async function (forceRefresh = false) {
         const data = await getStudentData(studentID);
 
         state.rawAttendance = data.attended;
-        state.rawAbsence    = data.absent;
+        state.rawAbsence = data.absent;
 
         document.getElementById('attendanceTabCount').innerText = data.attended.length;
-        document.getElementById('absenceTabCount').innerText    = data.absent.length;
+        document.getElementById('absenceTabCount').innerText = data.absent.length;
 
         renderAnalytics();
         switchAcademicTab('attendance');
@@ -225,11 +231,11 @@ window.openAcademicRecord = async function (forceRefresh = false) {
     }
 };
 
-window.refreshAcademicData = function() {
+window.refreshAcademicData = function () {
     const refreshBtn = document.getElementById('refreshBtnIcon');
-    if(refreshBtn) refreshBtn.classList.add('fa-spin'); 
-    
+    if (refreshBtn) refreshBtn.classList.add('fa-spin');
+
     window.openAcademicRecord(true).then(() => {
-        if(refreshBtn) refreshBtn.classList.remove('fa-spin');
+        if (refreshBtn) refreshBtn.classList.remove('fa-spin');
     });
 };
