@@ -41,7 +41,7 @@ const CFG = Object.freeze({
         excludedUID: 'R78Lu7IZBpYK0WngcaSL6t1Our62',
     },
     ui: {
-        idleTimeoutSec: 20,
+        idleTimeoutSec: 5,
         statsCacheTTL: 900_000,
     },
     avatars: Object.freeze({
