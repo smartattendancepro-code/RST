@@ -1608,7 +1608,7 @@ const SessionManager = (() => {
             window._codeEntryStarted = null;
 
             sessionStorage.setItem('TEMP_DR_UID', doctorUID);
-            window.stopCodeEntryIdleTimer?.();
+            //window.stopCodeEntryIdleTimer?.();
             _populateSessionUI(sessionData);
 
             const noPassword = !sessionData.sessionPassword?.trim();
@@ -1675,6 +1675,9 @@ const SessionManager = (() => {
         }
 
         window.isJoiningProcessActive = true;
+
+        window.stopCodeEntryIdleTimer?.();
+
         const originalHtml = btn.innerHTML;
         btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Verifying & Joining...';
         btn.style.pointerEvents = 'none';
@@ -1733,11 +1736,12 @@ const SessionManager = (() => {
         } catch (e) {
             console.error('Join session error:', e);
             window.isJoiningProcessActive = false;
+            window.startCodeEntryIdleTimer?.();
             let msg = e.message;
             if (msg.includes('Failed to fetch')) msg = 'فشل الاتصال بالسيرفر! تأكد من الإنترنت.';
             UI.showToast(['❌', '⛔', '🔒'].some(p => msg.startsWith(p)) ? msg : `⚠️ ${msg}`, 4000, '#ef4444');
             if (msg.includes('غير موجودة') || msg.includes('مغلقة')) setTimeout(() => location.reload(), 1500);
-            throw e; // ← ده اللي بيخلي .catch() في onEnd يشتغل
+            throw e;
         } finally {
             if (document.querySelector('.section.active')?.id !== 'screenLiveSession') {
                 btn.innerHTML = originalHtml;
@@ -2355,35 +2359,39 @@ const SmartSearch = (() => {
 
 
 const IdleTimer = (() => {
-    let _ticker = null;
-    let _elapsed = 0;
-    let _isTyping = false;
+    let _timeoutId = null;
 
     function start() {
         stop();
-        _elapsed = _isTyping = false;
-        _ticker = setInterval(() => {
-            if (_isTyping) return;
-            if (++_elapsed >= CFG.ui.idleTimeoutSec) {
-                stop();
-                UI.switchScreen('screenWelcome');
-                UI.showToast('⚠️ كن سريعا في المرة القادمة', 3000, '#f59e0b');
-            }
-        }, 1000);
+        _timeoutId = setTimeout(_expire, CFG.ui.idleTimeoutSec * 1000);
     }
 
     function stop() {
-        clearInterval(_ticker);
-        _ticker = _elapsed = 0;
-        _isTyping = false;
+        if (_timeoutId) {
+            clearTimeout(_timeoutId);
+            _timeoutId = null;
+        }
         const input = Utils.$('attendanceCode');
         if (input) input.value = '';
     }
 
-    function onKeyDown() { _isTyping = true; _elapsed = 0; }
-    function onKeyUp() { _isTyping = false; }
+    function reset() {
+        if (_timeoutId) {
+            clearTimeout(_timeoutId);
+            _timeoutId = setTimeout(_expire, CFG.ui.idleTimeoutSec * 1000);
+        }
+    }
 
-    return { start, stop, onKeyDown, onKeyUp };
+    function _expire() {
+        stop();
+        UI.switchScreen('screenWelcome');
+        UI.showToast('⚠️ كن سريعا في المرة القادمة', 3000, '#f59e0b');
+    }
+
+    function onKeyDown() { reset(); }
+    function onKeyUp() { reset(); }
+
+    return { start, stop, onKeyDown, onKeyUp, reset };
 })();
 
 
@@ -2500,6 +2508,7 @@ Object.assign(window, {
 
     startCodeEntryIdleTimer: IdleTimer.start,
     stopCodeEntryIdleTimer: IdleTimer.stop,
+    resetIdleTimer: IdleTimer.reset,
 
     triggerAppInstall: PWAManager.triggerInstall,
 
@@ -3065,6 +3074,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.pointerType === 'mouse' && e.button !== 0) return;
         if (activePointer !== null) return;
 
+        window.resetIdleTimer?.();
+
         calcPositions();
 
         const idx = hitTest(e.clientX, e.clientY);
@@ -3199,6 +3210,8 @@ document.addEventListener('DOMContentLoaded', () => {
     window.renderPasswordChoices = function (sessionData) {
         window._patternAttempts = 0;
 
+        window.resetIdleTimer?.();
+
         const container = document.getElementById('patternLockContainer');
         if (container) container.style.display = '';
 
@@ -3214,7 +3227,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('patternGrid')) {
         window.renderPasswordChoices();
     }
-
 })();
 initSecurityLayer();
 
