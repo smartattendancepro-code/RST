@@ -3116,8 +3116,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function finalizePattern() {
-        if (path.length < 3) {
-            showError('Draw at least 3 dots');
+        if (path.length < 4) {
+            showError('Draw at least 4 dots');
             return;
         }
 
