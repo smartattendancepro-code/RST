@@ -447,7 +447,7 @@ async function _doSync(queue, user) {
             log('info', 'Firestore module loaded & cached');
         }
 
-        const { doc, getDoc, writeBatch, serverTimestamp } = _firestoreCache;
+        const { doc, getDoc, writeBatch, serverTimestamp, Timestamp } = _firestoreCache;
         const db = window.db;
         if (!db) { log('error', 'window.db not available'); return; }
 
@@ -470,7 +470,7 @@ async function _doSync(queue, user) {
                     return { status: 'quarantine' };
                 }
 
-                const result = await _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db, user });
+                const result = await _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, Timestamp, db, user });
                 return { status: result, entry };
             })
         );
@@ -559,7 +559,7 @@ function _verifyPattern(entryPatternRaw, sessionPasswordRaw) {
     }
 }
 
-async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db, user }) {
+async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, Timestamp, db, user }) {
 
     for (let attempt = 1; attempt <= OA.MAX_RETRIES; attempt++) {
         try {
@@ -625,7 +625,7 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
                                     sessionPin: entry.sessionPin,
                                     patternPath: savedPath.path
                                 }),
-                                signal: AbortSignal.timeout(8000) 
+                                signal: AbortSignal.timeout(8000)
                             }
                         );
 
@@ -686,6 +686,10 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
 
             const sessionData = sessionSnap.data();
 
+            if (sessionData.sessionCode && sessionData.sessionCode !== entry.sessionPin) {
+                sessionData.isActive = false;
+            }
+
             if (sessionData.isActive === false) {
                 log('info', 'Session closed — saving offline attendance as post-session record.');
 
@@ -710,7 +714,7 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
                     group: "GENERAL",
                     date: fixedDateStr,
                     time_str: subDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-                    timestamp: serverTimestamp(),
+                    timestamp: Timestamp.fromMillis(entry.submissionTime),
                     status: "ATTENDED",
                     doctorUID: doctorUID,
                     doctorName: codeData.doctorName,
@@ -759,7 +763,7 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, db,
                 group: "GENERAL",
                 date: fixedDateStr,
                 time_str: subDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-                timestamp: serverTimestamp(),
+                timestamp: Timestamp.fromMillis(entry.submissionTime),
                 status: "ATTENDED",
                 doctorUID: doctorUID,
                 doctorName: codeData.doctorName,
