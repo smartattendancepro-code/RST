@@ -237,23 +237,96 @@ window.openAcademicRecord = async function (forceRefresh = false) {
         document.getElementById('academicRecordContent').innerHTML = `<div style="text-align:center; color:#ef4444; padding:20px;">Error Loading Records</div>`;
     }
 };
-
 window.refreshAcademicData = function () {
     const lastRefresh = localStorage.getItem('last_refresh_time');
     const now = Date.now();
 
     if (lastRefresh && now - parseInt(lastRefresh) < 30000) {
         const remaining = Math.ceil((30000 - (now - parseInt(lastRefresh))) / 1000);
-        alert(`انتظر ${remaining} ثانية قبل التحديث مجدداً`);
+        _showRefreshThrottleModal(remaining);
         return;
     }
 
     localStorage.setItem('last_refresh_time', now);
 
     const refreshBtn = document.getElementById('refreshBtnIcon');
-    if (refreshBtn) refreshBtn.classList.add('fa-spin');
+    if (refreshBtn) {
+        refreshBtn.classList.add('fa-spin');
+        refreshBtn.style.color = '#1a7abf';
+    }
 
     window.openAcademicRecord(true).then(() => {
-        if (refreshBtn) refreshBtn.classList.remove('fa-spin');
+        if (refreshBtn) {
+            refreshBtn.classList.remove('fa-spin');
+            refreshBtn.style.color = '';
+        }
     });
 };
+
+function _showRefreshThrottleModal(seconds) {
+    const old = document.getElementById('refreshThrottleModal');
+    if (old) old.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'refreshThrottleModal';
+    modal.style.cssText = `
+        position:fixed; inset:0; z-index:99999;
+        background:rgba(0,0,0,0.35);
+        display:flex; align-items:center; justify-content:center;
+    `;
+
+    modal.innerHTML = `
+        <div style="
+            background:#e8f4fd; border-radius:24px;
+            padding:28px 24px 24px; width:280px;
+            text-align:center; border:1px solid #cce4f7;
+        ">
+            <div style="
+                width:56px; height:56px; background:#bfdffc;
+                border-radius:50%; display:flex;
+                align-items:center; justify-content:center;
+                margin:0 auto 14px;
+            ">
+                <i class="fa-solid fa-clock" style="font-size:24px; color:#1a7abf;"></i>
+            </div>
+            <div style="font-size:11px; font-weight:600; color:#1a7abf; letter-spacing:1px; margin-bottom:6px;">
+                انتظر قليلاً
+            </div>
+            <div id="throttleCountdown" style="font-size:28px; font-weight:700; color:#0d4f80; margin-bottom:4px;">
+                ${seconds}
+            </div>
+            <div style="font-size:12px; color:#5a9ec9; margin-bottom:16px;">
+                ثانية قبل التحديث مجدداً
+            </div>
+            <div style="background:#d0ecfb; border-radius:999px; height:6px; overflow:hidden; margin-bottom:20px;">
+                <div id="throttleBar" style="
+                    height:100%; background:#1a7abf;
+                    border-radius:999px;
+                    width:${Math.round((seconds / 30) * 100)}%;
+                    transition:width 1s linear;
+                "></div>
+            </div>
+            <button onclick="document.getElementById('refreshThrottleModal').remove()" style="
+                width:100%; background:#1a7abf; color:white;
+                border:none; border-radius:14px; padding:12px;
+                font-size:14px; font-weight:600; cursor:pointer;
+            ">حسناً</button>
+        </div>`;
+
+    document.body.appendChild(modal);
+
+    let remaining = seconds;
+    const cdEl = document.getElementById('throttleCountdown');
+    const barEl = document.getElementById('throttleBar');
+
+    const iv = setInterval(() => {
+        remaining--;
+        if (cdEl) cdEl.textContent = remaining;
+        if (barEl) barEl.style.width = Math.round((remaining / 30) * 100) + '%';
+        if (remaining <= 0) {
+            clearInterval(iv);
+            const m = document.getElementById('refreshThrottleModal');
+            if (m) m.remove();
+        }
+    }, 1000);
+}
