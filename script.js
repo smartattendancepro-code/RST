@@ -1349,7 +1349,6 @@ const AuthManager = (() => {
 const SessionManager = (() => {
     const db = window.db;
     const auth = window.auth;
-
     async function monitorMyParticipation() {
         const user = auth.currentUser;
         const mainBtn = Utils.$('mainActionBtn');
@@ -1359,11 +1358,6 @@ const SessionManager = (() => {
             || await PersistentStore.get('TARGET_DOCTOR_UID');
 
         if (!targetDoctorUID) {
-            if (mainBtn) {
-                mainBtn.innerHTML = '<i class="fa-solid fa-arrows-rotate fa-spin"></i> جاري المزامنة...';
-                mainBtn.style.opacity = '0.7';
-                mainBtn.style.pointerEvents = 'none';
-            }
             targetDoctorUID = await _recoverActiveSession(user.uid);
             if (!targetDoctorUID) { UI.setMainButton('register'); return; }
         } else {
@@ -1391,15 +1385,12 @@ const SessionManager = (() => {
 
         localStorage.setItem('TARGET_DOCTOR_UID', targetDoctorUID);
         sessionStorage.setItem('TARGET_DOCTOR_UID', targetDoctorUID);
-
         window.studentStatusListener?.();
         window.sessionStatusListener?.();
-
         window.sessionStatusListener = onSnapshot(
             doc(db, 'active_sessions', targetDoctorUID),
             async snap => {
                 if (!snap.exists() || !snap.data().isActive) {
-
                     const user = window.auth.currentUser;
                     if (user) {
                         try {
@@ -1408,41 +1399,23 @@ const SessionManager = (() => {
                                 { liveState: { status: 'idle', doctorUID: '', joinedAt: null } },
                                 { merge: true }
                             );
-                        } catch (e) { console.warn('liveState clear:', e); }
+                        } catch (e) { console.warn('liveState clear error:', e); }
                     }
-
                     PersistentStore.removeWithSync('TARGET_DOCTOR_UID');
                     UI.setMainButton('register');
                     window.studentStatusListener?.();
                     window.studentStatusListener = null;
                 }
             },
+            err => console.error('Session listener error:', err.code, err.message)
         );
-
-        let _pollInterval = null;
-
-        async function _pollStatus() {
-            try {
-                const snap = await getDoc(
-                    doc(db, 'active_sessions', targetDoctorUID, 'participants', user.uid)
-                );
-                _handleParticipantChange(snap, targetDoctorUID);
-            } catch (e) { console.warn('Poll error:', e); }
-        }
-
-        _pollStatus();
-        _pollInterval = setInterval(() => {
-            if (document.visibilityState === 'visible') _pollStatus();
-        }, 10_000);
-
-        window.studentStatusListener = () => {
-            clearInterval(_pollInterval);
-            _pollInterval = null;
-        };
+        window.studentStatusListener = onSnapshot(
+            doc(db, 'active_sessions', targetDoctorUID, 'participants', user.uid),
+            snap => _handleParticipantChange(snap, targetDoctorUID),
+            err => console.error('Participant listener error:', err.code, err.message)
+        );
     }
-
     async function _recoverActiveSession(uid) {
-        // ① الطريقة الجديدة السريعة
         try {
             const snap = await getDoc(doc(db, 'user_registrations', uid));
             const liveState = snap.data()?.liveState;
@@ -1459,7 +1432,6 @@ const SessionManager = (() => {
         } catch (e) {
             console.warn('Fast recovery failed, trying fallback:', e);
         }
-
         try {
             const q = query(
                 collection(db, 'active_sessions'),
@@ -1467,14 +1439,21 @@ const SessionManager = (() => {
                 limit(20)
             );
             const snap = await getDocs(q);
-            for (const s of snap.docs) {
-                const pSnap = await getDoc(
+            if (snap.empty) return null;
+            const results = await Promise.all(
+                snap.docs.map(s => getDoc(
                     doc(db, 'active_sessions', s.id, 'participants', uid)
-                );
-                if (pSnap.exists() && pSnap.data().status === 'active') {
-                    await PersistentStore.setWithSync('TARGET_DOCTOR_UID', s.id);
-                    return s.id;
-                }
+                ))
+            );
+
+            const foundIndex = results.findIndex(
+                r => r.exists() && r.data().status === 'active'
+            );
+
+            if (foundIndex !== -1) {
+                const foundId = snap.docs[foundIndex].id;
+                await PersistentStore.setWithSync('TARGET_DOCTOR_UID', foundId);
+                return foundId;
             }
         } catch (e) {
             console.error('Fallback recovery error:', e);
@@ -1482,7 +1461,6 @@ const SessionManager = (() => {
 
         return null;
     }
-
     function _handleParticipantChange(snap, doctorUID) {
         if (!snap.exists()) {
             sessionStorage.removeItem('TARGET_DOCTOR_UID');
@@ -2087,14 +2065,19 @@ const ProfileManager = (() => {
 const FeedbackManager = (() => {
     const db = window.db;
     const auth = window.auth;
-
     async function checkForPendingSurveys() {
         const user = auth.currentUser;
         if (!user || user.uid === CFG.firebase.excludedUID) return;
 
         try {
-            const userDoc = await getDoc(doc(db, 'user_registrations', user.uid));
-            const studentCode = userDoc.data()?.registrationInfo?.studentID || userDoc.data()?.studentID;
+            let studentCode = Utils.safeJsonParse(
+                localStorage.getItem('cached_profile_data')
+            )?.studentID;
+            if (!studentCode) {
+                const userDoc = await getDoc(doc(db, 'user_registrations', user.uid));
+                studentCode = userDoc.data()?.registrationInfo?.studentID || userDoc.data()?.studentID;
+            }
+
             if (!studentCode) return;
 
             const q = query(collection(db, 'attendance'),
@@ -2120,7 +2103,6 @@ const FeedbackManager = (() => {
             _showFeedbackModal(pending.id, pending.data());
         } catch (e) { console.error('Survey check error:', e); }
     }
-
     function _showFeedbackModal(docId, data) {
         Utils.$('feedbackSubjectName').innerText = data.subject || 'محاضرة';
         Utils.$('feedbackDocName').innerText = data.doctorName || 'الكلية';
@@ -2237,7 +2219,6 @@ const FeedbackManager = (() => {
     return { checkForPendingSurveys, selectStar, submitFeedback, dismissFeedback };
 })();
 
-
 const SmartSearch = (() => {
     const db = window.db;
 
@@ -2258,40 +2239,8 @@ const SmartSearch = (() => {
         modal.style.display = 'flex';
 
         try {
-            const results = [];
             const sessions = await getDocs(query(collection(db, 'active_sessions'), where('isActive', '==', true)));
-
-            for (const sessionDoc of sessions.docs) {
-                const data = { ...sessionDoc.data() };
-                const docId = sessionDoc.id;
-                const normSub = Utils.smartNormalize(data.allowedSubject || '');
-                const groups = Array.isArray(data.targetGroups) ? data.targetGroups : [];
-                const groupHit = groups.some(g => Utils.smartNormalize(g).includes(q));
-                let matchType = null;
-
-                if (normSub.includes(q) || groupHit) {
-                    matchType = 'session';
-                } else if (!isNaN(rawInput) && rawInput.length >= 3) {
-                    const pSnap = await getDocs(query(
-                        collection(db, 'active_sessions', docId, 'participants'),
-                        where('id', '==', rawInput), where('status', '==', 'active')));
-                    if (!pSnap.empty) { matchType = 'student'; data.friendName = pSnap.docs[0].data().name; }
-                }
-
-                if (!matchType) continue;
-
-                try {
-                    const cnt = await getCountFromServer(query(
-                        collection(db, 'active_sessions', docId, 'participants'),
-                        where('status', '==', 'active')));
-                    data.liveCount = cnt.data().count;
-                } catch { data.liveCount = '?'; }
-
-                results.push({ ...data, matchType, doctorId: docId });
-            }
-
-            content.innerHTML = '';
-            if (!results.length) {
+            if (sessions.empty) {
                 content.innerHTML = `<div class="empty-state-modern">
                     <div class="empty-icon-bg"><i class="fa-solid fa-magnifying-glass-minus" style="font-size:30px;color:#94a3b8;"></i></div>
                     <h3 style="margin-top:10px;font-size:14px;color:#64748b;">${_t('search_no_results_custom', 'لم يتم العثور على نتائج')}</h3>
@@ -2300,7 +2249,71 @@ const SmartSearch = (() => {
                 return;
             }
 
+            const isNumericSearch = !isNaN(rawInput) && rawInput.length >= 3;
+            const sessionMatches = sessions.docs.filter(s => {
+                const data = s.data();
+                const normSub = Utils.smartNormalize(data.allowedSubject || '');
+                const groups = Array.isArray(data.targetGroups) ? data.targetGroups : [];
+                return normSub.includes(q) || groups.some(g => Utils.smartNormalize(g).includes(q));
+            });
+            let participantResults = [];
+            if (isNumericSearch) {
+                const nonMatchedSessions = sessions.docs.filter(s => !sessionMatches.includes(s));
+                const pSnaps = await Promise.all(
+                    nonMatchedSessions.map(s => getDocs(query(
+                        collection(db, 'active_sessions', s.id, 'participants'),
+                        where('id', '==', rawInput),
+                        where('status', '==', 'active')
+                    )))
+                );
+                pSnaps.forEach((pSnap, i) => {
+                    if (!pSnap.empty) {
+                        participantResults.push({
+                            doc: nonMatchedSessions[i],
+                            friendName: pSnap.docs[0].data().name,
+                        });
+                    }
+                });
+            }
+            if (!sessionMatches.length && !participantResults.length) {
+                content.innerHTML = `<div class="empty-state-modern">
+                    <div class="empty-icon-box"><i class="fa-solid fa-magnifying-glass-minus" style="font-size:30px;color:#94a3b8;"></i></div>
+                    <h3 style="margin-top:10px;font-size:14px;color:#64748b;">${_t('search_no_results_custom', 'لم يتم العثور على نتائج')}</h3>
+                    <p style="font-size:11px;color:#cbd5e1;">"${rawInput}"</p>
+                </div>`;
+                return;
+            }
+            const allMatchedDocs = [
+                ...sessionMatches.map(s => s.id),
+                ...participantResults.map(p => p.doc.id),
+            ];
+
+            const counts = await Promise.all(
+                allMatchedDocs.map(id =>
+                    getCountFromServer(query(
+                        collection(db, 'active_sessions', id, 'participants'),
+                        where('status', '==', 'active')
+                    )).catch(() => null)
+                )
+            );
+            const results = [];
+
+            sessionMatches.forEach((s, i) => {
+                const data = { ...s.data() };
+                data.liveCount = counts[i]?.data().count ?? '?';
+                results.push({ ...data, matchType: 'session', doctorId: s.id });
+            });
+
+            participantResults.forEach((p, i) => {
+                const data = { ...p.doc.data() };
+                data.liveCount = counts[sessionMatches.length + i]?.data().count ?? '?';
+                data.friendName = p.friendName;
+                results.push({ ...data, matchType: 'student', doctorId: p.doc.id });
+            });
+
+            content.innerHTML = '';
             results.forEach(res => content.appendChild(_buildResultCard(res, _t)));
+
         } catch (e) {
             console.error('Smart search error:', e);
             content.innerHTML = '<div style="color:#ef4444;text-align:center;padding:20px;">حدث خطأ أثناء البحث</div>';
