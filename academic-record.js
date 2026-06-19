@@ -194,13 +194,16 @@ async function getStudentData(studentID) {
 
     return finalData;
 }
-
 window.openAcademicRecord = async function (forceRefresh = false) {
     const user = window.auth.currentUser;
     if (!user) return;
 
-    document.getElementById('academicRecordModal').style.display = 'flex';
+    const lastCall = window._lastAcademicCall || 0;
+    const now = Date.now();
+    if (forceRefresh && now - lastCall < 30000) return;
+    window._lastAcademicCall = now;
 
+    document.getElementById('academicRecordModal').style.display = 'flex';
     document.getElementById('academicRecordContent').innerHTML = `<div style="text-align:center; padding:50px;"><i class="fa-solid fa-circle-notch fa-spin" style="color:#3b82f6; font-size:30px;"></i></div>`;
     document.getElementById('academicStatsContainer').innerHTML = '';
 
@@ -209,8 +212,12 @@ window.openAcademicRecord = async function (forceRefresh = false) {
     }
 
     try {
-        const userSnap = await getDoc(doc(window.db, "user_registrations", user.uid));
-        const studentID = userSnap.data()?.registrationInfo?.studentID || userSnap.data()?.studentID;
+        let studentID = sessionStorage.getItem('cached_student_id');
+        if (!studentID) {
+            const userSnap = await getDoc(doc(window.db, "user_registrations", user.uid));
+            studentID = userSnap.data()?.registrationInfo?.studentID || userSnap.data()?.studentID;
+            if (studentID) sessionStorage.setItem('cached_student_id', String(studentID));
+        }
 
         if (!studentID) throw new Error("ID Not Found");
 
@@ -232,6 +239,17 @@ window.openAcademicRecord = async function (forceRefresh = false) {
 };
 
 window.refreshAcademicData = function () {
+    const lastRefresh = localStorage.getItem('last_refresh_time');
+    const now = Date.now();
+
+    if (lastRefresh && now - parseInt(lastRefresh) < 30000) {
+        const remaining = Math.ceil((30000 - (now - parseInt(lastRefresh))) / 1000);
+        alert(`انتظر ${remaining} ثانية قبل التحديث مجدداً`);
+        return;
+    }
+
+    localStorage.setItem('last_refresh_time', now);
+
     const refreshBtn = document.getElementById('refreshBtnIcon');
     if (refreshBtn) refreshBtn.classList.add('fa-spin');
 
