@@ -2070,37 +2070,31 @@ const FeedbackManager = (() => {
         if (!user || user.uid === CFG.firebase.excludedUID) return;
 
         try {
-            let studentCode = Utils.safeJsonParse(
-                localStorage.getItem('cached_profile_data')
-            )?.studentID;
-            if (!studentCode) {
-                const userDoc = await getDoc(doc(db, 'user_registrations', user.uid));
-                studentCode = userDoc.data()?.registrationInfo?.studentID || userDoc.data()?.studentID;
-            }
+            const userSnap = await getDoc(doc(db, 'user_registrations', user.uid));
+            if (!userSnap.exists()) return;
 
-            if (!studentCode) return;
+            const pendingInfo = userSnap.data()?.pendingFeedback;
+            if (!pendingInfo?.attendanceDocId) return;
 
-            const q = query(collection(db, 'attendance'),
-                where('id', '==', studentCode),
-                where('feedback_status', '==', 'pending'),
-                limit(1));
-            const snap = await getDocs(q);
-            if (snap.empty) return;
-
-            const pending = snap.docs[0];
-            const localKey = `fd_${pending.id}`;
+            const docId = pendingInfo.attendanceDocId;
+            const localKey = `fd_${docId}`;
 
             if (localStorage.getItem(localKey)) {
-                try {
-                    await updateDoc(doc(db, 'attendance', pending.id), {
-                        feedback_status: 'dismissed',
-                        dismissed_at: serverTimestamp(),
-                    });
-                } catch { }
+                await updateDoc(doc(db, 'user_registrations', user.uid), {
+                    pendingFeedback: null,
+                }).catch(() => { });
                 return;
             }
 
-            _showFeedbackModal(pending.id, pending.data());
+            const attSnap = await getDoc(doc(db, 'attendance', docId));
+            if (!attSnap.exists() || attSnap.data().feedback_status !== 'pending') {
+                await updateDoc(doc(db, 'user_registrations', user.uid), {
+                    pendingFeedback: null,
+                }).catch(() => { });
+                return;
+            }
+
+            _showFeedbackModal(docId, attSnap.data());
         } catch (e) { console.error('Survey check error:', e); }
     }
     function _showFeedbackModal(docId, data) {
@@ -2133,7 +2127,6 @@ const FeedbackManager = (() => {
         const submitBtn = modal.querySelector('.btn-main');
         submitBtn?.parentNode?.insertBefore(btn, submitBtn.nextSibling) ?? modal.appendChild(btn);
     }
-
     async function dismissFeedback() {
         const docId = Utils.$('targetAttendanceDocId')?.value;
         UI.closeModal('feedbackModal');
@@ -2158,6 +2151,13 @@ const FeedbackManager = (() => {
             console.warn('Dismiss Firestore sync failed — local cache active:', e.code || e.message);
         }
 
+        const user = auth.currentUser;
+        if (user) {
+            await updateDoc(doc(db, 'user_registrations', user.uid), {
+                pendingFeedback: null,
+            }).catch(() => { });
+        }
+
         setTimeout(() => checkForPendingSurveys(), 600);
     }
 
@@ -2176,7 +2176,6 @@ const FeedbackManager = (() => {
         Utils.$('selectedRating').value = val;
         navigator.vibrate?.(20);
     }
-
     async function submitFeedback() {
         const rating = Utils.$('selectedRating')?.value;
         const docId = Utils.$('targetAttendanceDocId')?.value;
@@ -2201,6 +2200,13 @@ const FeedbackManager = (() => {
                 hall: room.hall || 'Unknown', date: room.date, studentId: room.id, studentLevel: 'General',
             });
             await batch.commit();
+
+            const user = auth.currentUser;
+            if (user) {
+                await updateDoc(doc(db, 'user_registrations', user.uid), {
+                    pendingFeedback: null,
+                }).catch(() => { });
+            }
 
             try { localStorage.removeItem(`fd_${docId}`); } catch { /* non-critical */ }
 
@@ -2288,25 +2294,17 @@ const SmartSearch = (() => {
                 ...participantResults.map(p => p.doc.id),
             ];
 
-            const counts = await Promise.all(
-                allMatchedDocs.map(id =>
-                    getCountFromServer(query(
-                        collection(db, 'active_sessions', id, 'participants'),
-                        where('status', '==', 'active')
-                    )).catch(() => null)
-                )
-            );
             const results = [];
 
-            sessionMatches.forEach((s, i) => {
+            sessionMatches.forEach((s) => {
                 const data = { ...s.data() };
-                data.liveCount = counts[i]?.data().count ?? '?';
+                data.liveCount = data.active_count ?? 0;
                 results.push({ ...data, matchType: 'session', doctorId: s.id });
             });
 
-            participantResults.forEach((p, i) => {
+            participantResults.forEach((p) => {
                 const data = { ...p.doc.data() };
-                data.liveCount = counts[sessionMatches.length + i]?.data().count ?? '?';
+                data.liveCount = data.active_count ?? 0;
                 data.friendName = p.friendName;
                 results.push({ ...data, matchType: 'student', doctorId: p.doc.id });
             });
