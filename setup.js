@@ -11,10 +11,15 @@ import {
     signInWithEmailAndPassword, signOut, sendEmailVerification
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
+import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js";
 import { i18n, t, changeLanguage, toggleSystemLanguage } from './i18n.js';
 
 console.log = function () { };
+
+
 console.warn = function () { };
+
+
 
 const BACKEND_URL = "nursing-backend-rej8.vercel.app";
 window.BACKEND_URL = BACKEND_URL;
@@ -29,6 +34,16 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+
+if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+    self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+}
+
+const appCheck = initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider("6Ld7vUksAAAAANFN352PwWdLlhciZFT0wbAssCxn"),
+    isTokenAutoRefreshEnabled: true
+});
+window.appCheck = appCheck;
 
 const db = initializeFirestore(app, {
     localCache: persistentLocalCache({
@@ -125,7 +140,7 @@ window.showError = function (msg, isPermanent = false) {
 window.performLogout = async function () {
     try {
         const deviceId = localStorage.getItem("unique_device_id_v3");
-        const currentLang = localStorage.getItem("sys_lang"); 
+        const currentLang = localStorage.getItem("sys_lang");
 
         await signOut(window.auth);
 
@@ -136,7 +151,7 @@ window.performLogout = async function () {
             localStorage.setItem("unique_device_id_v3", deviceId);
         }
         if (currentLang) {
-            localStorage.setItem("sys_lang", currentLang); 
+            localStorage.setItem("sys_lang", currentLang);
         }
 
         if (typeof window.showToast === 'function') {
@@ -193,4 +208,3 @@ window.switchScreen = function (screenId) {
         }
     }
 };
-
