@@ -2200,12 +2200,32 @@ const FeedbackManager = (() => {
                 hall: room.hall || 'Unknown', date: room.date, studentId: room.id, studentLevel: 'General',
             });
             await batch.commit();
-
             const user = auth.currentUser;
             if (user) {
                 await updateDoc(doc(db, 'user_registrations', user.uid), {
                     pendingFeedback: null,
                 }).catch(() => { });
+            }
+
+            // ⭐ مزامنة التقييم مع Supabase
+            try {
+                const idToken = await user.getIdToken();
+                await fetch(`${CFG.api.base}/api/syncFeedback`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${idToken}`,
+                    },
+                    body: JSON.stringify({
+                        studentId: room.id,
+                        doctorUID: room.doctorUID,
+                        subject: room.subject,
+                        date: room.date,
+                        rating: parseInt(rating),
+                    }),
+                });
+            } catch (supaErr) {
+                console.warn('Supabase feedback sync skipped:', supaErr);
             }
 
             try { localStorage.removeItem(`fd_${docId}`); } catch { /* non-critical */ }
