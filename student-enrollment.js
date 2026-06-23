@@ -7,13 +7,13 @@ const db = window.db;
 
 let currentStudentData = null;
 let openSubjectsCache = [];
-let _cacheTimestamp = 0;
-const CACHE_TTL_MS = 5 * 60 * 1000;
+let _cacheTimestamp = 0;       
+const CACHE_TTL_MS = 5 * 60 * 1000; 
 
 let _notifierReady = false;
 let _notifierReadyCbs = [];
-let _listenerAttached = false;
-let _clickHandlerAttached = false;
+let _listenerAttached = false;     
+let _clickHandlerAttached = false;      
 
 window.enrollmentNotifierUnsubscribe = null;
 
@@ -303,7 +303,7 @@ window.initStudentEnrollmentNotifier = async function () {
 
         }, err => {
             console.error("❌ [Notifier]", err);
-            _listenerAttached = false;
+            _listenerAttached = false; 
         });
 
     } catch (e) {
@@ -544,14 +544,12 @@ async function executeEnrollment(subjectName, subjectDocId) {
     try {
         const { studentId, fullName, group } = currentStudentData;
         const idToken = await user.getIdToken();
-        const appCheckToken = await window.appCheck?.getToken().catch(() => null);
 
         const response = await fetch('https://nursing-backend-rej8.vercel.app/api/student-enroll', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${idToken}`,
-                ...(appCheckToken && { 'X-Firebase-AppCheck': appCheckToken.token })
+                'Authorization': `Bearer ${idToken}`
             },
             body: JSON.stringify({
                 subjectDocId,
