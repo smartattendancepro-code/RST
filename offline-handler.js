@@ -667,15 +667,13 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, Tim
                             return false;
                         }
 
-                        const appCheckToken = await window.appCheck.getToken();
                         const verifyRes = await fetch(
                             'https://nursing-backend-rej8.vercel.app/api/verifyOfflinePattern',
                             {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${idToken}`,
-                                    'X-Firebase-AppCheck': appCheckToken.token
+                                    'Authorization': `Bearer ${idToken}`
                                 },
                                 body: JSON.stringify({
                                     sessionPin: entry.sessionPin,
@@ -798,15 +796,13 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, Tim
                     if (!currentUser) return 'retry';
                     const idToken = await currentUser.getIdToken(true);
 
-                    const appCheckToken = await window.appCheck.getToken();
                     const syncRes = await fetch(
                         'https://nursing-backend-rej8.vercel.app/api/syncPostSessionAttendance',
                         {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${idToken}`,
-                                'X-Firebase-AppCheck': appCheckToken.token
+                                'Authorization': `Bearer ${idToken}`
                             },
                             body: JSON.stringify({
                                 sessionPin: entry.sessionPin,
@@ -1573,15 +1569,13 @@ function offlineAlert(msg, type = 'error') {
 
             const idToken = await user.getIdToken(true);
 
-            const appCheckToken = await window.appCheck.getToken();
             const verifyRes = await fetch(
                 'https://nursing-backend-rej8.vercel.app/api/verifyOfflinePattern',
                 {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${idToken}`,
-                        'X-Firebase-AppCheck': appCheckToken.token
+                        'Authorization': `Bearer ${idToken}`
                     },
                     body: JSON.stringify({
                         sessionPin: pin,
