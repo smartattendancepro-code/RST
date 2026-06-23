@@ -152,14 +152,7 @@ window.startLiveSnapshotListener = async function () {
         snapshot.forEach((docSnap) => {
             const s = docSnap.data();
 
-            if (s.status === 'expelled') {
-                if (!window._expelledHandled) {
-                    window._expelledHandled = true;
-                    showToast("🚫 تم إخراجك من الجلسة", 3000, "#ef4444");
-                    setTimeout(() => { goHome(); }, 1500);
-                }
-                return;
-            }
+            if (s.status === 'expelled') return;
 
             const isOnBreak = s.status === 'on_break';
             const isLeft = s.status === 'left';
