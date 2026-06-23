@@ -153,6 +153,12 @@ window.startLiveSnapshotListener = async function () {
             const s = docSnap.data();
             if (s.status === 'expelled') return;
 
+            if (s.status === 'expelled') {
+                showToast("🚫 تم إخراجك من الجلسة", 3000, "#ef4444");
+                setTimeout(() => { goHome(); }, 1500);
+                return;
+            }
+
             const isOnBreak = s.status === 'on_break';
             const isLeft = s.status === 'left';
             const opacityVal = (isLeft || isOnBreak) ? '0.5' : '1';
