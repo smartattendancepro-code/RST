@@ -1504,6 +1504,9 @@ const SessionManager = (() => {
     }
 
     function _handleExpulsion() {
+        if (window._expelledHandled) return;
+        window._expelledHandled = true;
+
         const _t = Utils._t;
         window.studentStatusListener?.();
         window.studentStatusListener = null;
@@ -1523,7 +1526,7 @@ const SessionManager = (() => {
         if (exModal) {
             exModal.style.setProperty('display', 'flex', 'important');
             const btn = exModal.querySelector('button') || exModal.querySelector('.btn-danger');
-            if (btn) { btn.innerHTML = _t('btn_leave_hall', 'Leave Hall ➜'); btn.onclick = () => { exModal.style.display = 'none'; window.location.reload(); }; }
+            if (btn) { btn.innerHTML = _t('btn_leave_hall', 'Leave Hall ➜'); btn.onclick = () => { exModal.style.display = 'none'; window._expelledHandled = false; window.location.reload(); }; }
             navigator.vibrate?.([500, 200, 500]);
         } else {
             alert(_t('modal_expel_title', '⛔ You have been expelled!'));
