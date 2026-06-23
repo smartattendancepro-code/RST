@@ -1020,10 +1020,9 @@ const AuthManager = (() => {
 
         try {
             const deviceID = await DeviceManager.getUniqueDeviceId();
-            const appCheckToken = await window.appCheck.getToken();
             const res = await fetch(`${CFG.api.base}/api/registerStudent`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Firebase-AppCheck': appCheckToken.token },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ...fields, deviceFingerprint: deviceID }),
             });
             const result = await res.json();
@@ -1685,10 +1684,9 @@ const SessionManager = (() => {
                 gpsData,
             });
 
-            const appCheckToken = await window.appCheck.getToken();
             const res = await fetch(`${CFG.api.base}/joinSessionSecure`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}`, 'X-Firebase-AppCheck': appCheckToken.token },
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
                 body: JSON.stringify({
                     studentUID: user.uid, sessionDocID: doctorUID,
                     gpsLat: gpsData.lat || 0, gpsLng: gpsData.lng || 0,
@@ -2215,13 +2213,11 @@ const FeedbackManager = (() => {
             // ⭐ مزامنة التقييم مع Supabase
             try {
                 const idToken = await user.getIdToken();
-                const appCheckToken = await window.appCheck.getToken();
                 await fetch(`${CFG.api.base}/api/syncFeedback`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${idToken}`,
-                        'X-Firebase-AppCheck': appCheckToken.token,
                     },
                     body: JSON.stringify({
                         studentId: room.id,
