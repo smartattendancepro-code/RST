@@ -2036,9 +2036,10 @@ const ProfileManager = (() => {
         if (!nameInput) return;
 
         nameInput.value = '';
-        nameInput.placeholder = 'جاري التحقق أمنياً...';
+        nameInput.value = 'جاري التحقق أمنياً...';
         const cleanId = studentId.toString().trim();
-        if (!cleanId || cleanId.length < 4) { nameInput.placeholder = 'Full Name'; return; }
+        if (!cleanId || cleanId.length < 4) { nameInput.value = ''; return; }
+
 
         try {
             const lockSnap = await getDoc(doc(db, 'taken_student_ids', cleanId));
