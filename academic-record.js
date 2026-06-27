@@ -5,7 +5,7 @@ import {
 const CONFIG = {
     COLLECTIONS: ["attendance_NURS", "attendance_PT", "attendance"],
     CACHE_KEY: 'academic_master_cache',
-    RECORDS_LIMIT: 200,
+    RECORDS_LIMIT: 50,
     SEMESTER_START_DATE: "01/02/2026"
 };
 
@@ -200,9 +200,15 @@ window.openAcademicRecord = async function (forceRefresh = false) {
 
     const lastCall = window._lastAcademicCall || 0;
     const now = Date.now();
-    if (forceRefresh && now - lastCall < 30000) return;
+    if (!forceRefresh && now - lastCall < 30000) {
+        document.getElementById('academicRecordModal').style.display = 'flex';
+        if (state.rawAttendance.length || state.rawAbsence.length) {
+            renderAnalytics();
+            switchAcademicTab(state.currentTab);
+            return;
+        }
+    }
     window._lastAcademicCall = now;
-
     document.getElementById('academicRecordModal').style.display = 'flex';
     document.getElementById('academicRecordContent').innerHTML = `<div style="text-align:center; padding:50px;"><i class="fa-solid fa-circle-notch fa-spin" style="color:#3b82f6; font-size:30px;"></i></div>`;
     document.getElementById('academicStatsContainer').innerHTML = '';
@@ -248,6 +254,7 @@ window.refreshAcademicData = function () {
     }
 
     localStorage.setItem('last_refresh_time', now);
+    window._lastAcademicCall = 0;
 
     const refreshBtn = document.getElementById('refreshBtnIcon');
     if (refreshBtn) {
