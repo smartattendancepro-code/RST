@@ -55,6 +55,13 @@ export const i18n = {
         exam_management: "تنظيم الامتحانات",
         data_entry: "إدخال البيانات",
 
+        group_help_title: 'صيغة الجروب',
+        group_help_example_label: 'مثال',
+        group_help_year: 'الفرقة',
+        group_help_college: 'الكلية',
+        group_help_number: 'رقم الجروب',
+        group_help_got_it: 'فهمت ✓',
+
         btn_signin: "تسجيل الدخول",
         status_verifying: "جاري التحقق...",
         msg_enter_creds: "⚠️ يرجى إدخال البريد الإلكتروني وكلمة المرور",
@@ -504,6 +511,13 @@ export const i18n = {
         status_new: "New",
         connection_error: "Connection Error",
 
+        group_help_title: 'Group Format',
+        group_help_example_label: 'Example',
+        group_help_year: 'Year',
+        group_help_college: 'College',
+        group_help_number: 'Group No.',
+        group_help_got_it: 'Got it ✓',
+        
         "error_no_active_subject": "Please start a session or select a subject first to view reports.",
         "report_searching_text": "Searching records for date:",
         "report_empty_msg": "No records found for today.",
