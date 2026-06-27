@@ -2,12 +2,25 @@ import {
     collection, query, where, getDocs, doc, getDoc, orderBy, limit
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+
 const CONFIG = {
-    COLLECTIONS: ["attendance_NURS", "attendance_PT", "attendance"],
     CACHE_KEY: 'academic_master_cache',
     RECORDS_LIMIT: 50,
     SEMESTER_START_DATE: "01/02/2026"
 };
+
+const COLLEGE_MAP = {
+    'G': 'NURS', 'N': 'NURS',
+    'P': 'PT', 'C': 'PHARM',
+    'D': 'DENT', 'T': 'CS',
+    'B': 'BA', 'H': 'HS'
+};
+
+function getCollectionByGroup(group) {
+    const letter = (group || '').replace(/[^a-zA-Z]/g, '')[0] || '';
+    const college = COLLEGE_MAP[letter];
+    return college ? `attendance_${college}` : 'attendance_NURS';
+}
 
 let state = {
     rawAttendance: [],
@@ -142,7 +155,8 @@ window.switchAcademicTab = (tab) => {
     renderList();
 };
 
-async function getStudentData(studentID) {
+async function getStudentData(studentID, group) {
+
     const cached = localStorage.getItem(CONFIG.CACHE_KEY);
     if (cached) {
         const { data, cacheDate, sid } = JSON.parse(cached);
@@ -155,33 +169,28 @@ async function getStudentData(studentID) {
     console.log("جلب بيانات جديدة من Firebase...");
     const finalData = { attended: [], absent: [] };
     const seen = new Set();
-
-    const fetchTask = CONFIG.COLLECTIONS.map(async (col) => {
-        const statuses = ["ATTENDED", "ABSENT"];
-        for (const status of statuses) {
-            const q = query(
-                collection(window.db, col),
-                where("id", "==", String(studentID)),
-                where("status", "==", status),
-                orderBy("date", "desc"),
-                limit(CONFIG.RECORDS_LIMIT)
-            );
-
-            const snap = await getDocs(q);
-            snap.forEach(d => {
-                const item = d.data();
-                const key = getUniqueKey(item);
-                if (!seen.has(key)) {
-                    seen.add(key);
-                    status === "ATTENDED"
-                        ? finalData.attended.push(item)
-                        : finalData.absent.push(item);
-                }
-            });
-        }
-    });
-
-    await Promise.all(fetchTask);
+    const targetCol = getCollectionByGroup(group);
+    const statuses = ["ATTENDED", "ABSENT"];
+    for (const status of statuses) {
+        const q = query(
+            collection(window.db, targetCol),
+            where("id", "==", String(studentID)),
+            where("status", "==", status),
+            orderBy("date", "desc"),
+            limit(CONFIG.RECORDS_LIMIT)
+        );
+        const snap = await getDocs(q);
+        snap.forEach(d => {
+            const item = d.data();
+            const key = getUniqueKey(item);
+            if (!seen.has(key)) {
+                seen.add(key);
+                status === "ATTENDED"
+                    ? finalData.attended.push(item)
+                    : finalData.absent.push(item);
+            }
+        });
+    }
 
     finalData.attended.sort((a, b) => parseDate(b.date) - parseDate(a.date));
     finalData.absent.sort((a, b) => parseDate(b.date) - parseDate(a.date));
@@ -219,15 +228,19 @@ window.openAcademicRecord = async function (forceRefresh = false) {
 
     try {
         let studentID = sessionStorage.getItem('cached_student_id');
-        if (!studentID) {
+        let group = sessionStorage.getItem('cached_student_group');
+        if (!studentID || !group) {
             const userSnap = await getDoc(doc(window.db, "user_registrations", user.uid));
-            studentID = userSnap.data()?.registrationInfo?.studentID || userSnap.data()?.studentID;
+            const userData = userSnap.data();
+            studentID = userData?.registrationInfo?.studentID || userData?.studentID;
+            group = userData?.registrationInfo?.group || userData?.group || '';
             if (studentID) sessionStorage.setItem('cached_student_id', String(studentID));
+            if (group) sessionStorage.setItem('cached_student_group', group);
         }
 
         if (!studentID) throw new Error("ID Not Found");
 
-        const data = await getStudentData(studentID);
+        const data = await getStudentData(studentID, group);
 
         state.rawAttendance = data.attended;
         state.rawAbsence = data.absent;
