@@ -61,10 +61,15 @@ const CFG = Object.freeze({
     ]),
     colleges: Object.freeze({
         nameMap: {
-            N: 'Nursing', P: 'Physical Therapy', C: 'Pharmacy',
-            D: 'Dentistry', T: 'Computer Science', B: 'Business Admin', H: 'Health Sciences'
+            G: 'Nursing', P: 'Physical Therapy', C: 'Pharmacy',
+            D: 'Dentistry', T: 'Computer Science', B: 'Business Admin', H: 'Health Sciences',
+            E: 'Engineering', A: 'Applied Arts', M: 'Human Medicine',
+            V: 'Veterinary Medicine', I: 'Media', L: 'Alsun (Languages)'
         },
-        codeMap: { NURS: 'N', PT: 'P', PHARM: 'C', DENT: 'D', CS: 'T', BA: 'B', HS: 'H' },
+        codeMap: {
+            NURS: 'G', PT: 'P', PHARM: 'C', DENT: 'D', CS: 'T', BA: 'B', HS: 'H',
+            ENG: 'E', ART: 'A', MED: 'M', VET: 'V', MEDIA: 'I', ALSUN: 'L'
+        },
     }),
 });
 
@@ -530,7 +535,7 @@ const UI = (() => {
             if (err) err.style.display = isPassMatch ? 'none' : 'block';
         }
 
-        const groupRx = /^[1-4][GPNCDTBH]\d{1,2}$/;
+        const groupRx = /^[1-4][GPNCDTBHEAMVIL]\d{1,2}$/;
         const isGroupFmt = groupRx.test(groupRaw);
         const isGroupLevel = !level || !isGroupFmt || groupRaw.startsWith(level);
         const isGroupOk = isGroupFmt && isGroupLevel;
@@ -2831,7 +2836,7 @@ window.onload = () => {
 
     const groupInput = Utils.$('regGroup');
     groupInput?.addEventListener('input', function () {
-        this.value = this.value.toUpperCase().replace(/[^0-9GPNCDTBH]/g, '');
+        this.value = this.value.toUpperCase().replace(/[^0-9GPNCDTBHEAMVIL]/g, '');
         UI.validateSignupForm();
     });
     Utils.$('regLevel')?.addEventListener('change', UI.validateSignupForm);
