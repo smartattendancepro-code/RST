@@ -13,7 +13,9 @@ const COLLEGE_MAP = {
     'G': 'NURS', 'N': 'NURS',
     'P': 'PT', 'C': 'PHARM',
     'D': 'DENT', 'T': 'CS',
-    'B': 'BA', 'H': 'HS'
+    'B': 'BA', 'H': 'HS',
+    'E': 'ENG', 'A': 'ART', 'M': 'MED',
+    'V': 'VET', 'I': 'MEDIA', 'L': 'ALSUN'
 };
 
 function getCollectionByGroup(group) {
