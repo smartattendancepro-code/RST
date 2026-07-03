@@ -7,13 +7,13 @@ const db = window.db;
 
 let currentStudentData = null;
 let openSubjectsCache = [];
-let _cacheTimestamp = 0;       
-const CACHE_TTL_MS = 5 * 60 * 1000; 
+let _cacheTimestamp = 0;
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
 let _notifierReady = false;
 let _notifierReadyCbs = [];
-let _listenerAttached = false;     
-let _clickHandlerAttached = false;      
+let _listenerAttached = false;
+let _clickHandlerAttached = false;
 
 window.enrollmentNotifierUnsubscribe = null;
 
@@ -187,7 +187,8 @@ async function fetchStudentData(uid) {
 
     const collegeMap = {
         'G': 'NURS', 'N': 'NURS', 'P': 'PT',
-        'C': 'PHARM', 'D': 'DENT', 'T': 'CS', 'B': 'BA', 'H': 'HS'
+        'C': 'PHARM', 'D': 'DENT', 'T': 'CS', 'B': 'BA', 'H': 'HS',
+        'E': 'ENG', 'A': 'ART', 'M': 'MED', 'V': 'VET', 'I': 'MEDIA', 'L': 'ALSUN'
     };
     const letter = group.replace(/[^a-zA-Z]/g, '')[0] || "";
     const college = collegeMap[letter] || letter;
@@ -303,7 +304,7 @@ window.initStudentEnrollmentNotifier = async function () {
 
         }, err => {
             console.error("❌ [Notifier]", err);
-            _listenerAttached = false; 
+            _listenerAttached = false;
         });
 
     } catch (e) {
