@@ -41,7 +41,7 @@ const CFG = Object.freeze({
         excludedUID: 'R78Lu7IZBpYK0WngcaSL6t1Our62',
     },
     ui: {
-        idleTimeoutSec: 5,
+        idleTimeoutSec: 10,
         statsCacheTTL: 900_000,
     },
     avatars: Object.freeze({
@@ -1579,7 +1579,7 @@ const SessionManager = (() => {
 
             if (sessionData.startTime) {
                 const doorOpenMs = sessionData.startTime.toMillis();
-                const codeDeadlineMs = doorOpenMs + 15_000;
+                const codeDeadlineMs = doorOpenMs + 20_000;
                 const entryStarted = window._codeEntryStarted;
 
                 if (!entryStarted || entryStarted > codeDeadlineMs) {
