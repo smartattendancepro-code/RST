@@ -716,7 +716,6 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, Tim
                             return false;
                         }
 
-                        // أي خطأ تاني غير متوقع
                         if (!verifyRes.ok) {
                             const errData = await verifyRes.json().catch(() => ({}));
                             log('warn', `Pattern verify failed (${verifyRes.status}) | PIN: ${entry.sessionPin} | ${errData.error || ''}`);
@@ -730,7 +729,13 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, Tim
                             return 'retry';
                         }
 
-                        // ✅ نجح التحقق عبر API
+                        const verifyData = await verifyRes.json().catch(() => ({}));
+                        if (verifyData && verifyData.verifyToken) {
+                            entry.offlineVerifyToken = verifyData.verifyToken;
+
+                            entry._sig = await _signEntry(entry, user.uid);
+                        }
+
                         patternAlreadyVerified = true;
                         log('info', `✅ Pattern verified on sync via API | PIN: ${entry.sessionPin}`);
                         toast(
@@ -786,9 +791,12 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, Tim
 
             const sessionData = sessionSnap.data();
 
+            // ❌ السطور دي لازم تتشال لأنها بتعمل Overwrite لحالة الجلسة الحقيقية
+            /* 
             if (sessionData.sessionCode && sessionData.sessionCode !== entry.sessionPin) {
-                sessionData.isActive = false;
+                sessionData.isActive = false; 
             }
+            */
 
             if (sessionData.isActive === false) {
                 log('info', 'Session closed — verifying via secure backend.');
