@@ -670,7 +670,7 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, Tim
                         }
 
                         const verifyRes = await fetch(
-                            'https://nursing-backend-rej8.vercel.app/api/verifyOfflinePattern',
+                            'https://nursing-backend-2.vercel.app/api/verifyOfflinePattern',
                             {
                                 method: 'POST',
                                 headers: {
@@ -807,7 +807,7 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, Tim
                     const idToken = await currentUser.getIdToken(true);
 
                     const syncRes = await fetch(
-                        'https://nursing-backend-rej8.vercel.app/api/syncPostSessionAttendance',
+                        'https://nursing-backend-2.vercel.app/api/syncPostSessionAttendance',
                         {
                             method: 'POST',
                             headers: {
@@ -862,7 +862,7 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, Tim
                 const idToken = await currentUser.getIdToken(true);
 
                 const liveSyncRes = await fetch(
-                    'https://nursing-backend-rej8.vercel.app/api/syncLiveOfflineAttendance',
+                    'https://nursing-backend-2.vercel.app/api/syncLiveOfflineAttendance',
                     {
                         method: 'POST',
                         headers: {
@@ -1566,7 +1566,8 @@ function offlineAlert(msg, type = 'error') {
             const idToken = await user.getIdToken(true);
 
             const verifyRes = await fetch(
-                'https://nursing-backend-rej8.vercel.app/api/verifyOfflinePattern',
+                'https://nursing-backend-2.vercel.app/api/verifyOfflinePattern',
+
                 {
                     method: 'POST',
                     headers: {
