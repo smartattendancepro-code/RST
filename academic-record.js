@@ -172,26 +172,29 @@ async function getStudentData(studentID, group) {
     const finalData = { attended: [], absent: [] };
     const seen = new Set();
     const targetCol = getCollectionByGroup(group);
+    const collectionsToQuery = [targetCol, 'attendance'];
     const statuses = ["ATTENDED", "ABSENT"];
-    for (const status of statuses) {
-        const q = query(
-            collection(window.db, targetCol),
-            where("id", "==", String(studentID)),
-            where("status", "==", status),
-            orderBy("date", "desc"),
-            limit(CONFIG.RECORDS_LIMIT)
-        );
-        const snap = await getDocs(q);
-        snap.forEach(d => {
-            const item = d.data();
-            const key = getUniqueKey(item);
-            if (!seen.has(key)) {
-                seen.add(key);
-                status === "ATTENDED"
-                    ? finalData.attended.push(item)
-                    : finalData.absent.push(item);
-            }
-        });
+    for (const colName of collectionsToQuery) {
+        for (const status of statuses) {
+            const q = query(
+                collection(window.db, colName),
+                where("id", "==", String(studentID)),
+                where("status", "==", status),
+                orderBy("date", "desc"),
+                limit(CONFIG.RECORDS_LIMIT)
+            );
+            const snap = await getDocs(q);
+            snap.forEach(d => {
+                const item = d.data();
+                const key = getUniqueKey(item);
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    status === "ATTENDED"
+                        ? finalData.attended.push(item)
+                        : finalData.absent.push(item);
+                }
+            });
+        }
     }
 
     finalData.attended.sort((a, b) => parseDate(b.date) - parseDate(a.date));
