@@ -617,19 +617,21 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, Tim
             const rawSubject = codeData.subject;
             const sessionPassword = codeData.sessionPassword || null;
 
-            // ✅ متغير نتيجة التحقق من الباترن
             let patternAlreadyVerified = false;
 
             if (sessionPassword) {
-                if (!entry.offlineVerifyToken) {
-                    log('warn', `Missing pattern token | PIN: ${entry.sessionPin}`);
-                    quarantineEntry({ ...entry, quarantineReason: 'missing-pattern-token' });
-                    return false;
-                }
+                if (!entry.offlineVerifyToken || !entry.patternInput) {
+                    log('warn', `Missing pattern data/token | PIN: ${entry.sessionPin}`);
 
-                if (!entry.patternInput) {
-                    log('warn', `Missing pattern data | PIN: ${entry.sessionPin}`);
-                    quarantineEntry({ ...entry, quarantineReason: 'missing-pattern-data' });
+                    offlineAlert(t(
+                        `❌ فشل تسجيل الحضور (${entry.sessionPin}) — هذه الجلسة تتطلب نمط دخول ولم تقم برسمه.`,
+                        `❌ Attendance failed (${entry.sessionPin}) — this session required a pattern which you did not draw.`
+                    ), 'error');
+
+                    quarantineEntry({
+                        ...entry,
+                        quarantineReason: !entry.offlineVerifyToken ? 'missing-pattern-token' : 'missing-pattern-data'
+                    });
                     return false;
                 }
                 try {
