@@ -846,79 +846,65 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, Tim
                 }
             }
 
-            const subDate = new Date(entry.submissionTime);
-            const d = String(subDate.getDate()).padStart(2, '0');
-            const m = String(subDate.getMonth() + 1).padStart(2, '0');
-            const y = subDate.getFullYear();
+            try {
+                const currentUser = window.auth?.currentUser;
+                if (!currentUser) return 'retry';
+                const idToken = await currentUser.getIdToken(true);
 
-            const dateKey = `${d}-${m}-${y}`;
-            const fixedDateStr = `${d}/${m}/${y}`;
-            const cleanSubKey = rawSubject.trim().replace(/\s+/g, '_').replace(/[^\w\u0600-\u06FF]/g, '');
-            const recID = `${entry.studentID}_${dateKey}_${cleanSubKey}`;
+                const liveSyncRes = await fetch(
+                    'https://nursing-backend-rej8.vercel.app/api/syncLiveOfflineAttendance',
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${idToken}`
+                        },
+                        body: JSON.stringify({
+                            sessionPin: entry.sessionPin,
+                            submissionTime: entry.submissionTime,
+                            patternInput: entry.patternInput || null,
+                            offlineVerifyToken: entry.offlineVerifyToken || null
+                        }),
+                        signal: AbortSignal.timeout(8000)
+                    }
+                );
 
-            const batch = writeBatch(db);
+                if (liveSyncRes.status >= 500) return 'retry';
+                if (liveSyncRes.status === 401 || liveSyncRes.status === 403) return 'retry';
+                if (liveSyncRes.status === 409) return 'retry';
 
-            const payload = {
-                id: entry.studentID,
-                sessionPin: entry.sessionPin,
-                name: entry.studentName,
-                subject: rawSubject,
-                college: college,
-                hall: codeData.hall || "Hall",
-                group: entry.group || codeData.targetGroups?.[0] || "GENERAL",
-                date: fixedDateStr,
-                time_str: subDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-                timestamp: Timestamp.fromMillis(entry.submissionTime),
-                status: "ATTENDED",
-                doctorUID: doctorUID,
-                doctorName: codeData.doctorName,
-                notes: "منضبط (مزامنة ذكية v3.2)",
-                isOfflineSync: true
-            };
+                if (!liveSyncRes.ok) {
+                    const errData = await liveSyncRes.json().catch(() => ({}));
+                    log('warn', `Live sync rejected: ${errData.error || liveSyncRes.status}`);
+                    quarantineEntry({ ...entry, quarantineReason: errData.error || 'live-sync-rejected' });
+                    return false;
+                }
 
-            batch.set(doc(db, `attendance_${college}`, recID), payload);
-            batch.set(doc(db, 'attendance', recID), payload);
+                localStorage.setItem('TARGET_DOCTOR_UID', doctorUID);
+                sessionStorage.setItem('TARGET_DOCTOR_UID', doctorUID);
 
-            batch.set(doc(db, "active_sessions", doctorUID, "participants", user.uid), {
-                id: entry.studentID,
-                uid: user.uid,
-                name: entry.studentName,
-                avatarClass: entry.avatarClass,
-                status: "active",
-                timestamp: serverTimestamp(),
-                isOfflineSync: true,
-                submissionTime: entry.submissionTime
-            });
+                beep();
+                toast(
+                    t(`✅ تم تأكيد حضورك بنجاح`, `✅ Attendance confirmed`),
+                    4000, "#10b981"
+                );
 
-            batch.set(doc(db, "offline_attendance_log", recID), {
-                ...entry,
-                syncTimestamp: serverTimestamp(),
-                syncStatus: "SUCCESS_RESILIENT_v3.2",
-                attempts: attempt
-            });
+                if (typeof window.switchScreen === 'function')
+                    window.switchScreen('screenLiveSession');
+                if (typeof window.startLiveSnapshotListener === 'function')
+                    window.startLiveSnapshotListener();
 
-            await batch.commit();
+                window.dispatchEvent(new CustomEvent('attendanceSynced', {
+                    detail: { studentID: entry.studentID, sessionPin: entry.sessionPin, postSession: false }
+                }));
 
-            localStorage.setItem('TARGET_DOCTOR_UID', doctorUID);
-            sessionStorage.setItem('TARGET_DOCTOR_UID', doctorUID);
+                log('info', `✅ Live Sync Complete via backend: ${entry.sessionPin}`);
+                return true;
 
-            beep();
-            toast(
-                t(`✅ تم تأكيد حضورك بنجاح`, `✅ Attendance confirmed`),
-                4000, "#10b981"
-            );
-
-            if (typeof window.switchScreen === 'function')
-                window.switchScreen('screenLiveSession');
-            if (typeof window.startLiveSnapshotListener === 'function')
-                window.startLiveSnapshotListener();
-
-            window.dispatchEvent(new CustomEvent('attendanceSynced', {
-                detail: { studentID: entry.studentID, sessionPin: entry.sessionPin, postSession: false }
-            }));
-
-            log('info', `✅ Resilient Atomic Sync Complete: ${recID}`);
-            return true;
+            } catch (netErr) {
+                log('warn', `Live sync network error: ${netErr.message}`);
+                return 'retry';
+            }
 
         } catch (err) {
             log('error', `Sync fatal error on attempt ${attempt}:`, err.message);
