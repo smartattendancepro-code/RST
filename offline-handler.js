@@ -669,21 +669,32 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, Tim
                             return false;
                         }
 
+                        let verifySignal;
+                        let verifyTimeoutId;
+                        if (window.AbortController) {
+                            const controller = new AbortController();
+                            verifyTimeoutId = setTimeout(() => controller.abort(), 8000);
+                            verifySignal = controller.signal;
+                        }
+
+                        const fetchOptions = {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${idToken}`
+                            },
+                            body: JSON.stringify({
+                                sessionPin: entry.sessionPin,
+                                patternPath: savedPath.path
+                            })
+                        };
+                        if (verifySignal) fetchOptions.signal = verifySignal;
+
                         const verifyRes = await fetch(
                             'https://nursing-backend-2.vercel.app/api/verifyOfflinePattern',
-                            {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${idToken}`
-                                },
-                                body: JSON.stringify({
-                                    sessionPin: entry.sessionPin,
-                                    patternPath: savedPath.path
-                                }),
-                                signal: AbortSignal.timeout(8000)
-                            }
+                            fetchOptions
                         );
+                        if (verifyTimeoutId) clearTimeout(verifyTimeoutId);
 
                         // 401 = التوكن منتهي → نحاول تاني
                         if (verifyRes.status === 401) {
@@ -806,21 +817,32 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, Tim
                     if (!currentUser) return 'retry';
                     const idToken = await currentUser.getIdToken(true);
 
+                    let syncSignal;
+                    let syncTimeoutId;
+                    if (window.AbortController) {
+                        const syncController = new AbortController();
+                        syncTimeoutId = setTimeout(() => syncController.abort(), 8000);
+                        syncSignal = syncController.signal;
+                    }
+
+                    const syncOptions = {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${idToken}`
+                        },
+                        body: JSON.stringify({
+                            sessionPin: entry.sessionPin,
+                            submissionTime: entry.submissionTime
+                        })
+                    };
+                    if (syncSignal) syncOptions.signal = syncSignal;
+
                     const syncRes = await fetch(
                         'https://nursing-backend-2.vercel.app/api/syncPostSessionAttendance',
-                        {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${idToken}`
-                            },
-                            body: JSON.stringify({
-                                sessionPin: entry.sessionPin,
-                                submissionTime: entry.submissionTime
-                            }),
-                            signal: AbortSignal.timeout(8000)
-                        }
+                        syncOptions
                     );
+                    if (syncTimeoutId) clearTimeout(syncTimeoutId);
 
                     if (syncRes.status >= 500) return 'retry';
 
@@ -861,23 +883,34 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, Tim
                 if (!currentUser) return 'retry';
                 const idToken = await currentUser.getIdToken(true);
 
+                let liveSignal;
+                let liveTimeoutId;
+                if (window.AbortController) {
+                    const liveController = new AbortController();
+                    liveTimeoutId = setTimeout(() => liveController.abort(), 8000);
+                    liveSignal = liveController.signal;
+                }
+
+                const liveSyncOptions = {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${idToken}`
+                    },
+                    body: JSON.stringify({
+                        sessionPin: entry.sessionPin,
+                        submissionTime: entry.submissionTime,
+                        patternInput: entry.patternInput || null,
+                        offlineVerifyToken: entry.offlineVerifyToken || null
+                    })
+                };
+                if (liveSignal) liveSyncOptions.signal = liveSignal;
+
                 const liveSyncRes = await fetch(
                     'https://nursing-backend-2.vercel.app/api/syncLiveOfflineAttendance',
-                    {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${idToken}`
-                        },
-                        body: JSON.stringify({
-                            sessionPin: entry.sessionPin,
-                            submissionTime: entry.submissionTime,
-                            patternInput: entry.patternInput || null,
-                            offlineVerifyToken: entry.offlineVerifyToken || null
-                        }),
-                        signal: AbortSignal.timeout(8000)
-                    }
+                    liveSyncOptions
                 );
+                if (liveTimeoutId) clearTimeout(liveTimeoutId);
 
                 if (liveSyncRes.status >= 500) return 'retry';
                 if (liveSyncRes.status === 401 || liveSyncRes.status === 403) return 'retry';
