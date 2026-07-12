@@ -1,9 +1,11 @@
 'use strict';
 
 const OA = {
-    STORAGE_KEY: "nursing_offline_queue_v3",
-    QUARANTINE_KEY: "nursing_offline_quarantine_v3",
+    STORAGE_KEY: "nursing_offline_queue_v4",
+    QUARANTINE_KEY: "nursing_offline_quarantine_v4",
     RATE_KEY: "nursing_pin_rate_v1",
+    DEVICE_SALT_KEY: "nursing_device_salt_v1",
+    DEVICE_SECRET_KEY: "nursing_device_secret_v1",
     FIRESTORE_CDN: "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js",
     PIN_LENGTH: 6,
     COUNTDOWN_SEC: 3,
@@ -15,6 +17,7 @@ const OA = {
     LOCKOUT_MS: 5 * 60 * 1000,
     CRYPTO_ALGO: "AES-GCM",
     KEY_LENGTH: 256,
+    PBKDF2_ITERATIONS: 210_000,
 };
 
 let _firestoreCache = null;
@@ -37,8 +40,60 @@ function log(level, ...args) {
     const method = (console[level] && typeof console[level] === 'function') ? level : 'error';
     console[method](prefix, ...args);
 }
+const Store = {
+    async get(key) {
+        if (window.PersistentStore && typeof window.PersistentStore.get === 'function') {
+            try {
+                const v = await window.PersistentStore.get(key);
+                if (v !== undefined && v !== null) return v;
+            } catch { /* fall through to localStorage */ }
+        }
+        try { return localStorage.getItem(key); } catch { return null; }
+    },
+    async set(key, value) {
+        if (window.PersistentStore && typeof window.PersistentStore.set === 'function') {
+            try { await window.PersistentStore.set(key, value); } catch { /* localStorage below still covers us */ }
+        }
+        try { localStorage.setItem(key, value); } catch { /* ignore quota/availability errors */ }
+    },
+    async remove(key) {
+        if (window.PersistentStore && typeof window.PersistentStore.delete === 'function') {
+            try { await window.PersistentStore.delete(key); } catch { /* ignore */ }
+        }
+        try { localStorage.removeItem(key); } catch { /* ignore */ }
+    },
+};
 
 const _keyCache = new Map();
+
+function _utf8ToB64(str) {
+    return btoa(Array.from(new TextEncoder().encode(str), b => String.fromCharCode(b)).join(''));
+}
+
+function _b64ToUtf8(b64) {
+    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+}
+
+async function _getDeviceSalt() {
+    let raw = await Store.get(OA.DEVICE_SALT_KEY);
+    if (!raw) {
+        const bytes = crypto.getRandomValues(new Uint8Array(16));
+        raw = btoa(String.fromCharCode(...bytes));
+        await Store.set(OA.DEVICE_SALT_KEY, raw);
+    }
+    return Uint8Array.from(atob(raw), c => c.charCodeAt(0));
+}
+
+async function _getDeviceSecret() {
+    let raw = await Store.get(OA.DEVICE_SECRET_KEY);
+    if (!raw) {
+        const bytes = crypto.getRandomValues(new Uint8Array(32));
+        raw = btoa(String.fromCharCode(...bytes));
+        await Store.set(OA.DEVICE_SECRET_KEY, raw);
+    }
+    return raw;
+}
 
 async function _getAesKey(uid) {
     if (_keyCache.has(uid)) return _keyCache.get(uid);
@@ -48,18 +103,19 @@ async function _getAesKey(uid) {
         _keyCache.delete(oldest);
     }
 
+    const deviceSecret = await _getDeviceSecret();
+    const salt = await _getDeviceSalt();
+
     const rawMaterial = await crypto.subtle.importKey(
         'raw',
-        new TextEncoder().encode(uid),
+        new TextEncoder().encode(`${uid}::${deviceSecret}`),
         { name: 'PBKDF2' },
         false,
         ['deriveKey']
     );
 
-    const salt = new TextEncoder().encode('NursingApp_Salt_2024');
-
     const key = await crypto.subtle.deriveKey(
-        { name: 'PBKDF2', salt, iterations: 100_000, hash: 'SHA-256' },
+        { name: 'PBKDF2', salt, iterations: OA.PBKDF2_ITERATIONS, hash: 'SHA-256' },
         rawMaterial,
         { name: OA.CRYPTO_ALGO, length: OA.KEY_LENGTH },
         false,
@@ -74,9 +130,11 @@ async function _getHmacKey(uid) {
     const cacheKey = `hmac_${uid}`;
     if (_keyCache.has(cacheKey)) return _keyCache.get(cacheKey);
 
+    const deviceSecret = await _getDeviceSecret();
+
     const key = await crypto.subtle.importKey(
         'raw',
-        new TextEncoder().encode(`hmac_${uid}_NursingApp`),
+        new TextEncoder().encode(`hmac_${uid}_${deviceSecret}`),
         { name: 'HMAC', hash: 'SHA-256' },
         false,
         ['sign', 'verify']
@@ -105,7 +163,7 @@ async function _encryptQueue(arr, uid) {
         return btoa(String.fromCharCode(...combined));
     } catch (e) {
         log('error', 'Encrypt failed, falling back to plain JSON:', e.message);
-        return btoa(unescape(encodeURIComponent(JSON.stringify(arr))));
+        return _utf8ToB64(JSON.stringify(arr));
     }
 }
 
@@ -141,7 +199,7 @@ async function _decryptQueue(raw, uid) {
             return Array.isArray(parsed) ? parsed : [];
         } catch {
             try {
-                const legacyDecoded = decodeURIComponent(escape(atob(raw)));
+                const legacyDecoded = _b64ToUtf8(raw);
                 const parsed = JSON.parse(legacyDecoded);
                 return Array.isArray(parsed) ? parsed : [];
             } catch {
@@ -175,12 +233,11 @@ async function _signEntry(entry, uid) {
 }
 
 async function _verifyEntry(entry, uid) {
-    if (!entry._sig) return true;
+    if (!entry._sig) return false;
 
     const expected = await _signEntry({ ...entry, _sig: undefined }, uid);
     return expected === entry._sig;
 }
-
 
 function _getUidForCrypto() {
     const currentUser = window.auth?.currentUser;
@@ -191,7 +248,7 @@ function _getUidForCrypto() {
 
 async function queueLoad() {
     try {
-        const raw = localStorage.getItem(OA.STORAGE_KEY);
+        const raw = await Store.get(OA.STORAGE_KEY);
         if (!raw) return [];
         const uid = _getUidForCrypto();
         return await _decryptQueue(raw, uid);
@@ -205,26 +262,26 @@ async function queueSave(arr) {
         const safe = arr.slice(-OA.MAX_QUEUE_SIZE);
         const uid = _getUidForCrypto();
         const encrypted = await _encryptQueue(safe, uid);
-        localStorage.setItem(OA.STORAGE_KEY, encrypted);
+        await Store.set(OA.STORAGE_KEY, encrypted);
         _updateBadge(safe.length);
     } catch (e) {
         log('error', 'queueSave failed:', e.message);
     }
 }
 
-function quarantineEntry(entry) {
+async function quarantineEntry(entry) {
     try {
-        const q = JSON.parse(localStorage.getItem(OA.QUARANTINE_KEY) || '[]');
+        const raw = await Store.get(OA.QUARANTINE_KEY);
+        const q = raw ? JSON.parse(raw) : [];
         q.push({ ...entry, _sig: undefined, quarantinedAt: Date.now() });
-        localStorage.setItem(OA.QUARANTINE_KEY, JSON.stringify(q));
+        await Store.set(OA.QUARANTINE_KEY, JSON.stringify(q));
         log('warn', 'Entry quarantined:', entry.sessionPin);
-    } catch { }
+    } catch { /* best-effort; never block the sync flow on this */ }
 }
 
 function entryKey(studentID, sessionPin) {
     return `${studentID}_${sessionPin}`;
 }
-
 
 function _checkRateLimit() {
     try {
@@ -234,7 +291,6 @@ function _checkRateLimit() {
         if (raw.lockedUntil && now < raw.lockedUntil) {
             const mins = Math.ceil((raw.lockedUntil - now) / 60_000);
             offlineAlert(t(`⛔ تم تجاوز عدد المحاولات المسموح به.\nحاول مجدداً بعد ${mins} دقيقة.`, `⛔ Too many attempts. Try again in ${mins} minute(s).`), 'warning');
-
             return false;
         }
 
@@ -251,7 +307,6 @@ function _checkRateLimit() {
                 lockedUntil: now + OA.LOCKOUT_MS,
             }));
             offlineAlert(t(`⛔ تم تجاوز ${OA.MAX_PIN_ATTEMPTS} محاولات. محظور لمدة 5 دقايق.`, `⛔ ${OA.MAX_PIN_ATTEMPTS} failed attempts. Locked for 5 minutes.`), 'warning');
-
             return false;
         }
 
@@ -266,7 +321,6 @@ function _checkRateLimit() {
 function _resetRateLimit() {
     localStorage.removeItem(OA.RATE_KEY);
 }
-
 
 function _updateBadge(count) {
     let badge = document.getElementById('offlinePendingBadge');
@@ -291,7 +345,6 @@ function _updateBadge(count) {
     }
 }
 
-
 function controlOfflineButtonVisibility() {
     const wrapper = document.getElementById('offlineActionsWrapper');
     if (!wrapper) return;
@@ -314,7 +367,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     _updateBadge(q.length);
     setTimeout(syncOfflineData, OA.SYNC_BOOT_DELAY);
 });
-
 
 window.openOfflineRegistrationModal = function () {
     const modal = document.getElementById('offlineRegModal');
@@ -388,8 +440,8 @@ async function _saveEntry(studentData, sessionPin) {
         patternInput: window.getOfflinePattern?.() || null,
         offlineVerifyToken: window._offlineVerifyToken || null,
         deviceId: window.HARDWARE_ID || "DEVICE_OFFLINE",
-        appVersion: window.APP_VERSION || "3.0",
-        group: studentData.group || "GENERAL", // ✅ ضيف السطر ده
+        appVersion: window.APP_VERSION || "4.0",
+        group: studentData.group || "GENERAL",
     };
 
     window._offlineVerifyToken = null;
@@ -414,7 +466,6 @@ async function _saveEntry(studentData, sessionPin) {
 
     if (navigator.onLine) syncOfflineData();
 }
-
 
 async function syncOfflineData() {
     if (_syncPromise) {
@@ -449,13 +500,10 @@ async function _doSync(queue, user) {
             log('info', 'Firestore module loaded & cached');
         }
 
-        const { doc, getDoc, writeBatch, serverTimestamp, Timestamp } = _firestoreCache;
+        const { doc, getDoc } = _firestoreCache;
         const db = window.db;
         if (!db) { log('error', 'window.db not available'); return; }
 
-        const remainingQueue = [];
-        let successCount = 0;
-        let failCount = 0;
         const uid = user.uid;
 
         const results = await Promise.allSettled(
@@ -463,23 +511,26 @@ async function _doSync(queue, user) {
                 const isValid = await _verifyEntry(entry, uid);
 
                 if (!isValid) {
-                    log('warn', 'Tampered entry detected, quarantining:', entry.sessionPin);
+                    log('warn', 'Unsigned or tampered entry detected, quarantining:', entry.sessionPin);
                     toast(
                         t('⚠️ تم اكتشاف تلاعب في بيانات محفوظة', '⚠️ Tampered entry detected'),
                         5000, "#ef4444"
                     );
-                    quarantineEntry(entry);
+                    await quarantineEntry(entry);
                     return { status: 'quarantine' };
                 }
 
-                const result = await _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, Timestamp, db, user });
+                const result = await _syncEntry(entry, { doc, getDoc, db, user });
                 return { status: result, entry };
             })
         );
 
-        for (let i = 0; i < results.length; i++) {
-            const r = results[i];
+        const remainingQueue = [];
+        let successCount = 0;
+        let failCount = 0;
+        let quarantineCount = 0;
 
+        for (const r of results) {
             if (r.status === 'rejected') {
                 failCount++;
                 continue;
@@ -487,7 +538,7 @@ async function _doSync(queue, user) {
 
             const val = r.value;
             if (!val || val.status === 'quarantine') {
-                failCount++;
+                quarantineCount++;
             } else if (val.status === true) {
                 successCount++;
             } else if (val.status === 'retry') {
@@ -499,55 +550,10 @@ async function _doSync(queue, user) {
         }
 
         await queueSave(remainingQueue);
-        log('info', `Sync complete. Remaining: ${remainingQueue.length}`);
+        log('info', `Sync complete. Success: ${successCount} | Retry: ${remainingQueue.length} | Quarantined: ${quarantineCount} | Other failures: ${failCount}`);
 
-        // الجديد
-        let quarantineCount = 0;
-        for (let i = 0; i < results.length; i++) {
-            const r = results[i];
-            if (r.status === 'rejected') { failCount++; continue; }
-            const val = r.value;
-            if (!val || val.status === 'quarantine') { quarantineCount++; }
-        }
+        _reportSyncOutcome({ successCount, remainingCount: remainingQueue.length, quarantineCount });
 
-        if (successCount > 0 && remainingQueue.length === 0 && quarantineCount === 0) {
-            toast(
-                t(`✅ تم تأكيد ${successCount} تسجيل بنجاح`, `✅ ${successCount} registration(s) confirmed`),
-                5000, "#10b981"
-            );
-        } else if (successCount > 0 && remainingQueue.length > 0 && quarantineCount === 0) {
-            toast(
-                t(
-                    `✅ نجح ${successCount} | ⏳ ${remainingQueue.length} سيُعاد المحاولة تلقائياً`,
-                    `✅ ${successCount} confirmed | ⏳ ${remainingQueue.length} will retry`
-                ),
-                6000, "#f59e0b"
-            );
-        } else if (successCount > 0 && quarantineCount > 0) {
-            toast(
-                t(
-                    `✅ نجح ${successCount} | ❌ رُفض ${quarantineCount} نهائياً (نمط خاطئ أو بيانات تالفة)`,
-                    `✅ ${successCount} confirmed | ❌ ${quarantineCount} permanently rejected`
-                ),
-                8000, "#ef4444"
-            );
-        } else if (remainingQueue.length > 0 && successCount === 0 && quarantineCount === 0) {
-            toast(
-                t(
-                    `⚠️ فشلت مزامنة ${remainingQueue.length} تسجيل — سيتم إعادة المحاولة`,
-                    `⚠️ ${remainingQueue.length} pending — will retry automatically`
-                ),
-                6000, "#f59e0b"
-            );
-        } else if (quarantineCount > 0 && successCount === 0) {
-            toast(
-                t(
-                    `❌ تم رفض ${quarantineCount} تسجيل نهائياً — تواصل مع الدكتور`,
-                    `❌ ${quarantineCount} registration(s) permanently rejected — contact your doctor`
-                ),
-                8000, "#ef4444"
-            );
-        }
     } catch (criticalError) {
         log('error', 'Critical sync failure:', criticalError);
         toast(
@@ -560,9 +566,48 @@ async function _doSync(queue, user) {
     }
 }
 
+function _reportSyncOutcome({ successCount, remainingCount, quarantineCount }) {
+    if (successCount > 0 && remainingCount === 0 && quarantineCount === 0) {
+        toast(
+            t(`✅ تم تأكيد ${successCount} تسجيل بنجاح`, `✅ ${successCount} registration(s) confirmed`),
+            5000, "#10b981"
+        );
+    } else if (successCount > 0 && remainingCount > 0 && quarantineCount === 0) {
+        toast(
+            t(
+                `✅ نجح ${successCount} | ⏳ ${remainingCount} سيُعاد المحاولة تلقائياً`,
+                `✅ ${successCount} confirmed | ⏳ ${remainingCount} will retry`
+            ),
+            6000, "#f59e0b"
+        );
+    } else if (successCount > 0 && quarantineCount > 0) {
+        toast(
+            t(
+                `✅ نجح ${successCount} | ❌ رُفض ${quarantineCount} نهائياً (نمط خاطئ أو بيانات تالفة)`,
+                `✅ ${successCount} confirmed | ❌ ${quarantineCount} permanently rejected`
+            ),
+            8000, "#ef4444"
+        );
+    } else if (remainingCount > 0 && successCount === 0 && quarantineCount === 0) {
+        toast(
+            t(
+                `⚠️ فشلت مزامنة ${remainingCount} تسجيل — سيتم إعادة المحاولة`,
+                `⚠️ ${remainingCount} pending — will retry automatically`
+            ),
+            6000, "#f59e0b"
+        );
+    } else if (quarantineCount > 0 && successCount === 0) {
+        toast(
+            t(
+                `❌ تم رفض ${quarantineCount} تسجيل نهائياً — تواصل مع الدكتور`,
+                `❌ ${quarantineCount} registration(s) permanently rejected — contact your doctor`
+            ),
+            8000, "#ef4444"
+        );
+    }
+}
 function _verifyPattern(entryPatternRaw, sessionPasswordRaw) {
     if (!sessionPasswordRaw) return true;
-
     if (!entryPatternRaw) return false;
 
     try {
@@ -577,12 +622,14 @@ function _verifyPattern(entryPatternRaw, sessionPasswordRaw) {
         if (!Array.isArray(doctorPath) || !Array.isArray(studentPath)) return false;
         if (doctorPath.length !== studentPath.length) return false;
 
-        if (doctorPwd.mapping) {
-            const mappedStudentPath = studentPath.map(idx => doctorPwd.mapping[idx]);
-            return JSON.stringify(mappedStudentPath) === JSON.stringify(doctorPath);
-        }
+        const compareTo = doctorPwd.mapping
+            ? studentPath.map(idx => doctorPwd.mapping[idx])
+            : studentPath;
 
-        return JSON.stringify(studentPath) === JSON.stringify(doctorPath);
+        for (let i = 0; i < doctorPath.length; i++) {
+            if (compareTo[i] !== doctorPath[i]) return false;
+        }
+        return true;
 
     } catch (e) {
         log('warn', '_verifyPattern parse error:', e.message);
@@ -590,8 +637,293 @@ function _verifyPattern(entryPatternRaw, sessionPasswordRaw) {
     }
 }
 
-async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, Timestamp, db, user }) {
+function _timeoutSignal(ms) {
+    if (!window.AbortController) return { signal: undefined, cancel: () => {} };
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), ms);
+    return { signal: controller.signal, cancel: () => clearTimeout(id) };
+}
 
+function _isWithinOfflineWindow(entry, codeData) {
+    const openedAtMs = _toMs(codeData.openedAt);
+    const OFFLINE_WINDOW_MS = 25_000;
+    const LOOSE_DRIFT = 4000;
+    const offlineDeadline = openedAtMs + OFFLINE_WINDOW_MS;
+    const submitted = entry.submissionTime;
+    return submitted >= (openedAtMs - LOOSE_DRIFT) && submitted <= (offlineDeadline + LOOSE_DRIFT);
+}
+
+async function _resolvePatternVerification(entry, { doc, getDoc, db, user }) {
+    if (!entry.patternInput) {
+        log('warn', `Missing pattern data | PIN: ${entry.sessionPin}`);
+        offlineAlert(t(
+            `❌ فشل تسجيل الحضور (${entry.sessionPin}) — هذه الجلسة تتطلب نمط دخول ولم تقم برسمه.`,
+            `❌ Attendance failed (${entry.sessionPin}) — this session required a pattern which you did not draw.`
+        ), 'error');
+        await quarantineEntry({ ...entry, quarantineReason: 'missing-pattern-data' });
+        return false;
+    }
+
+    if (entry.offlineVerifyToken) {
+        try {
+            const tokenRef = doc(db, "pattern_tokens", `${user.uid}_${entry.sessionPin}`);
+            const tokenSnap = await getDoc(tokenRef);
+
+            if (tokenSnap.exists()) {
+                const tokenData = tokenSnap.data();
+                const notExpired = _toMs(tokenData.expiresAt) > entry.submissionTime;
+
+                if (tokenData.token === entry.offlineVerifyToken && notExpired) {
+                    log('info', `✅ Pattern pre-verified via Firestore token | PIN: ${entry.sessionPin}`);
+                    return true;
+                }
+            }
+        } catch (e) {
+            log('warn', `pattern_tokens read failed, falling back to API: ${e.message}`);
+        }
+    }
+
+    return await _verifyPatternViaApi(entry, user);
+}
+
+/** Authoritative pattern check against the backend. */
+async function _verifyPatternViaApi(entry, user) {
+    try {
+        const currentUser = window.auth?.currentUser;
+        if (!currentUser) return 'retry';
+
+        const idToken = await currentUser.getIdToken(true);
+
+        let savedPath;
+        try {
+            savedPath = JSON.parse(entry.patternInput);
+        } catch {
+            savedPath = null;
+        }
+
+        if (!savedPath?.path || !Array.isArray(savedPath.path)) {
+            offlineAlert(
+                t('❌ بيانات النمط تالفة — تم رفض التسجيل', '❌ Corrupted pattern data — registration rejected'),
+                'error'
+            );
+            await quarantineEntry({ ...entry, quarantineReason: 'invalid-pattern-format' });
+            return false;
+        }
+
+        const { signal, cancel } = _timeoutSignal(8000);
+        let verifyRes;
+        try {
+            verifyRes = await fetch(
+                'https://nursing-backend-2.vercel.app/api/verifyOfflinePattern',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${idToken}`
+                    },
+                    body: JSON.stringify({ sessionPin: entry.sessionPin, patternPath: savedPath.path }),
+                    ...(signal ? { signal } : {})
+                }
+            );
+        } finally {
+            cancel();
+        }
+
+        if (verifyRes.status === 401) {
+            log('warn', `Token expired during pattern verify (PIN: ${entry.sessionPin}) — retrying`);
+            return 'retry';
+        }
+
+        if (verifyRes.status === 429) {
+            log('warn', `Rate limited on pattern verify (PIN: ${entry.sessionPin}) — retrying later`);
+            offlineAlert(
+                t('⛔ تجاوزت عدد المحاولات — سيتم إعادة المحاولة تلقائياً', '⛔ Too many attempts — will retry automatically'),
+                'warning'
+            );
+            return 'retry';
+        }
+
+        if (verifyRes.status === 403) {
+            const errData = await verifyRes.json().catch(() => ({}));
+            log('warn', `Wrong pattern on sync | PIN: ${entry.sessionPin} | ${errData.error || ''}`);
+            offlineAlert(
+                t(
+                    `❌ النمط غير صحيح — تم رفض تسجيل الحضور (${entry.sessionPin})`,
+                    `❌ Wrong pattern — attendance rejected (${entry.sessionPin})`
+                ),
+                'error'
+            );
+            await quarantineEntry({ ...entry, quarantineReason: 'pattern-wrong-on-sync' });
+            return false;
+        }
+
+        if (!verifyRes.ok) {
+            const errData = await verifyRes.json().catch(() => ({}));
+            log('warn', `Pattern verify failed (${verifyRes.status}) | PIN: ${entry.sessionPin} | ${errData.error || ''}`);
+            offlineAlert(
+                t(
+                    `⚠️ خطأ في التحقق من النمط (${verifyRes.status}) — حاول مجدداً`,
+                    `⚠️ Pattern verify error (${verifyRes.status}) — please retry`
+                ),
+                'warning'
+            );
+            return 'retry';
+        }
+
+        const verifyData = await verifyRes.json().catch(() => ({}));
+        if (verifyData?.verifyToken) {
+            entry.offlineVerifyToken = verifyData.verifyToken;
+            entry._sig = await _signEntry(entry, user.uid);
+        }
+
+        log('info', `✅ Pattern verified on sync via API | PIN: ${entry.sessionPin}`);
+        toast(
+            t(`✅ تم التحقق من النمط بنجاح`, `✅ Pattern verified successfully`),
+            3000, "#10b981"
+        );
+        return true;
+
+    } catch (e) {
+        log('warn', `Pattern re-verify network error | PIN: ${entry.sessionPin} | ${e.message}`);
+        offlineAlert(
+            t('⚠️ تعذّر الاتصال للتحقق من النمط — سيتم إعادة المحاولة', '⚠️ Network error during pattern verify — will retry'),
+            'warning'
+        );
+        return 'retry';
+    }
+}
+
+async function _syncPostSessionAttendance(entry, doctorUID) {
+    log('info', 'Session closed — verifying via secure backend.');
+    try {
+        const currentUser = window.auth?.currentUser;
+        if (!currentUser) return 'retry';
+        const idToken = await currentUser.getIdToken(true);
+
+        const { signal, cancel } = _timeoutSignal(8000);
+        let syncRes;
+        try {
+            syncRes = await fetch(
+                'https://nursing-backend-2.vercel.app/api/syncPostSessionAttendance',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${idToken}`
+                    },
+                    body: JSON.stringify({ sessionPin: entry.sessionPin, submissionTime: entry.submissionTime }),
+                    ...(signal ? { signal } : {})
+                }
+            );
+        } finally {
+            cancel();
+        }
+
+        if (syncRes.status >= 500) return 'retry';
+
+        if (syncRes.status === 401 || syncRes.status === 403) {
+            log('warn', `Auth rejected post-session sync (status ${syncRes.status}) — retrying`);
+            return 'retry';
+        }
+
+        if (!syncRes.ok) {
+            const errData = await syncRes.json().catch(() => ({}));
+            log('warn', `Post-session sync rejected: ${errData.error || syncRes.status}`);
+            offlineAlert(t(
+                `❌ فشل تسجيل الحضور: ${errData.error || 'خطأ غير معروف'}`,
+                `❌ Attendance failed: ${errData.error || 'Unknown error'}`
+            ), 'error');
+            await quarantineEntry({ ...entry, quarantineReason: errData.error || 'post-session-rejected' });
+            return false;
+        }
+
+        offlineAlert(t(`✅ تم تسجيل حضورك (الجلسة كانت مغلقة)`, `✅ Attendance recorded (session was closed)`), 'success');
+        beep();
+        log('info', `✅ Post-session offline sync complete via backend: ${entry.sessionPin}`);
+
+        window.dispatchEvent(new CustomEvent('attendanceSynced', {
+            detail: { studentID: entry.studentID, sessionPin: entry.sessionPin, postSession: true }
+        }));
+
+        return true;
+
+    } catch (netErr) {
+        log('warn', `Post-session sync network error: ${netErr.message}`);
+        return 'retry';
+    }
+}
+
+async function _syncLiveAttendance(entry, doctorUID) {
+    try {
+        const currentUser = window.auth?.currentUser;
+        if (!currentUser) return 'retry';
+        const idToken = await currentUser.getIdToken(true);
+
+        const { signal, cancel } = _timeoutSignal(8000);
+        let liveSyncRes;
+        try {
+            liveSyncRes = await fetch(
+                'https://nursing-backend-2.vercel.app/api/syncLiveOfflineAttendance',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${idToken}`
+                    },
+                    body: JSON.stringify({
+                        sessionPin: entry.sessionPin,
+                        submissionTime: entry.submissionTime,
+                        patternInput: entry.patternInput || null,
+                        offlineVerifyToken: entry.offlineVerifyToken || null
+                    }),
+                    ...(signal ? { signal } : {})
+                }
+            );
+        } finally {
+            cancel();
+        }
+
+        if (liveSyncRes.status >= 500) return 'retry';
+        if (liveSyncRes.status === 401 || liveSyncRes.status === 403) return 'retry';
+        if (liveSyncRes.status === 409) return 'retry';
+
+        if (!liveSyncRes.ok) {
+            const errData = await liveSyncRes.json().catch(() => ({}));
+            log('warn', `Live sync rejected: ${errData.error || liveSyncRes.status}`);
+            await quarantineEntry({ ...entry, quarantineReason: errData.error || 'live-sync-rejected' });
+            return false;
+        }
+
+        try {
+            localStorage.setItem('TARGET_DOCTOR_UID', doctorUID);
+            sessionStorage.setItem('TARGET_DOCTOR_UID', doctorUID);
+        } catch { /* non-critical UI hint storage */ }
+
+        beep();
+        toast(
+            t(`✅ تم تأكيد حضورك بنجاح`, `✅ Attendance confirmed`),
+            4000, "#10b981"
+        );
+
+        if (typeof window.switchScreen === 'function')
+            window.switchScreen('screenLiveSession');
+        if (typeof window.startLiveSnapshotListener === 'function')
+            window.startLiveSnapshotListener();
+
+        window.dispatchEvent(new CustomEvent('attendanceSynced', {
+            detail: { studentID: entry.studentID, sessionPin: entry.sessionPin, postSession: false }
+        }));
+
+        log('info', `✅ Live Sync Complete via backend: ${entry.sessionPin}`);
+        return true;
+
+    } catch (netErr) {
+        log('warn', `Live sync network error: ${netErr.message}`);
+        return 'retry';
+    }
+}
+
+async function _syncEntry(entry, { doc, getDoc, db, user }) {
     for (let attempt = 1; attempt <= OA.MAX_RETRIES; attempt++) {
         try {
             const codeRef = doc(db, "issued_codes_logs", entry.sessionPin);
@@ -599,7 +931,7 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, Tim
 
             try {
                 codeSnap = await getDoc(codeRef);
-            } catch (networkErr) {
+            } catch {
                 log('warn', `Network glitch fetching PIN (Attempt ${attempt})`);
                 return 'retry';
             }
@@ -607,179 +939,20 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, Tim
             if (!codeSnap.exists()) {
                 log('warn', `PIN ${entry.sessionPin} is invalid.`);
                 offlineAlert(t(`❌ كود غير صحيح (${entry.sessionPin})`, `❌ Invalid PIN`));
-                quarantineEntry(entry);
+                await quarantineEntry(entry);
                 return false;
             }
 
             const codeData = codeSnap.data();
             const doctorUID = codeData.doctorId;
-            const college = codeData.college || "NURS";
-            const rawSubject = codeData.subject;
             const sessionPassword = codeData.sessionPassword || null;
 
-            let patternAlreadyVerified = false;
-
             if (sessionPassword) {
-                if (!entry.offlineVerifyToken || !entry.patternInput) {
-                    log('warn', `Missing pattern data/token | PIN: ${entry.sessionPin}`);
-
-                    offlineAlert(t(
-                        `❌ فشل تسجيل الحضور (${entry.sessionPin}) — هذه الجلسة تتطلب نمط دخول ولم تقم برسمه.`,
-                        `❌ Attendance failed (${entry.sessionPin}) — this session required a pattern which you did not draw.`
-                    ), 'error');
-
-                    quarantineEntry({
-                        ...entry,
-                        quarantineReason: !entry.offlineVerifyToken ? 'missing-pattern-token' : 'missing-pattern-data'
-                    });
-                    return false;
-                }
-                try {
-                    const tokenRef = doc(db, "pattern_tokens", `${user.uid}_${entry.sessionPin}`);
-                    const tokenSnap = await getDoc(tokenRef);
-
-                    if (tokenSnap.exists()) {
-                        const tokenData = tokenSnap.data();
-                        const notExpired = _toMs(tokenData.expiresAt) > entry.submissionTime;
-
-                        if (tokenData.token === entry.offlineVerifyToken && notExpired) {
-                            patternAlreadyVerified = true;
-                            log('info', `✅ Pattern pre-verified via Firestore token | PIN: ${entry.sessionPin}`);
-                        }
-                    }
-                } catch (e) {
-                    log('warn', `pattern_tokens read failed, falling back to API: ${e.message}`);
-                }
-
-                // 🐌 المسار الاحتياطي: API
-                if (!patternAlreadyVerified) {
-                    try {
-                        const currentUser = window.auth?.currentUser;
-                        if (!currentUser) return 'retry';
-
-                        const idToken = await currentUser.getIdToken(true);
-                        const savedPath = JSON.parse(entry.patternInput);
-
-                        if (!savedPath?.path || !Array.isArray(savedPath.path)) {
-                            offlineAlert(
-                                t('❌ بيانات النمط تالفة — تم رفض التسجيل', '❌ Corrupted pattern data — registration rejected'),
-                                'error'
-                            );
-                            quarantineEntry({ ...entry, quarantineReason: 'invalid-pattern-format' });
-                            return false;
-                        }
-
-                        let verifySignal;
-                        let verifyTimeoutId;
-                        if (window.AbortController) {
-                            const controller = new AbortController();
-                            verifyTimeoutId = setTimeout(() => controller.abort(), 8000);
-                            verifySignal = controller.signal;
-                        }
-
-                        const fetchOptions = {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${idToken}`
-                            },
-                            body: JSON.stringify({
-                                sessionPin: entry.sessionPin,
-                                patternPath: savedPath.path
-                            })
-                        };
-                        if (verifySignal) fetchOptions.signal = verifySignal;
-
-                        const verifyRes = await fetch(
-                            'https://nursing-backend-2.vercel.app/api/verifyOfflinePattern',
-                            fetchOptions
-                        );
-                        if (verifyTimeoutId) clearTimeout(verifyTimeoutId);
-
-                        // 401 = التوكن منتهي → نحاول تاني
-                        if (verifyRes.status === 401) {
-                            log('warn', `Token expired during pattern verify (PIN: ${entry.sessionPin}) — retrying`);
-                            return 'retry';
-                        }
-
-                        // 429 = تجاوز المحاولات → نحاول بعدين
-                        if (verifyRes.status === 429) {
-                            log('warn', `Rate limited on pattern verify (PIN: ${entry.sessionPin}) — retrying later`);
-                            offlineAlert(
-                                t('⛔ تجاوزت عدد المحاولات — سيتم إعادة المحاولة تلقائياً', '⛔ Too many attempts — will retry automatically'),
-                                'warning'
-                            );
-                            return 'retry';
-                        }
-
-                        // 403 = الباترن غلط فعلاً → نرفض نهائياً
-                        if (verifyRes.status === 403) {
-                            const errData = await verifyRes.json().catch(() => ({}));
-                            log('warn', `Wrong pattern on sync | PIN: ${entry.sessionPin} | ${errData.error || ''}`);
-                            offlineAlert(
-                                t(
-                                    `❌ النمط غير صحيح — تم رفض تسجيل الحضور (${entry.sessionPin})`,
-                                    `❌ Wrong pattern — attendance rejected (${entry.sessionPin})`
-                                ),
-                                'error'
-                            );
-                            quarantineEntry({ ...entry, quarantineReason: 'pattern-wrong-on-sync' });
-                            return false;
-                        }
-
-                        if (!verifyRes.ok) {
-                            const errData = await verifyRes.json().catch(() => ({}));
-                            log('warn', `Pattern verify failed (${verifyRes.status}) | PIN: ${entry.sessionPin} | ${errData.error || ''}`);
-                            offlineAlert(
-                                t(
-                                    `⚠️ خطأ في التحقق من النمط (${verifyRes.status}) — حاول مجدداً`,
-                                    `⚠️ Pattern verify error (${verifyRes.status}) — please retry`
-                                ),
-                                'warning'
-                            );
-                            return 'retry';
-                        }
-
-                        const verifyData = await verifyRes.json().catch(() => ({}));
-                        if (verifyData && verifyData.verifyToken) {
-                            entry.offlineVerifyToken = verifyData.verifyToken;
-
-                            entry._sig = await _signEntry(entry, user.uid);
-                        }
-
-                        patternAlreadyVerified = true;
-                        log('info', `✅ Pattern verified on sync via API | PIN: ${entry.sessionPin}`);
-                        toast(
-                            t(`✅ تم التحقق من النمط بنجاح`, `✅ Pattern verified successfully`),
-                            3000, "#10b981"
-                        );
-
-                    } catch (e) {
-                        log('warn', `Pattern re-verify network error | PIN: ${entry.sessionPin} | ${e.message}`);
-                        offlineAlert(
-                            t('⚠️ تعذّر الاتصال للتحقق من النمط — سيتم إعادة المحاولة', '⚠️ Network error during pattern verify — will retry'),
-                            'warning'
-                        );
-                        return 'retry';
-                    }
-                }
-
-                // 🛡️ حاجز أمان نهائي: لو لسه مش verified بعد كل المسارات → وقف
-                if (!patternAlreadyVerified) {
-                    log('warn', `Pattern block exited without verification | PIN: ${entry.sessionPin}`);
-                    quarantineEntry({ ...entry, quarantineReason: 'pattern-unverified' });
-                    return false;
-                }
+                const patternResult = await _resolvePatternVerification(entry, { doc, getDoc, db, user });
+                if (patternResult !== true) return patternResult;
             }
 
-            const openedAtMs = _toMs(codeData.openedAt);
-            const OFFLINE_WINDOW_MS = 25_000;
-            const offlineDeadline = openedAtMs + OFFLINE_WINDOW_MS;
-            const LOOSE_DRIFT = 4000;
-            const submitted = entry.submissionTime;
-
-            if (submitted < (openedAtMs - LOOSE_DRIFT) ||
-                submitted > (offlineDeadline + LOOSE_DRIFT)) {
+            if (!_isWithinOfflineWindow(entry, codeData)) {
                 log('warn', 'Offline window exceeded — must register in first 25s');
                 offlineAlert(t("❌ فشل: لازم تسجل في أول 25 ثانية", "❌ Failed: Must register within first 25 seconds"));
                 return false;
@@ -790,7 +963,7 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, Tim
 
             try {
                 sessionSnap = await getDoc(sessionRef);
-            } catch (e) {
+            } catch {
                 log('warn', 'Failed to verify session status due to network.');
                 return 'retry';
             }
@@ -802,152 +975,11 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, Tim
 
             const sessionData = sessionSnap.data();
 
-            // ❌ السطور دي لازم تتشال لأنها بتعمل Overwrite لحالة الجلسة الحقيقية
-            /* 
-            if (sessionData.sessionCode && sessionData.sessionCode !== entry.sessionPin) {
-                sessionData.isActive = false; 
-            }
-            */
-
             if (sessionData.isActive === false) {
-                log('info', 'Session closed — verifying via secure backend.');
-
-                try {
-                    const currentUser = window.auth?.currentUser;
-                    if (!currentUser) return 'retry';
-                    const idToken = await currentUser.getIdToken(true);
-
-                    let syncSignal;
-                    let syncTimeoutId;
-                    if (window.AbortController) {
-                        const syncController = new AbortController();
-                        syncTimeoutId = setTimeout(() => syncController.abort(), 8000);
-                        syncSignal = syncController.signal;
-                    }
-
-                    const syncOptions = {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${idToken}`
-                        },
-                        body: JSON.stringify({
-                            sessionPin: entry.sessionPin,
-                            submissionTime: entry.submissionTime
-                        })
-                    };
-                    if (syncSignal) syncOptions.signal = syncSignal;
-
-                    const syncRes = await fetch(
-                        'https://nursing-backend-2.vercel.app/api/syncPostSessionAttendance',
-                        syncOptions
-                    );
-                    if (syncTimeoutId) clearTimeout(syncTimeoutId);
-
-                    if (syncRes.status >= 500) return 'retry';
-
-                    if (syncRes.status === 401 || syncRes.status === 403) {
-                        log('warn', `Auth rejected post-session sync (status ${syncRes.status}) — retrying`);
-                        return 'retry';
-                    }
-
-                    if (!syncRes.ok) {
-                        const errData = await syncRes.json().catch(() => ({}));
-                        log('warn', `Post-session sync rejected: ${errData.error || syncRes.status}`);
-                        offlineAlert(t(
-                            `❌ فشل تسجيل الحضور: ${errData.error || 'خطأ غير معروف'}`,
-                            `❌ Attendance failed: ${errData.error || 'Unknown error'}`
-                        ), 'error');
-                        quarantineEntry({ ...entry, quarantineReason: errData.error || 'post-session-rejected' });
-                        return false;
-                    }
-
-                    offlineAlert(t(`✅ تم تسجيل حضورك (الجلسة كانت مغلقة)`, `✅ Attendance recorded (session was closed)`), 'success');
-                    beep();
-                    log('info', `✅ Post-session offline sync complete via backend: ${entry.sessionPin}`);
-
-                    window.dispatchEvent(new CustomEvent('attendanceSynced', {
-                        detail: { studentID: entry.studentID, sessionPin: entry.sessionPin, postSession: true }
-                    }));
-
-                    return true;
-
-                } catch (netErr) {
-                    log('warn', `Post-session sync network error: ${netErr.message}`);
-                    return 'retry';
-                }
+                return await _syncPostSessionAttendance(entry, doctorUID);
             }
 
-            try {
-                const currentUser = window.auth?.currentUser;
-                if (!currentUser) return 'retry';
-                const idToken = await currentUser.getIdToken(true);
-
-                let liveSignal;
-                let liveTimeoutId;
-                if (window.AbortController) {
-                    const liveController = new AbortController();
-                    liveTimeoutId = setTimeout(() => liveController.abort(), 8000);
-                    liveSignal = liveController.signal;
-                }
-
-                const liveSyncOptions = {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${idToken}`
-                    },
-                    body: JSON.stringify({
-                        sessionPin: entry.sessionPin,
-                        submissionTime: entry.submissionTime,
-                        patternInput: entry.patternInput || null,
-                        offlineVerifyToken: entry.offlineVerifyToken || null
-                    })
-                };
-                if (liveSignal) liveSyncOptions.signal = liveSignal;
-
-                const liveSyncRes = await fetch(
-                    'https://nursing-backend-2.vercel.app/api/syncLiveOfflineAttendance',
-                    liveSyncOptions
-                );
-                if (liveTimeoutId) clearTimeout(liveTimeoutId);
-
-                if (liveSyncRes.status >= 500) return 'retry';
-                if (liveSyncRes.status === 401 || liveSyncRes.status === 403) return 'retry';
-                if (liveSyncRes.status === 409) return 'retry';
-
-                if (!liveSyncRes.ok) {
-                    const errData = await liveSyncRes.json().catch(() => ({}));
-                    log('warn', `Live sync rejected: ${errData.error || liveSyncRes.status}`);
-                    quarantineEntry({ ...entry, quarantineReason: errData.error || 'live-sync-rejected' });
-                    return false;
-                }
-
-                localStorage.setItem('TARGET_DOCTOR_UID', doctorUID);
-                sessionStorage.setItem('TARGET_DOCTOR_UID', doctorUID);
-
-                beep();
-                toast(
-                    t(`✅ تم تأكيد حضورك بنجاح`, `✅ Attendance confirmed`),
-                    4000, "#10b981"
-                );
-
-                if (typeof window.switchScreen === 'function')
-                    window.switchScreen('screenLiveSession');
-                if (typeof window.startLiveSnapshotListener === 'function')
-                    window.startLiveSnapshotListener();
-
-                window.dispatchEvent(new CustomEvent('attendanceSynced', {
-                    detail: { studentID: entry.studentID, sessionPin: entry.sessionPin, postSession: false }
-                }));
-
-                log('info', `✅ Live Sync Complete via backend: ${entry.sessionPin}`);
-                return true;
-
-            } catch (netErr) {
-                log('warn', `Live sync network error: ${netErr.message}`);
-                return 'retry';
-            }
+            return await _syncLiveAttendance(entry, doctorUID);
 
         } catch (err) {
             log('error', `Sync fatal error on attempt ${attempt}:`, err.message);
@@ -959,7 +991,7 @@ async function _syncEntry(entry, { doc, getDoc, writeBatch, serverTimestamp, Tim
                         '❌ Permission error - contact support'),
                     8000, "#ef4444"
                 );
-                quarantineEntry({ ...entry, quarantineReason: 'permission-denied' });
+                await quarantineEntry({ ...entry, quarantineReason: 'permission-denied' });
                 return false;
             }
 
@@ -1086,7 +1118,6 @@ function _runCountdown(seconds, onDone) {
     tick();
 }
 
-
 window.cancelOfflineRegistration = function () {
     if (_countdownTimer) { clearTimeout(_countdownTimer); _countdownTimer = null; }
     const modal = document.getElementById('offlineRegModal');
@@ -1119,7 +1150,8 @@ window.inspectOfflineQueue = async function () {
     }
 
     const queue = await queueLoad();
-    const quarantine = JSON.parse(localStorage.getItem(OA.QUARANTINE_KEY) || '[]');
+    const quarantineRaw = await Store.get(OA.QUARANTINE_KEY);
+    const quarantine = quarantineRaw ? JSON.parse(quarantineRaw) : [];
     const rateInfo = JSON.parse(localStorage.getItem(OA.RATE_KEY) || '{}');
 
     console.table(queue.map(e => ({ ...e, _sig: e._sig ? `${e._sig.slice(0, 12)}…` : 'none' })));
@@ -1129,33 +1161,49 @@ window.inspectOfflineQueue = async function () {
     return { queue, quarantine, rateInfo };
 };
 
+(async function _migrateLegacyQueues() {
+    const uid = _getUidForCrypto();
 
-(async function _migrateFromV2() {
-    const OLD_KEY = "nursing_offline_queue_v2";
-    const raw = localStorage.getItem(OLD_KEY);
-    if (!raw) return;
-
-    const existing = await queueLoad();
-    if (existing.length > 0) {
-        localStorage.removeItem(OLD_KEY);
-        return;
-    }
-
+    const V3_KEY = "nursing_offline_queue_v3";
     try {
-        const decoded = decodeURIComponent(escape(atob(raw)));
-        const oldQueue = JSON.parse(decoded);
-
-        if (Array.isArray(oldQueue) && oldQueue.length > 0) {
-            log('info', `Migrating ${oldQueue.length} entries from v2 to v3...`);
-            await queueSave(oldQueue);
-            log('info', 'Migration complete.');
+        const v3Raw = localStorage.getItem(V3_KEY);
+        if (v3Raw) {
+            const existing = await queueLoad();
+            if (existing.length === 0) {
+                const decoded = await _decryptQueue(v3Raw, uid);
+                if (Array.isArray(decoded) && decoded.length > 0) {
+                    log('info', `Migrating ${decoded.length} entries from v3 to v4...`);
+                    await queueSave(decoded);
+                    log('info', 'v3 -> v4 migration complete.');
+                }
+            }
+            localStorage.removeItem(V3_KEY);
         }
     } catch {
-        log('warn', 'Failed to migrate v2 queue. Starting fresh.');
+        log('warn', 'v3 -> v4 queue migration failed.');
     }
 
-    localStorage.removeItem(OLD_KEY);
+    const V2_KEY = "nursing_offline_queue_v2";
+    try {
+        const v2Raw = localStorage.getItem(V2_KEY);
+        if (v2Raw) {
+            const existing = await queueLoad();
+            if (existing.length === 0) {
+                const decoded = _b64ToUtf8(v2Raw);
+                const oldQueue = JSON.parse(decoded);
+                if (Array.isArray(oldQueue) && oldQueue.length > 0) {
+                    log('info', `Migrating ${oldQueue.length} entries from v2 to v4...`);
+                    await queueSave(oldQueue);
+                    log('info', 'v2 -> v4 migration complete.');
+                }
+            }
+            localStorage.removeItem(V2_KEY);
+        }
+    } catch {
+        log('warn', 'v2 -> v4 queue migration failed.');
+    }
 })();
+
 function offlineAlert(msg, type = 'error') {
     const modal = document.getElementById('offlineAlertModal');
     const msgEl = document.getElementById('offlineAlertMsg');
@@ -1180,6 +1228,7 @@ function offlineAlert(msg, type = 'error') {
 
     modal.style.display = 'flex';
 }
+
 (function initOfflinePattern() {
     'use strict';
 
@@ -1266,9 +1315,39 @@ function offlineAlert(msg, type = 'error') {
     let _savedPattern = null;
     let _resizeTimer = null;
     let _attempts = 0;
+    let _patternListeners = [];
+    let _patternResizeObserver = null;
+    let _patternMutationObserver = null;
 
     const _lang = () => localStorage.getItem('sys_lang') || 'ar';
     const _t = (ar, en) => _lang() === 'ar' ? ar : en;
+
+    function _addPatternListener(target, type, handler, options) {
+        target.addEventListener(type, handler, options);
+        _patternListeners.push({ target, type, handler, options });
+    }
+
+    function _detachEvents() {
+        for (const { target, type, handler, options } of _patternListeners) {
+            target.removeEventListener(type, handler, options);
+        }
+        _patternListeners = [];
+    }
+
+    function _teardownPatternModal() {
+        _detachEvents();
+        _patternResizeObserver?.disconnect();
+        _patternResizeObserver = null;
+        _patternMutationObserver?.disconnect();
+        _patternMutationObserver = null;
+        clearInterval(_timerTick);
+    }
+
+    function _closePatternModal() {
+        _teardownPatternModal();
+        const modal = document.getElementById('offlinePatternModal');
+        if (modal) modal.style.display = 'none';
+    }
 
     function calcPositions() {
         const grid = document.getElementById('offlinePatternGrid');
@@ -1357,7 +1436,7 @@ function offlineAlert(msg, type = 'error') {
             const a = _dotPositions[_path[k]];
             const b = _dotPositions[_path[k + 1]];
             if (a && b) {
-                html += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"
+                html += `<line x1="${Number(a.x)}" y1="${Number(a.y)}" x2="${Number(b.x)}" y2="${Number(b.y)}"
                     stroke="${stroke}" stroke-width="3.5"
                     stroke-linecap="round" opacity="${isError ? 0.7 : 1}"/>`;
             }
@@ -1367,8 +1446,8 @@ function offlineAlert(msg, type = 'error') {
             const last = _dotPositions[_path[_path.length - 1]];
             const gr = document.getElementById('offlinePatternGrid')?.getBoundingClientRect();
             if (last && gr) {
-                html += `<line x1="${last.x}" y1="${last.y}"
-                    x2="${liveX - gr.left}" y2="${liveY - gr.top}"
+                html += `<line x1="${Number(last.x)}" y1="${Number(last.y)}"
+                    x2="${Number(liveX - gr.left)}" y2="${Number(liveY - gr.top)}"
                     stroke="${stroke}" stroke-width="3"
                     stroke-linecap="round" opacity="0.4"
                     stroke-dasharray="6 4"/>`;
@@ -1404,8 +1483,7 @@ function offlineAlert(msg, type = 'error') {
         if (_attempts >= 2) {
             clearInterval(_timerTick);
             setTimeout(() => {
-                const modal = document.getElementById('offlinePatternModal');
-                if (modal) modal.style.display = 'none';
+                _closePatternModal();
 
                 window._pendingOfflineStudent = null;
                 window._pendingOfflinePin = null;
@@ -1431,6 +1509,7 @@ function offlineAlert(msg, type = 'error') {
 
         setTimeout(() => {
             buildGrid();
+            attachEvents();
             if (hint) {
                 hint.style.color = '#f59e0b';
                 hint.innerText = _t(
@@ -1486,37 +1565,43 @@ function offlineAlert(msg, type = 'error') {
         const grid = document.getElementById('offlinePatternGrid');
         if (!grid) return;
 
-        grid.addEventListener('pointerdown', onPointerDown, { passive: false });
-        grid.addEventListener('pointermove', onPointerMove, { passive: false });
-        grid.addEventListener('pointerup', onPointerUp, { passive: false });
-        grid.addEventListener('pointercancel', onPointerUp, { passive: false });
+        _detachEvents();
+
+        _addPatternListener(grid, 'pointerdown', onPointerDown, { passive: false });
+        _addPatternListener(grid, 'pointermove', onPointerMove, { passive: false });
+        _addPatternListener(grid, 'pointerup', onPointerUp, { passive: false });
+        _addPatternListener(grid, 'pointercancel', onPointerUp, { passive: false });
 
         if (!('PointerEvent' in window)) {
-            grid.addEventListener('mousedown', e => onPointerDown({ ...e, pointerId: 'mouse', pointerType: 'mouse' }));
-            grid.addEventListener('mousemove', e => onPointerMove({ ...e, pointerId: 'mouse' }));
-            grid.addEventListener('mouseup', e => onPointerUp({ ...e, pointerId: 'mouse' }));
+            const mouseDown = e => onPointerDown({ ...e, pointerId: 'mouse', pointerType: 'mouse' });
+            const mouseMove = e => onPointerMove({ ...e, pointerId: 'mouse' });
+            const mouseUp = e => onPointerUp({ ...e, pointerId: 'mouse' });
+            _addPatternListener(grid, 'mousedown', mouseDown);
+            _addPatternListener(grid, 'mousemove', mouseMove);
+            _addPatternListener(grid, 'mouseup', mouseUp);
 
-            grid.addEventListener('touchstart', e => {
-                const t = e.touches[0];
+            const touchStart = e => {
+                const touch = e.touches[0];
                 onPointerDown({
-                    clientX: t.clientX, clientY: t.clientY,
-                    pointerId: t.identifier, pointerType: 'touch',
+                    clientX: touch.clientX, clientY: touch.clientY,
+                    pointerId: touch.identifier, pointerType: 'touch',
                     button: 0,
                     preventDefault: () => e.preventDefault(),
                     target: grid
                 });
-            }, { passive: false });
-
-            grid.addEventListener('touchmove', e => {
-                const t = e.touches[0];
+            };
+            const touchMove = e => {
+                const touch = e.touches[0];
                 e.preventDefault();
-                onPointerMove({ clientX: t.clientX, clientY: t.clientY, pointerId: t.identifier });
-            }, { passive: false });
-
-            grid.addEventListener('touchend', e => {
-                const t = e.changedTouches[0];
-                onPointerUp({ clientX: t.clientX, clientY: t.clientY, pointerId: t.identifier });
-            }, { passive: false });
+                onPointerMove({ clientX: touch.clientX, clientY: touch.clientY, pointerId: touch.identifier });
+            };
+            const touchEnd = e => {
+                const touch = e.changedTouches[0];
+                onPointerUp({ clientX: touch.clientX, clientY: touch.clientY, pointerId: touch.identifier });
+            };
+            _addPatternListener(grid, 'touchstart', touchStart, { passive: false });
+            _addPatternListener(grid, 'touchmove', touchMove, { passive: false });
+            _addPatternListener(grid, 'touchend', touchEnd, { passive: false });
         }
     }
 
@@ -1525,34 +1610,38 @@ function offlineAlert(msg, type = 'error') {
         if (!grid) return;
 
         if ('ResizeObserver' in window) {
-            new ResizeObserver(() => {
+            _patternResizeObserver?.disconnect();
+            _patternResizeObserver = new ResizeObserver(() => {
                 clearTimeout(_resizeTimer);
                 _resizeTimer = setTimeout(calcPositions, 100);
-            }).observe(grid);
+            });
+            _patternResizeObserver.observe(grid);
         }
 
-        window.addEventListener('resize', () => {
+        const onResize = () => {
             clearTimeout(_resizeTimer);
             _resizeTimer = setTimeout(calcPositions, 100);
-        });
+        };
+        const onOrientation = () => setTimeout(calcPositions, 300);
 
-        window.addEventListener('orientationchange', () => {
-            setTimeout(calcPositions, 300);
-        });
+        _addPatternListener(window, 'resize', onResize);
+        _addPatternListener(window, 'orientationchange', onOrientation);
     }
 
     function watchMutations() {
         const grid = document.getElementById('offlinePatternGrid');
         if (!grid || !('MutationObserver' in window)) return;
 
-        new MutationObserver(mutations => {
+        _patternMutationObserver?.disconnect();
+        _patternMutationObserver = new MutationObserver(mutations => {
             for (const m of mutations) {
                 if (m.type === 'childList' && m.addedNodes.length > 0) {
                     requestAnimationFrame(() => requestAnimationFrame(calcPositions));
                     break;
                 }
             }
-        }).observe(grid, { childList: true, subtree: true });
+        });
+        _patternMutationObserver.observe(grid, { childList: true, subtree: true });
     }
 
     function startTimer() {
@@ -1565,8 +1654,7 @@ function offlineAlert(msg, type = 'error') {
             if (remaining <= 5 && timerEl) timerEl.style.color = '#ef4444';
             if (remaining <= 0) {
                 clearInterval(_timerTick);
-                const modal = document.getElementById('offlinePatternModal');
-                if (modal) modal.style.display = 'none';
+                _closePatternModal();
                 if (typeof offlineAlert === 'function') {
                     offlineAlert(_t('⏰ انتهى وقت رسم النمط', '⏰ Pattern time expired'), 'warning');
                 }
@@ -1586,7 +1674,7 @@ function offlineAlert(msg, type = 'error') {
 
         if (!navigator.onLine) {
             _savedPattern = JSON.stringify({ type: 'pattern', path: _path });
-            window._offlineVerifyToken = `OFFLINE_VERIFIED_${Date.now()}`;
+            window._offlineVerifyToken = null;
             clearInterval(_timerTick);
             _continueAfterPattern(student, pin);
             return;
@@ -1600,7 +1688,6 @@ function offlineAlert(msg, type = 'error') {
 
             const verifyRes = await fetch(
                 'https://nursing-backend-2.vercel.app/api/verifyOfflinePattern',
-
                 {
                     method: 'POST',
                     headers: {
@@ -1619,9 +1706,7 @@ function offlineAlert(msg, type = 'error') {
             if (!verifyRes.ok) {
                 showError(verifyData.error || _t('❌ النمط غير صحيح', '❌ Wrong pattern'));
                 if (verifyData.attemptsLeft === 0) {
-                    setTimeout(() => {
-                        document.getElementById('offlinePatternModal').style.display = 'none';
-                    }, 900);
+                    setTimeout(() => _closePatternModal(), 900);
                 }
                 return;
             }
@@ -1632,7 +1717,7 @@ function offlineAlert(msg, type = 'error') {
 
         } catch (e) {
             _savedPattern = JSON.stringify({ type: 'pattern', path: _path });
-            window._offlineVerifyToken = `OFFLINE_VERIFIED_${Date.now()}`;
+            window._offlineVerifyToken = null;
             clearInterval(_timerTick);
             _continueAfterPattern(student, pin);
         }
@@ -1646,8 +1731,7 @@ function offlineAlert(msg, type = 'error') {
         if (thumb) thumb.style.left = '24px';
         if (icon) { icon.className = 'fa-solid fa-lock-open'; icon.style.color = '#10b981'; }
 
-        const modal = document.getElementById('offlinePatternModal');
-        if (modal) modal.style.display = 'none';
+        _closePatternModal();
 
         window._pendingOfflineStudent = null;
         window._pendingOfflinePin = null;
@@ -1687,7 +1771,6 @@ function offlineAlert(msg, type = 'error') {
     };
 
     window.skipOfflinePattern = function () {
-        clearInterval(_timerTick);
         _savedPattern = null;
         _attempts = 0;
         window._pendingOfflineStudent = null;
@@ -1700,8 +1783,7 @@ function offlineAlert(msg, type = 'error') {
         if (thumb) thumb.style.left = '1px';
         if (icon) { icon.className = 'fa-solid fa-lock'; icon.style.color = '#94a3b8'; }
 
-        const modal = document.getElementById('offlinePatternModal');
-        if (modal) modal.style.display = 'none';
+        _closePatternModal();
     };
 
     window.getOfflinePattern = function () {
