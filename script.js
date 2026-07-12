@@ -36,6 +36,7 @@ const CFG = Object.freeze({
     },
     api: {
         base: 'https://nursing-backend-rej8.vercel.app',
+        joinSession: 'https://joinsessionsecure-ymczwvp73q-ew.a.run.app',
     },
     firebase: {
         excludedUID: 'R78Lu7IZBpYK0WngcaSL6t1Our62',
@@ -1689,14 +1690,22 @@ const SessionManager = (() => {
                 gpsData,
             });
 
-            const res = await fetch(`${CFG.api.base}/joinSessionSecure`, {
+
+            const res = await fetch(CFG.api.joinSession, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`
+                },
                 body: JSON.stringify({
-                    studentUID: user.uid, sessionDocID: doctorUID,
-                    gpsLat: gpsData.lat || 0, gpsLng: gpsData.lng || 0,
-                    deviceFingerprint, isDeviceMatch, codeInput: sessionData.sessionCode,
-                    patternPath: window._currentPatternPath || [], // ✅
+                    studentUID: user.uid,
+                    sessionDocID: doctorUID,
+                    gpsLat: gpsData.lat || 0,
+                    gpsLng: gpsData.lng || 0,
+                    deviceFingerprint,
+                    isDeviceMatch,
+                    codeInput: sessionData.sessionCode,
+                    patternPath: window._currentPatternPath || [],
                 }),
             });
             const result = await res.json();
