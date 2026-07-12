@@ -1689,9 +1689,12 @@ const SessionManager = (() => {
                 gpsData,
             });
 
-            const res = await fetch(`${CFG.api.base}/joinSessionSecure`, {
+            const res = await fetch(`https://joinsessionsecure-ymczwwp73q-ew.a.run.app`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`
+                },
                 body: JSON.stringify({
                     studentUID: user.uid, sessionDocID: doctorUID,
                     gpsLat: gpsData.lat || 0, gpsLng: gpsData.lng || 0,
