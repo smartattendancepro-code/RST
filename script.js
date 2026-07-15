@@ -1580,7 +1580,7 @@ const SessionManager = (() => {
 
             if (sessionData.startTime) {
                 const doorOpenMs = sessionData.startTime.toMillis();
-                const codeDeadlineMs = doorOpenMs + 12_000;
+                const codeDeadlineMs = doorOpenMs + 9_000;
                 const entryStarted = window._codeEntryStarted;
 
                 if (!entryStarted || entryStarted > codeDeadlineMs) {
