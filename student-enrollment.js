@@ -10,9 +10,12 @@ let openSubjectsCache = [];
 let _cacheTimestamp = 0;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
+let advisorInfoCache = null;
+let _advisorListenerAttached = false;
+
+let _listenerAttached = false;
 let _notifierReady = false;
 let _notifierReadyCbs = [];
-let _listenerAttached = false;
 let _clickHandlerAttached = false;
 
 window.enrollmentNotifierUnsubscribe = null;
@@ -257,6 +260,143 @@ async function fetchOpenSubjects(college) {
     _cacheTimestamp = Date.now();
     return openSubjectsCache;
 }
+
+function initAdvisorInfoListener(uid) {
+    if (_advisorListenerAttached) return;
+    _advisorListenerAttached = true;
+
+    const q = query(
+        collection(db, "advising_students"),
+        where("studentUID", "==", uid)
+    );
+
+    onSnapshot(q, snap => {
+        if (snap.empty) {
+            advisorInfoCache = null;
+            const modal = document.getElementById('studentEnrollmentModal');
+            if (modal && modal.style.display === 'flex') renderAdvisorInfoCard();
+            return;
+        }
+
+        const data = snap.docs[0].data();
+        advisorInfoCache = {
+            doctorName: data.doctorName || null,
+            doctorUID: data.doctorUID || null,
+            doctorWhatsapp: advisorInfoCache?.doctorWhatsapp || null,
+            courses: data.courses || []
+        };
+
+        const modal = document.getElementById('studentEnrollmentModal');
+        if (modal && modal.style.display === 'flex') renderAdvisorInfoCard();
+
+        if (data.doctorUID) initDoctorContactListener(data.doctorUID);
+
+    }, err => {
+        console.warn("⚠️ [AdvisorInfo] تعذر تحميل بيانات المرشد:", err.message);
+        _advisorListenerAttached = false;
+    });
+}
+
+let _contactListenerAttached = false;
+let _contactListenerDoctorUID = null;
+
+function initDoctorContactListener(doctorUID) {
+    if (_contactListenerAttached && _contactListenerDoctorUID === doctorUID) return;
+    _contactListenerAttached = true;
+    _contactListenerDoctorUID = doctorUID;
+
+    onSnapshot(doc(db, "doctor_contacts", doctorUID), snap => {
+        if (advisorInfoCache) {
+            advisorInfoCache.doctorWhatsapp = snap.exists() ? (snap.data().whatsapp || null) : null;
+            const modal = document.getElementById('studentEnrollmentModal');
+            if (modal && modal.style.display === 'flex') renderAdvisorInfoCard();
+        }
+    }, err => {
+        console.warn("⚠️ [DoctorContact] تعذر تحميل رقم الواتس:", err.message);
+        _contactListenerAttached = false;
+    });
+
+}
+function _onWaClick(e) {
+    const btn = e.target.closest('.se-whatsapp-btn');
+    if (!btn) return;
+    const number = btn.dataset.wa;
+    if (!number) {
+        showToast?.("⚠️ الدكتور لا يسمح بالتواصل حالياً", 3000, "#ef4444");
+        return;
+    }
+    window.open(`https://wa.me/${number}`, '_blank');
+}
+function renderAdvisorInfoCard() {
+    const container = document.getElementById('studentEnrollmentListContainer');
+    if (!container) return;
+
+    let card = document.getElementById('seAdvisorInfoCard');
+
+    if (!advisorInfoCache) {
+        card?.remove();
+
+        if (!document.getElementById('seNoAdvisorMsg')) {
+            container.insertAdjacentHTML('afterbegin', `
+                <div id="seNoAdvisorMsg" style="
+                    background:#fef2f2;border:1.5px solid #fecaca;border-radius:16px;
+                    padding:14px 16px;margin-bottom:14px;text-align:center;
+                ">
+                    <i class="fa-solid fa-user-slash" style="color:#ef4444;font-size:16px;margin-bottom:6px;display:block;"></i>
+                    <span style="font-size:12px;font-weight:800;color:#b91c1c;">ليس لديك مرشد أكاديمي حالياً</span>
+                </div>`);
+        }
+        return;
+    }
+
+    const { doctorName, doctorWhatsapp, courses } = advisorInfoCache;
+    document.getElementById('seNoAdvisorMsg')?.remove();
+
+    const coursesHtml = courses.length
+        ? courses.map(c => `
+            <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#334155;padding:4px 0;">
+                <i class="fa-solid fa-circle-check" style="color:#10b981;font-size:11px;"></i>
+                ${escapeHtml(c.name)}
+            </div>`).join('')
+        : '';
+    const html = `
+        <div id="seAdvisorInfoCard" style="
+            background:#f0fdf4;border:1.5px solid #a7f3d0;border-radius:16px;
+            padding:14px 16px;margin-bottom:14px;
+        ">
+           <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;direction:ltr;justify-content:flex-start;">
+                <i class="fa-solid fa-user-tie" style="color:#059669;font-size:13px;"></i>
+<span style="font-size:12px;font-weight:800;color:#059669;">
+                    Academic Advisor: ${doctorName ? escapeHtml(doctorName) : '—'}
+                </span>
+                <button class="se-whatsapp-btn"
+                    data-wa="${doctorWhatsapp ? escapeHtml(doctorWhatsapp) : ''}"
+                    title="${doctorWhatsapp ? 'تواصل عبر واتساب' : 'التواصل غير متاح'}"
+                    style="
+                        margin-inline-start:auto; width:26px; height:26px; border:none; border-radius:8px;
+                        display:flex; align-items:center; justify-content:center; cursor:pointer;
+                        background:${doctorWhatsapp ? '#25D366' : '#ef4444'}; color:#fff; font-size:13px;
+                        box-shadow:0 2px 6px rgba(0,0,0,.15);
+                    ">
+                    <i class="fa-brands fa-whatsapp"></i>
+                </button>
+            </div>
+            <div style="border-top:1px dashed #a7f3d0;padding-top:8px;">
+                ${coursesHtml}
+            </div>
+        </div>`;
+
+    if (card) {
+        card.outerHTML = html;
+    } else {
+        container.insertAdjacentHTML('afterbegin', html);
+    }
+
+    if (!container._waHandlerAttached) {
+        container.addEventListener('click', _onWaClick);
+        container._waHandlerAttached = true;
+    }
+}
 window.initStudentEnrollmentNotifier = async function () {
     const user = window.auth?.currentUser;
     if (!user) return;
@@ -339,6 +479,8 @@ window.openStudentEnrollmentModal = async function () {
             currentStudentData = data;
         }
 
+        initAdvisorInfoListener(user.uid);
+
         if (isCacheValid()) {
             renderSubjects(container);
             return;
@@ -374,7 +516,9 @@ window.closeStudentEnrollmentModal = function () {
 
 function renderSubjects(container) {
     if (!openSubjectsCache.length) {
-        container.innerHTML = `
+        container.innerHTML = '';
+        renderAdvisorInfoCard();
+        container.innerHTML += `
             <div class="se-empty">
                 <span class="se-empty-emoji">☕</span>
                 <div class="se-empty-title">لا توجد مواد متاحة حالياً</div>
@@ -443,6 +587,7 @@ function renderSubjects(container) {
     });
 
     container.innerHTML = html;
+    renderAdvisorInfoCard();
     if (!_clickHandlerAttached) {
         container.addEventListener('click', _onEnrollClick);
         _clickHandlerAttached = true;
