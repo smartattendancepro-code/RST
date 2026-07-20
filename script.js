@@ -265,7 +265,25 @@ const Utils = (() => {
 
     const lang = () => localStorage.getItem('sys_lang') || 'ar';
 
-    return { hashString, debounce, haversineKm, smartNormalize, safeJsonParse, $, _t, lang };
+    function smoothScrollTo(target, duration = 900) {
+        if (!target) return;
+        const startY = window.scrollY || window.pageYOffset;
+        const rect = target.getBoundingClientRect();
+        const targetY = startY + rect.top - Math.max((window.innerHeight - rect.height) / 2, 0);
+        const distance = targetY - startY;
+        const startTime = performance.now();
+
+        function easeInOutQuad(t) { return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; }
+
+        function step(now) {
+            const progress = Math.min((now - startTime) / duration, 1);
+            window.scrollTo(0, startY + distance * easeInOutQuad(progress));
+            if (progress < 1) requestAnimationFrame(step);
+        }
+        requestAnimationFrame(step);
+    }
+
+    return { hashString, debounce, haversineKm, smartNormalize, safeJsonParse, $, _t, lang, smoothScrollTo };
 })();
 
 
@@ -2803,7 +2821,10 @@ window.onload = () => {
             if (e.target.value.length === 0) {
                 window._codeEntryStarted = null;
             }
-            if (e.target.value.trim().length === 6) SessionManager.searchForSession();
+            if (e.target.value.trim().length === 6) {
+                e.target.blur(); 
+                SessionManager.searchForSession();
+            }
         });
     }
 
@@ -3271,6 +3292,8 @@ document.addEventListener('DOMContentLoaded', () => {
             watchResize();
             watchMutations();
         });
+
+        setTimeout(() => Utils.smoothScrollTo(container, 900), 300);
     };
 
     if (document.getElementById('patternGrid')) {
