@@ -10,6 +10,7 @@ import { applyVipTheme } from './VipThemeManager.js';
 const db = window.db;
 const auth = window.auth;
 
+const SPECIAL_STUDENT_UID = "HaGTkumxmYbwsi7C99xt6QWh1762";
 
 window.startLiveSnapshotListener = async function () {
     const user = auth.currentUser;
@@ -170,20 +171,55 @@ window.startLiveSnapshotListener = async function () {
             let statusColor = isLeft ? "#94a3b8" : (s.isUnruly ? "#ef4444" : (s.isUniformViolation ? "#f97316" : "#10b981"));
             let statusText = isLeft ? "مغادر" : (s.isUnruly ? "مشاغب" : (s.isUniformViolation ? "مخالف" : "حاضر"));
 
+            const isSpecialStudent = s.uid === SPECIAL_STUDENT_UID;
+
             const card = document.createElement('div');
             card.className = 'live-st-card student-view-card is-me-card';
-            card.style.cssText = `background:white;border-radius:15px;padding:20px;display:flex;flex-direction:column;align-items:center;opacity:${opacityVal};transition:0.3s;width:100%;max-width:320px;margin:0 auto;border:${borderStyle};position:relative;overflow:visible !important;`;
+
+            const specialBg = isSpecialStudent ? '#fff0f6 !important' : 'white';
+            const specialBorder = isSpecialStudent ? '2px solid #f9a8d4 !important' : borderStyle;
+
+            card.style.cssText = `background:${specialBg};border-radius:15px;padding:20px;display:flex;flex-direction:column;align-items:center;opacity:${opacityVal};transition:0.3s;width:100%;max-width:320px;margin:0 auto;border:${specialBorder};position:relative;overflow:visible !important;`;
+
+            const bowBadge = isSpecialStudent
+                ? `<div style="position:absolute;top:-14px;right:-6px;font-size:28px;transform:rotate(15deg);z-index:100;">🎀</div>`
+                : '';
+
+            const avatarBorderColor = isSpecialStudent ? '#f9a8d4 !important' : `${statusColor}`;
+            const meBadgeStyle = isSpecialStudent ? 'background-color:#f9a8d4 !important; color:white !important; border-color:#f9a8d4 !important;' : '';
+
+            const bgWatermark = isSpecialStudent
+                ? `<div style="position:absolute; top:0; left:0; width:100%; height:100%; overflow:hidden; border-radius:15px; z-index:1; pointer-events:none;">
+                       <!-- وردة كبيرة فوق على الشمال -->
+                       <div style="position:absolute; top:-15px; left:-10px; transform:rotate(20deg); font-size:80px; opacity:0.18;">🌸</div>
+                       
+                       <!-- وردة ضخمة تحت على اليمين -->
+                       <div style="position:absolute; bottom:-25px; right:-15px; transform:rotate(-15deg); font-size:110px; opacity:0.15;">🌸</div>
+                       
+                       <!-- وردة صغيرة فوق على اليمين -->
+                       <div style="position:absolute; top:35px; right:15px; transform:rotate(45deg); font-size:50px; opacity:0.2;">🌸</div>
+                       
+                       <!-- وردة متوسطة تحت على الشمال -->
+                       <div style="position:absolute; bottom:25px; left:15px; transform:rotate(-30deg); font-size:65px; opacity:0.18;">🌸</div>
+                       
+                       <!-- وردة كبيرة خفيفة في النص -->
+                       <div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%) rotate(10deg); font-size:130px; opacity:0.1;">🌸</div>
+                   </div>`
+                : '';
+
             card.innerHTML = `
-                <div class="me-badge">أنت</div>
+                ${bgWatermark}
+                <div class="me-badge" style="z-index:2; ${meBadgeStyle}">أنت</div>
+                ${bowBadge}
                 ${countBadge}
-                <div style="width:70px;height:70px;border-radius:50%;background:#f8fafc;border:3.5px solid ${statusColor};display:flex;align-items:center;justify-content:center;font-size:30px;color:#0284c7;margin-bottom:10px;z-index:2;">
+                <div style="position:relative; width:70px; height:70px; border-radius:50%; background:#f8fafc; border:3.5px solid ${avatarBorderColor}; display:flex; align-items:center; justify-content:center; font-size:30px; color:#0284c7; margin-bottom:10px; z-index:2;">
                     <i class="fa-solid ${s.avatarClass || 'fa-user-graduate'}"></i>
                 </div>
-                <div style="text-align:center;">
+                <div style="position:relative; text-align:center; z-index:2;">
                     <div class="st-name notranslate" translate="no" style="font-size:16px;font-weight:900;color:#1e293b;text-align:center;direction:auto;">${s.name}</div>
                     <div class="st-id en-font" style="font-size:12px;color:#64748b;">#${s.id}</div>
                 </div>
-                <div style="margin-top:12px;padding:4px 15px;border-radius:6px;font-size:11px;font-weight:800;border:1px solid ${statusColor}30;background:${statusColor}15;color:${statusColor};">
+                <div style="position:relative; margin-top:12px; padding:4px 15px; border-radius:6px; font-size:11px; font-weight:800; border:1px solid ${statusColor}30; background:${statusColor}15; color:${statusColor}; z-index:2;">
                     ${statusText}
                 </div>`;
 
