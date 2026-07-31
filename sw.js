@@ -1,4 +1,4 @@
-const CACHE_NAME = 'proattend-v9.7';
+const CACHE_NAME = 'proattend-v9.8';
 
 const ASSETS_TO_CACHE = [
   './',
@@ -8,7 +8,6 @@ const ASSETS_TO_CACHE = [
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
-  './icon-badge.png',
   './icon-badge.png',
   './faculty-logo.png'
 ];
