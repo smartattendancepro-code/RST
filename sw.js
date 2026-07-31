@@ -8,7 +8,9 @@ const ASSETS_TO_CACHE = [
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
-  './icon-badge.png'
+  './icon-badge.png',
+  './icon-badge.png',
+  './faculty-logo.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -54,6 +56,7 @@ self.addEventListener('fetch', (event) => {
         })
         .catch(() => {
           console.log('[SW] Network failed, serving from cache');
+          return new Response('', { status: 408, statusText: 'Network error' }); 
         });
       return cachedResponse || networkFetch;
     })
