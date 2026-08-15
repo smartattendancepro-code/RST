@@ -116,9 +116,14 @@ function renderList() {
         groups[date].forEach(item => {
             html += `
                 <div style="background:white; border:1px solid #f1f5f9; border-left:4px solid ${ui.color}; border-radius:12px; padding:12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
-                    <div>
+<div>
 <div style="font-weight:bold; color:#1e293b; font-size:13px;">
     ${item.subject || '---'}
+    ${item.status === "LEFT"
+                    ? `<span style="font-size:10px; background:#fef3c7; color:#d97706; 
+           padding:2px 7px; border-radius:8px; margin-right:6px; font-weight:700;">
+           🚶 مغادر</span>`
+                    : ''}
     ${item.isOfflineSync
                     ? `<span style="font-size:10px; background:#fef3c7; color:#d97706; 
            padding:2px 7px; border-radius:8px; margin-right:6px; font-weight:700;">
@@ -172,29 +177,23 @@ async function getStudentData(studentID, group) {
     const finalData = { attended: [], absent: [] };
     const seen = new Set();
     const targetCol = getCollectionByGroup(group);
-    const collectionsToQuery = [targetCol, 'attendance'];
-    const statuses = ["ATTENDED", "ABSENT"];
+    const collectionsToQuery = [targetCol];
     for (const colName of collectionsToQuery) {
-        for (const status of statuses) {
-            const q = query(
-                collection(window.db, colName),
-                where("id", "==", String(studentID)),
-                where("status", "==", status),
-                orderBy("date", "desc"),
-                limit(CONFIG.RECORDS_LIMIT)
-            );
-            const snap = await getDocs(q);
-            snap.forEach(d => {
-                const item = d.data();
-                const key = getUniqueKey(item);
-                if (!seen.has(key)) {
-                    seen.add(key);
-                    status === "ATTENDED"
-                        ? finalData.attended.push(item)
-                        : finalData.absent.push(item);
-                }
-            });
-        }
+        const q = query(
+            collection(window.db, colName),
+            where("id", "==", String(studentID)),
+            orderBy("date", "desc"),
+            limit(CONFIG.RECORDS_LIMIT)
+        );
+        const snap = await getDocs(q);
+        snap.forEach(d => {
+            const item = d.data();
+            const key = getUniqueKey(item);
+            if (seen.has(key)) return;
+            seen.add(key);
+            if (item.status === "ATTENDED") finalData.attended.push(item);
+            else if (item.status === "ABSENT" || item.status === "LEFT") finalData.absent.push(item);
+        });
     }
 
     finalData.attended.sort((a, b) => parseDate(b.date) - parseDate(a.date));
