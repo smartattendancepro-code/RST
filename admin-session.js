@@ -113,7 +113,7 @@ window.startLiveSnapshotListener = async function () {
 
         const doorStatus = document.getElementById('doorStatusText');
         if (doorStatus) {
-            if (data.sessionCode === "PAUSED") {
+            if (data.sessionCode === "PAUSED" || data.sessionCode === "PAUSING") {
                 doorStatus.innerHTML = '<i class="fa-solid fa-mug-hot fa-bounce"></i> PAUSED';
                 doorStatus.style.color = "#f59e0b";
             } else {
@@ -148,6 +148,16 @@ window.startLiveSnapshotListener = async function () {
 
     window.unsubscribeLiveSnapshot = onSnapshot(q, (snapshot) => {
         if (!grid) return;
+
+        const onBreakDoc = snapshot.docs.find(d => d.data().status === 'on_break');
+        if (onBreakDoc) {
+            if (window.unsubscribeLiveSnapshot) window.unsubscribeLiveSnapshot();
+            if (window.unsubscribeHeaderSession) window.unsubscribeHeaderSession();
+            showToast('☕ الدكتور بدأ استراحة — يمكنك الدخول مرة أخرى بالكود بعد انتهائها', 4000, '#f59e0b');
+            setTimeout(() => { goHome(); location.reload(); }, 1500);
+            return;
+        }
+
         grid.innerHTML = '';
 
         snapshot.forEach((docSnap) => {
