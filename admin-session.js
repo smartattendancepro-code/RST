@@ -140,20 +140,28 @@ window.startLiveSnapshotListener = async function () {
     if (window.unsubscribeHeaderSession) window.unsubscribeHeaderSession();
     window.unsubscribeHeaderSession = onSnapshot(sessionRef, updateSessionHeaderUI);
 
-    /* ── participant card (current user only) ── */
     const participantsRef = collection(db, "active_sessions", targetRoomUID, "participants");
     const q = query(participantsRef, where("uid", "==", user.uid));
 
     if (window.unsubscribeLiveSnapshot) window.unsubscribeLiveSnapshot();
 
-    window.unsubscribeLiveSnapshot = onSnapshot(q, (snapshot) => {
+    window.unsubscribeLiveSnapshot = onSnapshot(q, async (snapshot) => {
         if (!grid) return;
 
         const onBreakDoc = snapshot.docs.find(d => d.data().status === 'on_break');
         if (onBreakDoc) {
             if (window.unsubscribeLiveSnapshot) window.unsubscribeLiveSnapshot();
             if (window.unsubscribeHeaderSession) window.unsubscribeHeaderSession();
-            showToast('☕ الدكتور بدأ استراحة — يمكنك الدخول مرة أخرى بالكود بعد انتهائها', 4000, '#f59e0b');
+            try {
+                if (typeof PersistentStore !== 'undefined' && PersistentStore.removeWithSync) {
+                    await PersistentStore.removeWithSync('TARGET_DOCTOR_UID');
+                }
+            } catch (e) {
+                console.warn('PersistentStore cleanup skipped:', e);
+            }
+            localStorage.removeItem('TARGET_DOCTOR_UID');
+            sessionStorage.removeItem('TARGET_DOCTOR_UID');
+            showToast('☕ الدكتور بدأ استراحة', 4000, '#f59e0b');
             setTimeout(() => { goHome(); location.reload(); }, 1500);
             return;
         }
