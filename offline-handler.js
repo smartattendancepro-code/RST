@@ -604,6 +604,11 @@ function _reportSyncOutcome({ successCount, remainingCount, quarantineCount }) {
             ),
             8000, "#ef4444"
         );
+    } else if (successCount === 0 && remainingCount === 0 && quarantineCount === 0) {
+        toast(
+            t(`✅ تمت المزامنة`, `✅ Sync complete`),
+            3000, "#64748b"
+        );
     }
 }
 function _verifyPattern(entryPatternRaw, sessionPasswordRaw) {
@@ -638,232 +643,49 @@ function _verifyPattern(entryPatternRaw, sessionPasswordRaw) {
 }
 
 function _timeoutSignal(ms) {
-    if (!window.AbortController) return { signal: undefined, cancel: () => {} };
+    if (!window.AbortController) return { signal: undefined, cancel: () => { } };
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), ms);
     return { signal: controller.signal, cancel: () => clearTimeout(id) };
 }
 
-function _isWithinOfflineWindow(entry, codeData) {
-    const openedAtMs = _toMs(codeData.openedAt);
-    const OFFLINE_WINDOW_MS = 25_000;
-    const LOOSE_DRIFT = 4000;
-    const offlineDeadline = openedAtMs + OFFLINE_WINDOW_MS;
-    const submitted = entry.submissionTime;
-    return submitted >= (openedAtMs - LOOSE_DRIFT) && submitted <= (offlineDeadline + LOOSE_DRIFT);
-}
 
-async function _resolvePatternVerification(entry, { doc, getDoc, db, user }) {
-    if (!entry.patternInput) {
-        log('warn', `Missing pattern data | PIN: ${entry.sessionPin}`);
-        offlineAlert(t(
-            `❌ فشل تسجيل الحضور (${entry.sessionPin}) — هذه الجلسة تتطلب نمط دخول ولم تقم برسمه.`,
-            `❌ Attendance failed (${entry.sessionPin}) — this session required a pattern which you did not draw.`
-        ), 'error');
-        await quarantineEntry({ ...entry, quarantineReason: 'missing-pattern-data' });
-        return false;
-    }
 
-    if (entry.offlineVerifyToken) {
+async function _syncEntry(entry, { user }) {
+    for (let attempt = 1; attempt <= OA.MAX_RETRIES; attempt++) {
         try {
-            const tokenRef = doc(db, "pattern_tokens", `${user.uid}_${entry.sessionPin}`);
-            const tokenSnap = await getDoc(tokenRef);
+            const result = await _syncEntryUnified(entry, user);
+            if (result !== 'retry') return result;
+        } catch (err) {
+            log('error', `Sync fatal error on attempt ${attempt}:`, err.message);
+        }
 
-            if (tokenSnap.exists()) {
-                const tokenData = tokenSnap.data();
-                const notExpired = _toMs(tokenData.expiresAt) > entry.submissionTime;
-
-                if (tokenData.token === entry.offlineVerifyToken && notExpired) {
-                    log('info', `✅ Pattern pre-verified via Firestore token | PIN: ${entry.sessionPin}`);
-                    return true;
-                }
-            }
-        } catch (e) {
-            log('warn', `pattern_tokens read failed, falling back to API: ${e.message}`);
+        if (attempt < OA.MAX_RETRIES) {
+            await _sleep(OA.RETRY_BASE_MS * Math.pow(2, attempt - 1));
         }
     }
-
-    return await _verifyPatternViaApi(entry, user);
+    return 'retry';
 }
 
-/** Authoritative pattern check against the backend. */
-async function _verifyPatternViaApi(entry, user) {
-    try {
-        const currentUser = window.auth?.currentUser;
-        if (!currentUser) return 'retry';
-
-        const idToken = await currentUser.getIdToken(true);
-
-        let savedPath;
-        try {
-            savedPath = JSON.parse(entry.patternInput);
-        } catch {
-            savedPath = null;
-        }
-
-        if (!savedPath?.path || !Array.isArray(savedPath.path)) {
-            offlineAlert(
-                t('❌ بيانات النمط تالفة — تم رفض التسجيل', '❌ Corrupted pattern data — registration rejected'),
-                'error'
-            );
-            await quarantineEntry({ ...entry, quarantineReason: 'invalid-pattern-format' });
-            return false;
-        }
-
-        const { signal, cancel } = _timeoutSignal(8000);
-        let verifyRes;
-        try {
-            verifyRes = await fetch(
-                'https://nursing-backend-2.vercel.app/api/verifyOfflinePattern',
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${idToken}`
-                    },
-                    body: JSON.stringify({ sessionPin: entry.sessionPin, patternPath: savedPath.path }),
-                    ...(signal ? { signal } : {})
-                }
-            );
-        } finally {
-            cancel();
-        }
-
-        if (verifyRes.status === 401) {
-            log('warn', `Token expired during pattern verify (PIN: ${entry.sessionPin}) — retrying`);
-            return 'retry';
-        }
-
-        if (verifyRes.status === 429) {
-            log('warn', `Rate limited on pattern verify (PIN: ${entry.sessionPin}) — retrying later`);
-            offlineAlert(
-                t('⛔ تجاوزت عدد المحاولات — سيتم إعادة المحاولة تلقائياً', '⛔ Too many attempts — will retry automatically'),
-                'warning'
-            );
-            return 'retry';
-        }
-
-        if (verifyRes.status === 403) {
-            const errData = await verifyRes.json().catch(() => ({}));
-            log('warn', `Wrong pattern on sync | PIN: ${entry.sessionPin} | ${errData.error || ''}`);
-            offlineAlert(
-                t(
-                    `❌ النمط غير صحيح — تم رفض تسجيل الحضور (${entry.sessionPin})`,
-                    `❌ Wrong pattern — attendance rejected (${entry.sessionPin})`
-                ),
-                'error'
-            );
-            await quarantineEntry({ ...entry, quarantineReason: 'pattern-wrong-on-sync' });
-            return false;
-        }
-
-        if (!verifyRes.ok) {
-            const errData = await verifyRes.json().catch(() => ({}));
-            log('warn', `Pattern verify failed (${verifyRes.status}) | PIN: ${entry.sessionPin} | ${errData.error || ''}`);
-            offlineAlert(
-                t(
-                    `⚠️ خطأ في التحقق من النمط (${verifyRes.status}) — حاول مجدداً`,
-                    `⚠️ Pattern verify error (${verifyRes.status}) — please retry`
-                ),
-                'warning'
-            );
-            return 'retry';
-        }
-
-        const verifyData = await verifyRes.json().catch(() => ({}));
-        if (verifyData?.verifyToken) {
-            entry.offlineVerifyToken = verifyData.verifyToken;
-            entry._sig = await _signEntry(entry, user.uid);
-        }
-
-        log('info', `✅ Pattern verified on sync via API | PIN: ${entry.sessionPin}`);
-        toast(
-            t(`✅ تم التحقق من النمط بنجاح`, `✅ Pattern verified successfully`),
-            3000, "#10b981"
-        );
-        return true;
-
-    } catch (e) {
-        log('warn', `Pattern re-verify network error | PIN: ${entry.sessionPin} | ${e.message}`);
-        offlineAlert(
-            t('⚠️ تعذّر الاتصال للتحقق من النمط — سيتم إعادة المحاولة', '⚠️ Network error during pattern verify — will retry'),
-            'warning'
-        );
-        return 'retry';
-    }
-}
-
-async function _syncPostSessionAttendance(entry, doctorUID) {
-    log('info', 'Session closed — verifying via secure backend.');
+async function _syncEntryUnified(entry, user) {
     try {
         const currentUser = window.auth?.currentUser;
         if (!currentUser) return 'retry';
         const idToken = await currentUser.getIdToken(true);
+
+        let patternPath = null;
+        if (entry.patternInput) {
+            try {
+                const parsed = JSON.parse(entry.patternInput);
+                patternPath = Array.isArray(parsed?.path) ? parsed.path : null;
+            } catch { patternPath = null; }
+        }
 
         const { signal, cancel } = _timeoutSignal(8000);
         let syncRes;
         try {
             syncRes = await fetch(
-                'https://nursing-backend-2.vercel.app/api/syncPostSessionAttendance',
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${idToken}`
-                    },
-                    body: JSON.stringify({ sessionPin: entry.sessionPin, submissionTime: entry.submissionTime }),
-                    ...(signal ? { signal } : {})
-                }
-            );
-        } finally {
-            cancel();
-        }
-
-        if (syncRes.status >= 500) return 'retry';
-
-        if (syncRes.status === 401 || syncRes.status === 403) {
-            log('warn', `Auth rejected post-session sync (status ${syncRes.status}) — retrying`);
-            return 'retry';
-        }
-
-        if (!syncRes.ok) {
-            const errData = await syncRes.json().catch(() => ({}));
-            log('warn', `Post-session sync rejected: ${errData.error || syncRes.status}`);
-            offlineAlert(t(
-                `❌ فشل تسجيل الحضور: ${errData.error || 'خطأ غير معروف'}`,
-                `❌ Attendance failed: ${errData.error || 'Unknown error'}`
-            ), 'error');
-            await quarantineEntry({ ...entry, quarantineReason: errData.error || 'post-session-rejected' });
-            return false;
-        }
-
-        offlineAlert(t(`✅ تم تسجيل حضورك (الجلسة كانت مغلقة)`, `✅ Attendance recorded (session was closed)`), 'success');
-        beep();
-        log('info', `✅ Post-session offline sync complete via backend: ${entry.sessionPin}`);
-
-        window.dispatchEvent(new CustomEvent('attendanceSynced', {
-            detail: { studentID: entry.studentID, sessionPin: entry.sessionPin, postSession: true }
-        }));
-
-        return true;
-
-    } catch (netErr) {
-        log('warn', `Post-session sync network error: ${netErr.message}`);
-        return 'retry';
-    }
-}
-
-async function _syncLiveAttendance(entry, doctorUID) {
-    try {
-        const currentUser = window.auth?.currentUser;
-        if (!currentUser) return 'retry';
-        const idToken = await currentUser.getIdToken(true);
-
-        const { signal, cancel } = _timeoutSignal(8000);
-        let liveSyncRes;
-        try {
-            liveSyncRes = await fetch(
-                'https://nursing-backend-2.vercel.app/api/syncLiveOfflineAttendance',
+                'https://offlinemode.vercel.app/api/syncOfflineAttendance',
                 {
                     method: 'POST',
                     headers: {
@@ -873,8 +695,8 @@ async function _syncLiveAttendance(entry, doctorUID) {
                     body: JSON.stringify({
                         sessionPin: entry.sessionPin,
                         submissionTime: entry.submissionTime,
-                        patternInput: entry.patternInput || null,
-                        offlineVerifyToken: entry.offlineVerifyToken || null
+                        patternPath,
+                        deviceId: entry.deviceId || window.HARDWARE_ID || "DEVICE_OFFLINE"
                     }),
                     ...(signal ? { signal } : {})
                 }
@@ -883,126 +705,77 @@ async function _syncLiveAttendance(entry, doctorUID) {
             cancel();
         }
 
-        if (liveSyncRes.status >= 500) return 'retry';
-        if (liveSyncRes.status === 401 || liveSyncRes.status === 403) return 'retry';
-        if (liveSyncRes.status === 409) return 'retry';
-
-        if (!liveSyncRes.ok) {
-            const errData = await liveSyncRes.json().catch(() => ({}));
-            log('warn', `Live sync rejected: ${errData.error || liveSyncRes.status}`);
-            await quarantineEntry({ ...entry, quarantineReason: errData.error || 'live-sync-rejected' });
+        if (syncRes.status >= 500) return 'retry';
+        if (syncRes.status === 401) {
+            log('warn', 'Token expired during sync — retrying');
+            return 'retry';
+        }
+        if (syncRes.status === 429) {
+            offlineAlert(t('⛔ تجاوزت عدد المحاولات — سيتم إعادة المحاولة تلقائياً', '⛔ Too many attempts — will retry automatically'), 'warning');
+            return 'retry';
+        }
+        if (syncRes.status === 410) {
+            log('warn', `Stale code detected on sync: ${entry.sessionPin}`);
+            offlineAlert(t(
+                `❌ انتهت صلاحية الكود`,
+                `❌ This code has expired`
+            ), 'error');
+            await quarantineEntry({ ...entry, quarantineReason: 'stale-code-410' });
+            return false;
+        }
+        if (syncRes.status === 403) {
+            const errData = await syncRes.json().catch(() => ({}));
+            log('warn', `Sync forbidden: ${errData.error || 'unknown'}`);
+            offlineAlert(t(
+                `❌ فشل تسجيل الحضور (${entry.sessionPin}) — ${errData.error || ''}`,
+                `❌ Attendance failed (${entry.sessionPin}) — ${errData.error || ''}`
+            ), 'error');
+            await quarantineEntry({ ...entry, quarantineReason: errData.error || 'sync-forbidden' });
+            return false;
+        }
+        if (!syncRes.ok) {
+            const errData = await syncRes.json().catch(() => ({}));
+            log('warn', `Sync rejected: ${errData.error || syncRes.status}`);
+            offlineAlert(t(
+                `❌ فشل تسجيل الحضور: ${errData.error || 'خطأ غير معروف'}`,
+                `❌ Attendance failed: ${errData.error || 'Unknown error'}`
+            ), 'error');
+            await quarantineEntry({ ...entry, quarantineReason: errData.error || 'sync-rejected' });
             return false;
         }
 
-        try {
-            localStorage.setItem('TARGET_DOCTOR_UID', doctorUID);
-            sessionStorage.setItem('TARGET_DOCTOR_UID', doctorUID);
-        } catch { /* non-critical UI hint storage */ }
-
-        beep();
-        toast(
-            t(`✅ تم تأكيد حضورك بنجاح`, `✅ Attendance confirmed`),
-            4000, "#10b981"
-        );
-
-        if (typeof window.switchScreen === 'function')
-            window.switchScreen('screenLiveSession');
-        if (typeof window.startLiveSnapshotListener === 'function')
-            window.startLiveSnapshotListener();
-
-        window.dispatchEvent(new CustomEvent('attendanceSynced', {
-            detail: { studentID: entry.studentID, sessionPin: entry.sessionPin, postSession: false }
-        }));
-
-        log('info', `✅ Live Sync Complete via backend: ${entry.sessionPin}`);
+        const data = await syncRes.json().catch(() => ({}));
+        _handleSyncSuccess(entry, data);
         return true;
 
     } catch (netErr) {
-        log('warn', `Live sync network error: ${netErr.message}`);
+        log('warn', `Sync network error: ${netErr.message}`);
         return 'retry';
     }
 }
 
-async function _syncEntry(entry, { doc, getDoc, db, user }) {
-    for (let attempt = 1; attempt <= OA.MAX_RETRIES; attempt++) {
+function _handleSyncSuccess(entry, data) {
+    beep();
+
+    if (data.mode === 'live') {
+        toast(t(`✅ تم تأكيد حضورك بنجاح`, `✅ Attendance confirmed`), 4000, "#10b981");
         try {
-            const codeRef = doc(db, "issued_codes_logs", entry.sessionPin);
-            let codeSnap;
+            localStorage.setItem('TARGET_DOCTOR_UID', data.doctorUID);
+            sessionStorage.setItem('TARGET_DOCTOR_UID', data.doctorUID);
+        } catch { /* non-critical UI hint storage */ }
 
-            try {
-                codeSnap = await getDoc(codeRef);
-            } catch {
-                log('warn', `Network glitch fetching PIN (Attempt ${attempt})`);
-                return 'retry';
-            }
+        if (typeof window.switchScreen === 'function') window.switchScreen('screenLiveSession');
+        if (typeof window.startLiveSnapshotListener === 'function') window.startLiveSnapshotListener();
 
-            if (!codeSnap.exists()) {
-                log('warn', `PIN ${entry.sessionPin} is invalid.`);
-                offlineAlert(t(`❌ كود غير صحيح (${entry.sessionPin})`, `❌ Invalid PIN`));
-                await quarantineEntry(entry);
-                return false;
-            }
-
-            const codeData = codeSnap.data();
-            const doctorUID = codeData.doctorId;
-            const sessionPassword = codeData.sessionPassword || null;
-
-            if (sessionPassword) {
-                const patternResult = await _resolvePatternVerification(entry, { doc, getDoc, db, user });
-                if (patternResult !== true) return patternResult;
-            }
-
-            if (!_isWithinOfflineWindow(entry, codeData)) {
-                log('warn', 'Offline window exceeded — must register in first 25s');
-                offlineAlert(t("❌ فشل: لازم تسجل في أول 25 ثانية", "❌ Failed: Must register within first 25 seconds"));
-                return false;
-            }
-
-            const sessionRef = doc(db, "active_sessions", doctorUID);
-            let sessionSnap;
-
-            try {
-                sessionSnap = await getDoc(sessionRef);
-            } catch {
-                log('warn', 'Failed to verify session status due to network.');
-                return 'retry';
-            }
-
-            if (!sessionSnap.exists()) {
-                log('info', 'Session doc invisible, retrying...');
-                return 'retry';
-            }
-
-            const sessionData = sessionSnap.data();
-
-            if (sessionData.isActive === false) {
-                return await _syncPostSessionAttendance(entry, doctorUID);
-            }
-
-            return await _syncLiveAttendance(entry, doctorUID);
-
-        } catch (err) {
-            log('error', `Sync fatal error on attempt ${attempt}:`, err.message);
-
-            if (err.code === 'permission-denied') {
-                log('critical', 'Firebase Rules blocking write. Quarantining entry.');
-                toast(
-                    t('❌ خطأ في الصلاحيات - تواصل مع الدعم الفني',
-                        '❌ Permission error - contact support'),
-                    8000, "#ef4444"
-                );
-                await quarantineEntry({ ...entry, quarantineReason: 'permission-denied' });
-                return false;
-            }
-
-            if (attempt < OA.MAX_RETRIES) {
-                await _sleep(OA.RETRY_BASE_MS * Math.pow(2, attempt - 1));
-            } else {
-                return 'retry';
-            }
-        }
+    } else {
+        offlineAlert(t(`✅ تم تسجيل حضورك (الجلسة كانت مغلقة)`, `✅ Attendance recorded (session was closed)`), 'success');
     }
-    return 'retry';
+
+    window.dispatchEvent(new CustomEvent('attendanceSynced', {
+        detail: { studentID: entry.studentID, sessionPin: entry.sessionPin, postSession: data.mode !== 'live', recID: data.recID }
+    }));
+
+    log('info', `✅ Sync complete via unified backend: ${entry.sessionPin} (${data.mode})`);
 }
 
 function _toMs(val) {
@@ -1687,7 +1460,7 @@ function offlineAlert(msg, type = 'error') {
             const idToken = await user.getIdToken(true);
 
             const verifyRes = await fetch(
-                'https://nursing-backend-2.vercel.app/api/verifyOfflinePattern',
+                'https://offlinemode.vercel.app/api/verifyOfflinePattern',
                 {
                     method: 'POST',
                     headers: {
@@ -1711,7 +1484,7 @@ function offlineAlert(msg, type = 'error') {
                 return;
             }
             window._offlineVerifyToken = verifyData.verifyToken;
-            _savedPattern = 'VERIFIED';
+            _savedPattern = JSON.stringify({ type: 'pattern', path: _path, preVerified: true });
             clearInterval(_timerTick);
             _continueAfterPattern(student, pin);
 
