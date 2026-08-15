@@ -434,7 +434,13 @@ const UI = (() => {
             btn.style.background = '';
             btn.style.boxShadow = '';
             btn.style.border = '';
-            btn.onclick = () => window.forceOpenPinScreen?.() ?? window.startProcess?.(false);
+            btn.onclick = () => {
+                if (typeof window.forceOpenPinScreen === 'function') {
+                    window.forceOpenPinScreen();
+                } else {
+                    window.startProcess?.(false);
+                }
+            };
         }
     }
 
@@ -1561,6 +1567,8 @@ const SessionManager = (() => {
 
     function _handleBreak() {
         sessionStorage.removeItem('TARGET_DOCTOR_UID');
+        localStorage.removeItem('TARGET_DOCTOR_UID');
+        PersistentStore.removeWithSync('TARGET_DOCTOR_UID').catch(() => { });
         UI.setMainButton('register');
         window.unsubscribeLiveSnapshot?.();
         window.unsubscribeLiveSnapshot = null;
