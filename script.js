@@ -35,7 +35,7 @@ const CFG = Object.freeze({
         pingTimeoutMs: 3_000,
     },
     api: {
-        base: 'https://nursing-backend-rej8.vercel.app', 
+        base: 'https://student2-backend.vercel.app',
         joinSession: 'https://europe-west1-attendance-system-pro-dbdf1.cloudfunctions.net/joinSessionSecureV2',
     },
     firebase: {
