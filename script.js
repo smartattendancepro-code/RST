@@ -2115,6 +2115,15 @@ const ProfileManager = (() => {
 
             const result = await res.json();
 
+            // ⬇️ الجزء الجديد
+            if (res.status === 403) {
+                nameInput.value = result.error || '⛔ باب التسجيل مغلق حالياً';
+                nameInput.style.color = '#ef4444';
+                if (signupBtn) signupBtn.disabled = true;
+                return;
+            }
+            // ⬆️ لحد هنا
+
             if (result.status === 'taken') {
                 nameInput.value = '⚠️ الكود محجوز لحساب آخر';
                 nameInput.style.color = '#ef4444';
