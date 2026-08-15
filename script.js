@@ -35,14 +35,14 @@ const CFG = Object.freeze({
         pingTimeoutMs: 3_000,
     },
     api: {
-        base: 'https://nursing-backend-rej8.vercel.app',
-        joinSession: 'https://joinsessionsecure-ymczwvp73q-ew.a.run.app',
+        base: 'https://nursing-backend-rej8.vercel.app', 
+        joinSession: 'https://europe-west1-attendance-system-pro-dbdf1.cloudfunctions.net/joinSessionSecureV2',
     },
     firebase: {
         excludedUID: 'R78Lu7IZBpYK0WngcaSL6t1Our62',
     },
     ui: {
-        idleTimeoutSec: 10,
+        idleTimeoutSec: 6,
         statsCacheTTL: 900_000,
     },
     avatars: Object.freeze({
@@ -546,7 +546,7 @@ const UI = (() => {
             if (err) err.style.display = isEmailMatch ? 'none' : 'block';
         }
 
-        const isPassLen = pass.length >= 6;
+        const isPassLen = pass.length >= 8;
         const isPassMatch = isPassLen && pass === passConfirm;
         if (passConfirm) {
             setStyle(Utils.$('regPassConfirm'), isPassMatch);
@@ -961,7 +961,7 @@ const AuthManager = (() => {
             setTimeout(() => initPushNotifications(user.uid), 3000);
             setTimeout(() => refreshPushSubscription(user.uid), 5000);
             window.showSmartWelcome?.(name);
-            setTimeout(() => window.checkForPendingSurveys?.(), 2500);
+            window.listenForPendingFeedback?.();
 
             const avatarClass = data.avatarClass || data.registrationInfo?.avatarClass || 'fa-user-graduate';
             if (profileIcon) profileIcon.className = `fa-solid ${avatarClass}`;
@@ -1007,6 +1007,7 @@ const AuthManager = (() => {
 
         sessionStorage.clear();
         DeviceManager.clearVerifiedCache();
+        window.stopFeedbackListener?.();
         if (window.studentStatusListener) { window.studentStatusListener(); window.studentStatusListener = null; }
         if (profileIcon) profileIcon.className = 'fa-solid fa-user-astronaut';
         if (profileWrap) profileWrap.style.background = 'rgba(15, 23, 42, 0.8)';
@@ -1030,8 +1031,8 @@ const AuthManager = (() => {
             UI.showToast(_t('msg_missing_data', '⚠️ بيانات ناقصة! يرجى ملء كل الحقول واختيار الفرقة والنوع'), 3000, '#f59e0b');
             return;
         }
-        if (fields.password.length < 6) {
-            UI.showToast(_t('msg_weak_pass', '⚠️ كلمة المرور ضعيفة (6 أحرف على الأقل)'), 3000, '#f59e0b');
+        if (fields.password.length < 8) {
+            UI.showToast(_t('msg_weak_pass', '⚠️ كلمة المرور يجب أن تكون 8 أحرف على الأقل'), 3000, '#f59e0b');
             return;
         }
 
@@ -1616,7 +1617,7 @@ const SessionManager = (() => {
             //window.stopCodeEntryIdleTimer?.();
             _populateSessionUI(sessionData);
 
-            const noPassword = !sessionData.sessionPassword?.trim();
+            const noPassword = !sessionData.patternEnabled;
             _showStep(2);
             if (noPassword) {
                 setTimeout(() => joinSessionAction(), 300);
@@ -2062,36 +2063,77 @@ const ProfileManager = (() => {
         } catch (e) { UI.showToast('❌ فشل حفظ التغييرات', 3000, '#ef4444'); }
     }
 
-    async function autoFetchName(studentId) {
+    let _autoFetchTimer = null;
+    let _autoFetchSeq = 0;
+
+    function autoFetchName(studentId) {
         const nameInput = Utils.$('regFullName');
         const signupBtn = Utils.$('btnDoSignup');
         if (!nameInput) return;
 
-        nameInput.value = '';
-        nameInput.value = 'جاري التحقق أمنياً...';
         const cleanId = studentId.toString().trim();
-        if (!cleanId || cleanId.length < 4) { nameInput.value = ''; return; }
+        _autoFetchSeq++; // يلغي أي طلب قديم لسه ماشي
 
+        clearTimeout(_autoFetchTimer);
+
+        if (!cleanId || cleanId.length < 4) {
+            nameInput.value = '';
+            nameInput.placeholder = '';
+            nameInput.style.color = '';
+            if (signupBtn) signupBtn.disabled = false;
+            return;
+        }
+
+        nameInput.value = 'جاري التحقق...';
+        nameInput.style.color = '#64748b';
+        if (signupBtn) signupBtn.disabled = true;
+
+        // Debounce: مستنيين الطالب يخلص كتابة قبل ما نبعت للـ Backend
+        _autoFetchTimer = setTimeout(() => _checkStudentIdOnServer(cleanId, _autoFetchSeq), 450);
+    }
+
+    async function _checkStudentIdOnServer(cleanId, requestSeq) {
+        const nameInput = Utils.$('regFullName');
+        const signupBtn = Utils.$('btnDoSignup');
+        if (!nameInput) return;
 
         try {
-            const lockSnap = await getDoc(doc(db, 'taken_student_ids', cleanId));
-            if (lockSnap.exists()) {
-                nameInput.value = '⚠️ الكود محجوز لحساب آخر';
-                nameInput.style.color = '#ef4444';
+            const res = await fetch(`${CFG.api.base}/api/checkStudentId`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ studentId: cleanId }),
+            });
+
+            if (requestSeq !== _autoFetchSeq) return;
+
+            if (res.status === 429) {
+                nameInput.value = '⏳ محاولات كثيرة، انتظر قليلاً';
+                nameInput.style.color = '#f59e0b';
                 if (signupBtn) signupBtn.disabled = true;
                 return;
             }
-            const stdSnap = await getDoc(doc(db, 'students', cleanId));
-            if (stdSnap.exists()) {
-                nameInput.value = stdSnap.data().name;
+
+            const result = await res.json();
+
+            if (result.status === 'taken') {
+                nameInput.value = '⚠️ الكود محجوز لحساب آخر';
+                nameInput.style.color = '#ef4444';
+                if (signupBtn) signupBtn.disabled = true;
+            } else if (result.status === 'ok') {
+                nameInput.value = result.name || '';
                 nameInput.style.color = '#0f172a';
                 nameInput.placeholder = '';
             } else {
                 nameInput.value = '❌ كود غير مسجل';
                 nameInput.style.color = '#b91c1c';
             }
-        } catch { nameInput.value = '⚠️ اعد المحاولة'; }
-        finally { UI.validateSignupForm(); }
+        } catch (e) {
+            if (requestSeq !== _autoFetchSeq) return;
+            nameInput.value = '⚠️ اعد المحاولة';
+            nameInput.style.color = '#f59e0b';
+        } finally {
+            if (requestSeq === _autoFetchSeq) UI.validateSignupForm();
+        }
     }
 
     return { openStudentProfile, openAvatarSelector, saveNewAvatar, autoFetchName };
@@ -2101,6 +2143,51 @@ const ProfileManager = (() => {
 const FeedbackManager = (() => {
     const db = window.db;
     const auth = window.auth;
+    let _pendingCollege = null;
+    let _unsubscribeFeedbackListener = null;
+
+    function listenForPendingFeedback() {
+        const user = auth.currentUser;
+        if (!user || user.uid === CFG.firebase.excludedUID) return;
+
+        _unsubscribeFeedbackListener?.();
+        _unsubscribeFeedbackListener = onSnapshot(
+            doc(db, 'user_registrations', user.uid),
+            async snap => {
+                if (!snap.exists()) return;
+                const pendingInfo = snap.data()?.pendingFeedback;
+                if (!pendingInfo?.attendanceDocId || !pendingInfo?.college) return;
+                await _handlePendingFeedback(pendingInfo, user.uid);
+            },
+            err => console.warn('Feedback listener error:', err)
+        );
+    }
+
+    async function _handlePendingFeedback(pendingInfo, uid) {
+        const docId = pendingInfo.attendanceDocId;
+        const college = pendingInfo.college;
+        const localKey = `fd_${docId}`;
+
+        if (localStorage.getItem(localKey)) {
+            await updateDoc(doc(db, 'user_registrations', uid), { pendingFeedback: null }).catch(() => { });
+            return;
+        }
+
+        try {
+            const attSnap = await getDoc(doc(db, `attendance_${college}`, docId));
+            if (!attSnap.exists() || attSnap.data().feedback_status !== 'pending') {
+                await updateDoc(doc(db, 'user_registrations', uid), { pendingFeedback: null }).catch(() => { });
+                return;
+            }
+            _showFeedbackModal(docId, college, attSnap.data());
+        } catch (e) { console.error('Pending feedback check error:', e); }
+    }
+
+    function stopFeedbackListener() {
+        _unsubscribeFeedbackListener?.();
+        _unsubscribeFeedbackListener = null;
+    }
+
     async function checkForPendingSurveys() {
         const user = auth.currentUser;
         if (!user || user.uid === CFG.firebase.excludedUID) return;
@@ -2110,9 +2197,10 @@ const FeedbackManager = (() => {
             if (!userSnap.exists()) return;
 
             const pendingInfo = userSnap.data()?.pendingFeedback;
-            if (!pendingInfo?.attendanceDocId) return;
+            if (!pendingInfo?.attendanceDocId || !pendingInfo?.college) return;
 
             const docId = pendingInfo.attendanceDocId;
+            const college = pendingInfo.college;
             const localKey = `fd_${docId}`;
 
             if (localStorage.getItem(localKey)) {
@@ -2122,7 +2210,7 @@ const FeedbackManager = (() => {
                 return;
             }
 
-            const attSnap = await getDoc(doc(db, 'attendance', docId));
+            const attSnap = await getDoc(doc(db, `attendance_${college}`, docId));
             if (!attSnap.exists() || attSnap.data().feedback_status !== 'pending') {
                 await updateDoc(doc(db, 'user_registrations', user.uid), {
                     pendingFeedback: null,
@@ -2130,10 +2218,11 @@ const FeedbackManager = (() => {
                 return;
             }
 
-            _showFeedbackModal(docId, attSnap.data());
+            _showFeedbackModal(docId, college, attSnap.data());
         } catch (e) { console.error('Survey check error:', e); }
     }
-    function _showFeedbackModal(docId, data) {
+    function _showFeedbackModal(docId, college, data) {
+        _pendingCollege = college;
         Utils.$('feedbackSubjectName').innerText = data.subject || 'محاضرة';
         Utils.$('feedbackDocName').innerText = data.doctorName || 'الكلية';
         Utils.$('targetAttendanceDocId').value = docId;
@@ -2165,6 +2254,7 @@ const FeedbackManager = (() => {
     }
     async function dismissFeedback() {
         const docId = Utils.$('targetAttendanceDocId')?.value;
+        const college = _pendingCollege;
         UI.closeModal('feedbackModal');
         if (!docId) return;
 
@@ -2178,13 +2268,15 @@ const FeedbackManager = (() => {
             localStorage.setItem(`fd_${docId}`, JSON.stringify({ ts: Date.now() }));
         }
 
-        try {
-            await updateDoc(doc(db, 'attendance', docId), {
-                feedback_status: 'dismissed',
-                dismissed_at: serverTimestamp(),
-            });
-        } catch (e) {
-            console.warn('Dismiss Firestore sync failed — local cache active:', e.code || e.message);
+        if (college) {
+            try {
+                await updateDoc(doc(db, `attendance_${college}`, docId), {
+                    feedback_status: 'dismissed',
+                    dismissed_at: serverTimestamp(),
+                });
+            } catch (e) {
+                console.warn('Dismiss Firestore sync failed — local cache active:', e.code || e.message);
+            }
         }
 
         const user = auth.currentUser;
@@ -2194,6 +2286,7 @@ const FeedbackManager = (() => {
             }).catch(() => { });
         }
 
+        _pendingCollege = null;
         setTimeout(() => checkForPendingSurveys(), 600);
     }
 
@@ -2215,15 +2308,17 @@ const FeedbackManager = (() => {
     async function submitFeedback() {
         const rating = Utils.$('selectedRating')?.value;
         const docId = Utils.$('targetAttendanceDocId')?.value;
+        const college = _pendingCollege;
         const btn = document.querySelector('#feedbackModal .btn-main');
 
         if (!rating || rating === '0') { UI.showToast('⚠️ من فضلك قيم بعدد النجوم', 2000, '#f59e0b'); return; }
+        if (!college) { UI.showToast('⚠️ تعذر تحديد الكلية، أعد فتح التقييم', 2000, '#f59e0b'); return; }
 
         btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> جاري التوثيق...';
         btn.style.pointerEvents = 'none';
 
         try {
-            const attRef = doc(db, 'attendance', docId);
+            const attRef = doc(db, `attendance_${college}`, docId);
             const attSnap = await getDoc(attRef);
             if (!attSnap.exists()) throw new Error('بيانات الحضور غير موجودة');
             const room = attSnap.data();
@@ -2243,29 +2338,9 @@ const FeedbackManager = (() => {
                 }).catch(() => { });
             }
 
-            // ⭐ مزامنة التقييم مع Supabase
-            try {
-                const idToken = await user.getIdToken();
-                await fetch(`${CFG.api.base}/api/syncFeedback`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${idToken}`,
-                    },
-                    body: JSON.stringify({
-                        studentId: room.id,
-                        doctorUID: room.doctorUID,
-                        subject: room.subject,
-                        date: room.date,
-                        rating: parseInt(rating),
-                    }),
-                });
-            } catch (supaErr) {
-                console.warn('Supabase feedback sync skipped:', supaErr);
-            }
-
             try { localStorage.removeItem(`fd_${docId}`); } catch { /* non-critical */ }
 
+            _pendingCollege = null;
             UI.closeModal('feedbackModal');
             UI.showToast('✅ تم وصول تقييمك للإدارة بخصوصية تامة.', 3000, '#10b981');
             setTimeout(() => checkForPendingSurveys(), 1000);
@@ -2278,7 +2353,7 @@ const FeedbackManager = (() => {
         }
     }
 
-    return { checkForPendingSurveys, selectStar, submitFeedback, dismissFeedback };
+    return { checkForPendingSurveys, selectStar, submitFeedback, dismissFeedback, listenForPendingFeedback, stopFeedbackListener };
 })();
 
 const SmartSearch = (() => {
@@ -2570,6 +2645,8 @@ Object.assign(window, {
     selectStar: FeedbackManager.selectStar,
     submitFeedback: FeedbackManager.submitFeedback,
     dismissFeedback: FeedbackManager.dismissFeedback,
+    listenForPendingFeedback: FeedbackManager.listenForPendingFeedback,
+    stopFeedbackListener: FeedbackManager.stopFeedbackListener,
 
     startSmartSearch: SmartSearch.startSmartSearch,
 
@@ -2822,7 +2899,7 @@ window.onload = () => {
                 window._codeEntryStarted = null;
             }
             if (e.target.value.trim().length === 6) {
-                e.target.blur(); 
+                e.target.blur();
                 SessionManager.searchForSession();
             }
         });
