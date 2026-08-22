@@ -601,13 +601,9 @@ function renderSubjects(container) {
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
                 <div style="flex:1;min-width:0;">
                     ${isEnrolled ? `<div class="se-enrolled-label"><i class="fa-solid fa-circle-check"></i> مسجل بنجاح</div>` : ''}
-                    <div style="font-size:14px;font-weight:900;color:#1e293b;line-height:1.45;">
-                        ${escapeHtml(sub.subjectName)}
-                    </div>
-                    <div class="se-doc-tag">
-                        <i class="fa-solid fa-user-tie" style="color:#7c3aed;font-size:10px;"></i>
-                        د. ${escapeHtml(sub.doctorName || "—")}
-                    </div>
+<div style="font-size:14px;font-weight:900;color:#1e293b;line-height:1.45;">
+    ${escapeHtml(sub.subjectName)}
+</div>
                 </div>
                 <div id="action_${escapeHtml(sub.docId)}">
                     ${isEnrolled
