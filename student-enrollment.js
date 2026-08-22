@@ -261,8 +261,8 @@ function isCacheValid() {
 }
 
 async function fetchOpenSubjects(college) {
+    console.log("🔍 [DEBUG] fetchOpenSubjects بدأ — الكلية:", college);
     if (isCacheValid()) return openSubjectsCache;
-
     const openSnap = await getDocs(query(
         collection(db, "subject_enrollments"),
         where("college", "==", college),
@@ -282,6 +282,7 @@ async function fetchOpenSubjects(college) {
 
     openSubjectsCache = [...openSubjects, ...enrolledButClosed.filter(Boolean)];
     _cacheTimestamp = Date.now();
+    console.log("✅ [DEBUG] fetchOpenSubjects خلص، عدد المواد:", openSubjectsCache.length);
     return openSubjectsCache;
 }
 
@@ -422,6 +423,7 @@ function renderAdvisorInfoCard() {
     }
 }
 window.initStudentEnrollmentNotifier = async function () {
+    console.log("🔔 [DEBUG] initStudentEnrollmentNotifier بدأ التنفيذ");
     const user = window.auth?.currentUser;
     if (!user) return;
 
@@ -451,6 +453,11 @@ window.initStudentEnrollmentNotifier = async function () {
                 await fetchOpenSubjects(college);
             } catch (e) {
                 console.warn("⚠️ [Notifier] فشل تحديث الكاش:", e.message);
+                if (!_notifierReady) {
+                    _notifierReady = true;
+                    _notifierReadyCbs.forEach(cb => cb());
+                    _notifierReadyCbs = [];
+                }
                 return;
             }
 
@@ -469,6 +476,11 @@ window.initStudentEnrollmentNotifier = async function () {
         }, err => {
             console.error("❌ [Notifier]", err);
             _listenerAttached = false;
+            if (!_notifierReady) {
+                _notifierReady = true;
+                _notifierReadyCbs.forEach(cb => cb());
+                _notifierReadyCbs = [];
+            }
         });
 
     } catch (e) {
@@ -523,6 +535,11 @@ window.openStudentEnrollmentModal = async function () {
             });
         } else {
             await fetchOpenSubjects(currentStudentData.college);
+        }
+
+        if (!openSubjectsCache.length && !isCacheValid()) {
+            renderError(container, "تعذر تحميل المواد، تأكد من اتصالك وحاول مجدداً.");
+            return;
         }
 
         renderSubjects(container);
