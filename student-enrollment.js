@@ -7,6 +7,7 @@ const db = window.db;
 
 let currentStudentData = null;
 let openSubjectsCache = [];
+let enrolledSubjectIds = new Set(); // ← المواد اللي الطالب مسجل فيها (docIds)
 let _cacheTimestamp = 0;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
@@ -195,9 +196,21 @@ async function fetchStudentData(uid) {
     };
     const letter = group.replace(/[^a-zA-Z]/g, '')[0] || "";
     const college = collegeMap[letter] || letter;
+    const studentId = String(info.studentID || raw.studentID || "").trim();
+
+    // 🔒 قراءة واحدة بس: فهرس المواد المسجل فيها (بديل عن قراءة students array من كل مادة)
+    try {
+        const idxSnap = await getDoc(doc(db, "student_subject_index", studentId));
+        enrolledSubjectIds = idxSnap.exists()
+            ? new Set(Object.keys(idxSnap.data().subjects || {}))
+            : new Set();
+    } catch (e) {
+        console.warn("⚠️ [Index] تعذر تحميل فهرس المواد المسجلة:", e.message);
+        enrolledSubjectIds = new Set();
+    }
 
     return {
-        studentId: String(info.studentID || raw.studentID || "").trim(),
+        studentId,
         fullName: info.fullName || raw.fullName || "Student",
         group,
         level: info.level || raw.level || "",
@@ -250,13 +263,24 @@ function isCacheValid() {
 async function fetchOpenSubjects(college) {
     if (isCacheValid()) return openSubjectsCache;
 
-    const snap = await getDocs(query(
+    const openSnap = await getDocs(query(
         collection(db, "subject_enrollments"),
         where("college", "==", college),
         where("isOpenForSelfEnrollment", "==", true)
     ));
+    const openSubjects = openSnap.docs.map(d => ({ docId: d.id, ...d.data() }));
 
-    openSubjectsCache = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+    const missingIds = [...enrolledSubjectIds].filter(
+        id => !openSubjects.some(s => s.docId === id)
+    );
+    const enrolledButClosed = await Promise.all(
+        missingIds.map(async id => {
+            const snap = await getDoc(doc(db, "subject_enrollments", id));
+            return snap.exists() ? { docId: id, ...snap.data() } : null;
+        })
+    );
+
+    openSubjectsCache = [...openSubjects, ...enrolledButClosed.filter(Boolean)];
     _cacheTimestamp = Date.now();
     return openSubjectsCache;
 }
@@ -410,7 +434,7 @@ window.initStudentEnrollmentNotifier = async function () {
             currentStudentData = data;
         }
 
-        const { college, studentId } = currentStudentData;
+        const { college } = currentStudentData;
         if (!college) {
             console.warn("⚠️ [Notifier] لم يُعثر على الكلية — الإشعار متوقف.");
             return;
@@ -431,7 +455,7 @@ window.initStudentEnrollmentNotifier = async function () {
             }
 
             const unenrolled = openSubjectsCache.filter(sub =>
-                !(sub.students || []).some(s => String(s.id).trim() === studentId)
+                !enrolledSubjectIds.has(sub.docId)
             ).length;
 
             updateEnrollmentBadge(unenrolled);
@@ -530,10 +554,9 @@ function renderSubjects(container) {
         return;
     }
 
-    const { studentId } = currentStudentData;
     const total = openSubjectsCache.length;
     const enrolled = openSubjectsCache.filter(sub =>
-        (sub.students || []).some(s => String(s.id).trim() === studentId)
+        enrolledSubjectIds.has(sub.docId)
     ).length;
 
     let html = `
@@ -554,9 +577,7 @@ function renderSubjects(container) {
         </div>`;
 
     openSubjectsCache.forEach((sub, idx) => {
-        const isEnrolled = (sub.students || []).some(
-            s => String(s.id).trim() === studentId
-        );
+        const isEnrolled = enrolledSubjectIds.has(sub.docId);
 
         html += `
         <div class="se-card ${isEnrolled ? 'enrolled' : ''}" style="animation-delay:${idx * .06}s;">
@@ -712,18 +733,8 @@ async function executeEnrollment(subjectName, subjectDocId) {
             showToast?.(`✅ ${result.message || 'تم التسجيل رسمياً في المادة.'}`, 4000, "#10b981");
             if (typeof playSuccess === "function") playSuccess();
 
-            // ✅ حدّث الكاش المحلي بدون قراءة جديدة
-            const subIdx = openSubjectsCache.findIndex(s => s.docId === subjectDocId);
-            if (subIdx !== -1) {
-                const sub = openSubjectsCache[subIdx];
-                if (!sub.students) sub.students = [];
-                sub.students.push({
-                    id: studentId,
-                    name: fullName,
-                    group,
-                    uid: user.uid
-                });
-            }
+            // ✅ حدّث الحالة المحلية بدون أي قراءة إضافية من Firestore
+            enrolledSubjectIds.add(subjectDocId);
 
             if (actionWrap) {
                 actionWrap.innerHTML = `
@@ -744,7 +755,7 @@ async function executeEnrollment(subjectName, subjectDocId) {
                 }
             }
             const newUnenrolled = openSubjectsCache.filter(sub =>
-                !(sub.students || []).some(s => String(s.id).trim() === studentId)
+                !enrolledSubjectIds.has(sub.docId)
             ).length;
             updateEnrollmentBadge(newUnenrolled);
 
