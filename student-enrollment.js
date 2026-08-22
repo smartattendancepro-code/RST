@@ -537,11 +537,6 @@ window.openStudentEnrollmentModal = async function () {
             await fetchOpenSubjects(currentStudentData.college);
         }
 
-        if (!openSubjectsCache.length && !isCacheValid()) {
-            renderError(container, "تعذر تحميل المواد، تأكد من اتصالك وحاول مجدداً.");
-            return;
-        }
-
         renderSubjects(container);
 
     } catch (e) {
