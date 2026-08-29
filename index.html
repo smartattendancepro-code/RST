@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html dir="ltr" lang="en">
+<html dir="ltr" lang="en" translate="no">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title data-i18n="app_title">نظام كشف الحضور - جامعة الريادة </title>
+    <meta name="google" content="notranslate">
     <meta name="apple-mobile-web-app-title" content="SAP">
 
     <meta name="mobile-web-app-capable" content="yes">
@@ -28,7 +29,7 @@
 
 </head>
 
-<body>
+<body class="notranslate">
     <div id="topToast"></div>
     <div id="verificationSuccessModal" class="modal-overlay" style="z-index: 999999;">
         <div class="modal-box">
@@ -329,12 +330,13 @@
                     color:#991b1b; font-size:11px; font-weight:800;
                 " data-i18n="offline_cutoff_title">تنبيه هام</span>
                                     </div>
-<p style="
+                                    <p style="
     color:#7f1d1d; font-size:10.5px; font-weight:600;
     line-height:1.5; margin:0;
 " data-i18n="offline_cutoff_msg">
-    يجب إعادة الاتصال بالإنترنت قبل الساعة <b>7:00 مساءً</b> لإتمام التسجيل، وإلا سيُرفض تلقائياً.
-</p>
+                                        يجب إعادة الاتصال بالإنترنت قبل الساعة <b>7:00 مساءً</b> لإتمام التسجيل، وإلا
+                                        سيُرفض تلقائياً.
+                                    </p>
                                 </div>
 
                                 <div id="offlineInputView">
