@@ -1,4 +1,4 @@
-const CACHE_NAME = 'proattend-v9.9';
+const CACHE_NAME = 'proattend-v10.7';
 
 const ASSETS_TO_CACHE = [
   './',
