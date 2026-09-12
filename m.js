@@ -1,5 +1,5 @@
 import { MASTER_HALLS, MASTER_SUBJECTS } from './config.js';
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { initializeApp } from "firebase/app";
 import {
     getFirestore,
     initializeFirestore,
@@ -26,12 +26,12 @@ import {
     arrayRemove,
     increment,
     getCountFromServer
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+} from "firebase/firestore";
 
 import {
     getAuth, onAuthStateChanged, createUserWithEmailAndPassword,
     signInWithEmailAndPassword, signOut, sendEmailVerification
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+} from "firebase/auth";
 import { i18n, t, changeLanguage, toggleSystemLanguage } from './i18n.js';
 
 window.HARDWARE_ID = null;

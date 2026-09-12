@@ -1,7 +1,6 @@
-
 import {
     doc, setDoc, getDoc
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+} from "firebase/firestore";
 
 const SAP_PUSH_CONFIG = Object.freeze({
     vapidKey: 'BIPEO4hlmAZBVXnus7wcSqyRMgR0foYP7eZjPJDRvjRF2ygOa09R8pxyuxnKGdSI2xPgYbTAMTUgtg_79xD2pXA',

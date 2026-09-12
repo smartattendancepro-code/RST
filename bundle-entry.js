@@ -1,0 +1,9 @@
+import './js/core/utils.js';
+import './setup.js';
+import './security.js';
+import './student-enrollment.js';
+import './admin-session.js';
+import './script.js';
+import './profile-system.js';
+import './academic-record.js';
+import './offline-handler.js';

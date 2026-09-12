@@ -1,1 +1,1562 @@
-const e="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js",t="nursing_offline_queue_v4",n="nursing_offline_quarantine_v4",o="nursing_pin_rate_v1",i="nursing_device_salt_v1",r="nursing_device_secret_v1",a=3,s=5e3,c=3,l=1500,d=200,u=5,f=3e5,m="AES-GCM",y=256,g=21e4;let p=null,w=null,h=null;const v=(e,t)=>"ar"===(localStorage.getItem("sys_lang")||"ar")?e:t;function b(e,t=4e3,n="#1e293b"){window.showToast&&window.showToast(e,t,n)}function I(){window.playSuccess&&window.playSuccess()}function S(e,...t){const n=`[NursingOffline][${(new Date).toISOString()}]`,o=console[e]&&"function"==typeof console[e]?e:"error";console[o](n,...t)}const P={async get(e){if(window.PersistentStore&&"function"==typeof window.PersistentStore.get)try{const t=await window.PersistentStore.get(e);if(null!=t)return t}catch{}try{return localStorage.getItem(e)}catch{return null}},async set(e,t){if(window.PersistentStore&&"function"==typeof window.PersistentStore.set)try{await window.PersistentStore.set(e,t)}catch{}try{localStorage.setItem(e,t)}catch{}},async remove(e){if(window.PersistentStore&&"function"==typeof window.PersistentStore.delete)try{await window.PersistentStore.delete(e)}catch{}try{localStorage.removeItem(e)}catch{}}},E=new Map;function A(e){const t=Uint8Array.from(atob(e),e=>e.charCodeAt(0));return(new TextDecoder).decode(t)}async function O(){let e=await P.get(r);if(!e){const t=crypto.getRandomValues(new Uint8Array(32));e=btoa(String.fromCharCode(...t)),await P.set(r,e)}return e}async function T(e){if(E.has(e))return E.get(e);if(E.size>=10){const e=E.keys().next().value;E.delete(e)}const t=await O(),n=await async function(){let e=await P.get(i);if(!e){const t=crypto.getRandomValues(new Uint8Array(16));e=btoa(String.fromCharCode(...t)),await P.set(i,e)}return Uint8Array.from(atob(e),e=>e.charCodeAt(0))}(),o=await crypto.subtle.importKey("raw",(new TextEncoder).encode(`${e}::${t}`),{name:"PBKDF2"},!1,["deriveKey"]),r=await crypto.subtle.deriveKey({name:"PBKDF2",salt:n,iterations:g,hash:"SHA-256"},o,{name:m,length:y},!1,["encrypt","decrypt"]);return E.set(e,r),r}async function _(e,t){try{const n=await T(t),o=crypto.getRandomValues(new Uint8Array(12)),i=(new TextEncoder).encode(JSON.stringify(e)),r=await crypto.subtle.encrypt({name:m,iv:o},n,i),a=new Uint8Array(o.byteLength+r.byteLength);return a.set(o,0),a.set(new Uint8Array(r),o.byteLength),btoa(String.fromCharCode(...a))}catch(t){return S("error","Encrypt failed, falling back to plain JSON:",t.message),n=JSON.stringify(e),btoa(Array.from((new TextEncoder).encode(n),e=>String.fromCharCode(e)).join(""))}var n}async function k(e,t){try{const n=Uint8Array.from(atob(e),e=>e.charCodeAt(0)),o=n.slice(0,12),i=n.slice(12),r=await T(t),a=await crypto.subtle.decrypt({name:m,iv:o},r,i),s=JSON.parse((new TextDecoder).decode(a));return Array.isArray(s)?s:[]}catch{try{const n=window.HARDWARE_ID||"ANONYMOUS_DEVICE";if(n===t)throw new Error("same uid");const o=Uint8Array.from(atob(e),e=>e.charCodeAt(0)),i=o.slice(0,12),r=o.slice(12),a=await T(n),s=await crypto.subtle.decrypt({name:m,iv:i},a,r),c=JSON.parse((new TextDecoder).decode(s));return S("warn","Queue decrypted with ANONYMOUS_DEVICE fallback"),Array.isArray(c)?c:[]}catch{try{const t=A(e),n=JSON.parse(t);return Array.isArray(n)?n:[]}catch{return[]}}}}async function x(e,t){try{const n=await async function(e){const t=`hmac_${e}`;if(E.has(t))return E.get(t);const n=await O(),o=await crypto.subtle.importKey("raw",(new TextEncoder).encode(`hmac_${e}_${n}`),{name:"HMAC",hash:"SHA-256"},!1,["sign","verify"]);return E.set(t,o),o}(t),o=JSON.stringify({studentID:e.studentID,sessionPin:e.sessionPin,submissionTime:e.submissionTime,offlineVerifyToken:e.offlineVerifyToken||null,patternInput:e.patternInput||null}),i=await crypto.subtle.sign("HMAC",n,(new TextEncoder).encode(o));return btoa(String.fromCharCode(...new Uint8Array(i)))}catch{return null}}function N(){const e=window.auth?.currentUser;return e?.uid?e.uid:window.HARDWARE_ID||"ANONYMOUS_DEVICE"}async function $(){try{const e=await P.get(t);if(!e)return[];const n=N();return await k(e,n)}catch{return[]}}async function C(e){try{const n=e.slice(-d),o=N(),i=await _(n,o);await P.set(t,i),L(n.length)}catch(e){S("error","queueSave failed:",e.message)}}async function B(e){try{const t=await P.get(n),o=t?JSON.parse(t):[];o.push({...e,_sig:void 0,quarantinedAt:Date.now()}),await P.set(n,JSON.stringify(o)),S("warn","Entry quarantined:",e.sessionPin)}catch{}}function D(e,t){return`${e}_${t}`}function L(e){let t=document.getElementById("offlinePendingBadge");if(!t){const e=document.querySelector('[onclick*="openOfflineRegistrationModal"]');e&&(t=document.createElement("span"),t.id="offlinePendingBadge",t.style.cssText="\n                display:inline-flex;align-items:center;justify-content:center;\n                background:#ef4444;color:#fff;border-radius:9999px;\n                font-size:11px;font-weight:700;min-width:18px;height:18px;\n                padding:0 4px;margin-inline-start:6px;\n                transition:opacity .3s;\n            ",e.appendChild(t))}t&&(t.textContent=e,t.style.opacity=e>0?"1":"0")}function R(){const e=document.getElementById("offlineActionsWrapper");e&&e.style.setProperty("display",navigator.onLine?"none":"block","important")}async function q(e,t){const n=Date.now(),i={studentID:e.id,studentName:e.name,avatarClass:e.avatar,sessionPin:t,submissionTime:n,patternInput:window.getOfflinePattern?.()||null,offlineVerifyToken:window._offlineVerifyToken||null,deviceId:window.HARDWARE_ID||"DEVICE_OFFLINE",appVersion:window.APP_VERSION||"4.0",group:e.group||"GENERAL"};window._offlineVerifyToken=null,i._sig=await x(i,e.uid||N());const r=await $();r.push(i),await C(r),localStorage.removeItem(o),b(v("✅ تم الحفظ أوفلاين.. سيتم التأكيد فور عودة النت","✅ Saved Offline.. Will sync on reconnect"),5e3,"#1e293b"),I();const a=document.getElementById("offlineRegModal");a&&(a.style.display="none"),navigator.onLine&&M()}async function M(){if(w)return S("info","Sync already running, awaiting..."),w;if(!navigator.onLine)return;const t=await $();if(0===t.length)return;const n=window.auth?.currentUser;if(n)return w=async function(t,n){S("info",`Sync started: ${t.length} entries`);try{p||(p=await(import(e)),S("info","Firestore module loaded & cached"));const{doc:o,getDoc:i}=p,r=window.db;if(!r)return void S("error","window.db not available");const a=n.uid,s=await Promise.allSettled(t.map(async e=>{const t=await async function(e,t){return!!e._sig&&await x({...e,_sig:void 0},t)===e._sig}(e,a);if(!t)return S("warn","Unsigned or tampered entry detected, quarantining:",e.sessionPin),b(v("⚠️ تم اكتشاف تلاعب في بيانات محفوظة","⚠️ Tampered entry detected"),5e3,"#ef4444"),await B(e),{status:"quarantine"};const s=await async function(e,{user:t}){for(let n=1;n<=c;n++){try{const n=await U(e,t);if("retry"!==n)return n}catch(e){S("error",`Sync fatal error on attempt ${n}:`,e.message)}n<c&&await J(l*Math.pow(2,n-1))}return"retry"}(e,{doc:o,getDoc:i,db:r,user:n});return{status:s,entry:e}})),d=[];let u=0,f=0,m=0;for(const e of s){if("rejected"===e.status){f++;continue}const t=e.value;t&&"quarantine"!==t.status?!0===t.status?u++:"retry"===t.status?(d.push(t.entry),f++):f++:m++}await C(d),S("info",`Sync complete. Success: ${u} | Retry: ${d.length} | Quarantined: ${m} | Other failures: ${f}`),function({successCount:e,remainingCount:t,quarantineCount:n}){e>0&&0===t&&0===n?b(v(`✅ تم تأكيد ${e} تسجيل بنجاح`,`✅ ${e} registration(s) confirmed`),5e3,"#10b981"):e>0&&t>0&&0===n?b(v(`✅ نجح ${e} | ⏳ ${t} سيُعاد المحاولة تلقائياً`,`✅ ${e} confirmed | ⏳ ${t} will retry`),6e3,"#f59e0b"):e>0&&n>0?b(v(`✅ نجح ${e} | ❌ رُفض ${n} نهائياً (نمط خاطئ أو بيانات تالفة)`,`✅ ${e} confirmed | ❌ ${n} permanently rejected`),8e3,"#ef4444"):t>0&&0===e&&0===n?b(v(`⚠️ فشلت مزامنة ${t} تسجيل — سيتم إعادة المحاولة`,`⚠️ ${t} pending — will retry automatically`),6e3,"#f59e0b"):n>0&&0===e?b(v(`❌ تم رفض ${n} تسجيل نهائياً — تواصل مع الدكتور`,`❌ ${n} registration(s) permanently rejected — contact your doctor`),8e3,"#ef4444"):0===e&&0===t&&0===n&&b(v("✅ تمت المزامنة","✅ Sync complete"),3e3,"#64748b")}({successCount:u,remainingCount:d.length,quarantineCount:m})}catch(e){S("error","Critical sync failure:",e),b(v("❌ خطأ غير متوقع أثناء المزامنة — تواصل مع الدعم","❌ Unexpected sync error — contact support"),8e3,"#ef4444")}}(t,n).finally(()=>{w=null}),w;S("info","Sync skipped: no authenticated user")}async function U(e,t){try{const t=window.auth?.currentUser;if(!t)return"retry";const n=await t.getIdToken(!0);let o=null;if(e.patternInput)try{const t=JSON.parse(e.patternInput);o=Array.isArray(t?.path)?t.path:null}catch{o=null}const{signal:i,cancel:r}=function(e){if(!window.AbortController)return{signal:void 0,cancel:()=>{}};const t=new AbortController,n=setTimeout(()=>t.abort(),e);return{signal:t.signal,cancel:()=>clearTimeout(n)}}(8e3);let a;try{a=await fetch("https://offlinemode.vercel.app/api/syncOfflineAttendance",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${n}`},body:JSON.stringify({sessionPin:e.sessionPin,submissionTime:e.submissionTime,patternPath:o,deviceId:e.deviceId||window.HARDWARE_ID||"DEVICE_OFFLINE"}),...i?{signal:i}:{}})}finally{r()}if(a.status>=500)return"retry";if(401===a.status)return S("warn","Token expired during sync — retrying"),"retry";if(429===a.status)return j(v("⛔ تجاوزت عدد المحاولات — سيتم إعادة المحاولة تلقائياً","⛔ Too many attempts — will retry automatically"),"warning"),"retry";if(410===a.status)return S("warn",`Stale code detected on sync: ${e.sessionPin}`),j(v("❌ انتهت صلاحية الكود","❌ This code has expired"),"error"),await B({...e,quarantineReason:"stale-code-410"}),!1;if(403===a.status){const t=await a.json().catch(()=>({}));return S("warn",`Sync forbidden: ${t.error||"unknown"}`),j(v(`❌ فشل تسجيل الحضور (${e.sessionPin}) — ${t.error||""}`,`❌ Attendance failed (${e.sessionPin}) — ${t.error||""}`),"error"),await B({...e,quarantineReason:t.error||"sync-forbidden"}),!1}if(!a.ok){const t=await a.json().catch(()=>({}));return S("warn",`Sync rejected: ${t.error||a.status}`),j(v(`❌ فشل تسجيل الحضور: ${t.error||"خطأ غير معروف"}`,`❌ Attendance failed: ${t.error||"Unknown error"}`),"error"),await B({...e,quarantineReason:t.error||"sync-rejected"}),!1}return function(e,t){if(I(),"live"===t.mode){b(v("✅ تم تأكيد حضورك بنجاح","✅ Attendance confirmed"),4e3,"#10b981");try{localStorage.setItem("TARGET_DOCTOR_UID",t.doctorUID),sessionStorage.setItem("TARGET_DOCTOR_UID",t.doctorUID)}catch{}"function"==typeof window.switchScreen&&window.switchScreen("screenLiveSession"),"function"==typeof window.startLiveSnapshotListener&&window.startLiveSnapshotListener()}else j(v("✅ تم تسجيل حضورك (الجلسة كانت مغلقة)","✅ Attendance recorded (session was closed)"),"success");window.dispatchEvent(new CustomEvent("attendanceSynced",{detail:{studentID:e.studentID,sessionPin:e.sessionPin,postSession:"live"!==t.mode,recID:t.recID}})),S("info",`✅ Sync complete via unified backend: ${e.sessionPin} (${t.mode})`)}(e,await a.json().catch(()=>({}))),!0}catch(e){return S("warn",`Sync network error: ${e.message}`),"retry"}}function J(e){return new Promise(t=>setTimeout(t,e))}function F(e){const t=document.getElementById("offlineInputView"),n=document.getElementById("offlineProcessView"),o=document.getElementById("btnCancelOffline");"input"===e?(t&&(t.style.display="block"),n&&(n.style.display="none"),o&&(o.style.display="block")):(t&&(t.style.display="none"),n&&(n.style.display="block"),o&&(o.style.display="none"))}function V(e,t){h&&clearTimeout(h);const n=document.getElementById("offTimer");let o=e;!function e(){n&&(n.innerText=o),o<=0?t():(o--,h=setTimeout(e,1e3))}()}function j(e,t="error"){const n=document.getElementById("offlineAlertModal"),o=document.getElementById("offlineAlertMsg"),i=document.getElementById("offlineAlertIcon"),r=document.getElementById("offlineAlertIconWrap");if(!n)return void alert(e);o.innerText=e;const a={error:["fa-circle-exclamation","#ef4444","rgba(239,68,68,0.15)","rgba(239,68,68,0.3)"],success:["fa-circle-check","#10b981","rgba(16,185,129,0.15)","rgba(16,185,129,0.3)"],warning:["fa-triangle-exclamation","#f59e0b","rgba(245,158,11,0.15)","rgba(245,158,11,0.3)"]},[s,c,l,d]=a[t]||a.error;i.className=`fa-solid ${s}`,i.style.color=c,r.style.background=l,r.style.borderColor=d,n.style.display="flex"}window.addEventListener("online",()=>{R(),M()}),window.addEventListener("offline",()=>{R(),b(v("⚠️ انقطع الاتصال.. وضع الأوفلاين متاح","⚠️ Disconnected.. Offline Mode Active"),4e3,"#475569")}),document.addEventListener("DOMContentLoaded",async()=>{R();L((await $()).length),setTimeout(M,s)}),window.openOfflineRegistrationModal=function(){const e=document.getElementById("offlineRegModal"),t=document.getElementById("offSessionPin");e&&(t&&(t.value=""),F("input"),e.style.display="flex",setTimeout(()=>t?.focus(),150))},window.processOfflineQueue=async function(){const t=document.getElementById("offSessionPin");if(!t)return;const n=t.value.trim(),i=(new Date).getHours();if(i>=19||i<7)return void j(v("❌ عذراً، التسجيل الأوفلاين غير متاح بعد الساعة 7 مساءً. يجب عودة الإنترنت وإتمام التسجيل قبل هذا الموعد.","❌ Sorry, offline registration is not available after 7 PM."),"error");const r=await async function(){try{const t=window.auth?.currentUser,n=localStorage.getItem("cached_profile_data");if(n){const e=JSON.parse(n);if(t&&e.uid!==t.uid)return null;if(e.studentID)return{id:String(e.studentID).trim(),name:e.fullName||"Student",avatar:e.avatarClass||"fa-user-graduate",uid:e.uid,group:e.group||"GENERAL"}}if(window.PersistentStore){const e=await window.PersistentStore.get("cached_profile_data");if(e){const t=JSON.parse(e);if(t.studentID){try{localStorage.setItem("cached_profile_data",e)}catch{}return{id:String(t.studentID).trim(),name:t.fullName||"Student",avatar:t.avatarClass||"fa-user-graduate",uid:t.uid,group:t.group||"GENERAL"}}}}if(t&&navigator.onLine){const{getDoc:n,doc:o}=await(import(e)),i=await n(o(window.db,"user_registrations",t.uid));if(!i.exists())return null;const r=i.data(),a=r.registrationInfo||r,s={uid:t.uid,studentID:a.studentID,fullName:a.fullName||"Student",avatarClass:r.avatarClass||"fa-user-graduate"},c=JSON.stringify(s);try{localStorage.setItem("cached_profile_data",c)}catch{}return window.PersistentStore?.set("cached_profile_data",c),{id:String(s.studentID).trim(),name:s.fullName,avatar:s.avatarClass,uid:s.uid,group:s.group||"GENERAL"}}return null}catch(e){return S("error","Failed to get student data:",e.message),null}}();if(!r)return void j(v("⚠️ يجب تسجيل الدخول أولاً","⚠️ Please Login First"),"warning");if(!/^\d{6}$/.test(n))return void j(v("⚠️ الكود يجب أن يكون 6 أرقام","⚠️ PIN must be 6 digits"),"warning");if(!function(){try{const e=JSON.parse(localStorage.getItem(o)||"{}"),t=Date.now();if(e.lockedUntil&&t<e.lockedUntil){const n=Math.ceil((e.lockedUntil-t)/6e4);return j(v(`⛔ تم تجاوز عدد المحاولات المسموح به.\nحاول مجدداً بعد ${n} دقيقة.`,`⛔ Too many attempts. Try again in ${n} minute(s).`),"warning"),!1}if(e.lockedUntil&&t>=e.lockedUntil)return localStorage.removeItem(o),!0;const n=(e.count||0)+1;return n>=u?(localStorage.setItem(o,JSON.stringify({count:n,lockedUntil:t+f})),j(v(`⛔ تم تجاوز ${u} محاولات. محظور لمدة 5 دقايق.`,`⛔ ${u} failed attempts. Locked for 5 minutes.`),"warning"),!1):(localStorage.setItem(o,JSON.stringify({count:n})),!0)}catch{return!0}}())return;const s=await $(),c=D(r.id,n);if(s.some(e=>D(e.studentID,e.sessionPin)===c))return void j(v("⚠️ سجّلت هذه الجلسة بالفعل","⚠️ Already registered this session"),"warning");if(s.length>=d)return void j(v("⚠️ قائمة الانتظار ممتلئة، يرجى الاتصال بالإنترنت أولاً","⚠️ Queue full, please sync first"),"warning");const l=document.getElementById("btnOfflinePattern");"true"===l?.dataset.on?(window._pendingOfflineStudent=r,window._pendingOfflinePin=n,window._offlinePatternAttempts=0,openOfflinePatternModal()):(F("process"),V(a,()=>q(r,n)))},window.cancelOfflineRegistration=function(){h&&(clearTimeout(h),h=null);const e=document.getElementById("offlineRegModal");e&&(e.style.display="none")},window.forceSyncOfflineData=async function(){return w&&(S("info","Waiting for ongoing sync before forcing..."),await w),M()},window.inspectOfflineQueue=async function(){if("production"===window.APP_ENV){const e=window.auth?.currentUser;if(!e)return void console.warn("[NursingOffline] Not authenticated.");try{const t=await e.getIdTokenResult();if(!t.claims?.admin)return void console.warn("[NursingOffline] Admin access required.")}catch{return void console.warn("[NursingOffline] Could not verify admin claim.")}}const e=await $(),t=await P.get(n),i=t?JSON.parse(t):[],r=JSON.parse(localStorage.getItem(o)||"{}");return console.table(e.map(e=>({...e,_sig:e._sig?`${e._sig.slice(0,12)}…`:"none"}))),console.info(`Pending: ${e.length} | Quarantined: ${i.length}`),console.info("Rate limit:",r),{queue:e,quarantine:i,rateInfo:r}},async function(){const e=N(),t="nursing_offline_queue_v3";try{const n=localStorage.getItem(t);if(n){if(0===(await $()).length){const t=await k(n,e);Array.isArray(t)&&t.length>0&&(S("info",`Migrating ${t.length} entries from v3 to v4...`),await C(t),S("info","v3 -> v4 migration complete."))}localStorage.removeItem(t)}}catch{S("warn","v3 -> v4 queue migration failed.")}const n="nursing_offline_queue_v2";try{const e=localStorage.getItem(n);if(e){if(0===(await $()).length){const t=A(e),n=JSON.parse(t);Array.isArray(n)&&n.length>0&&(S("info",`Migrating ${n.length} entries from v2 to v4...`),await C(n),S("info","v2 -> v4 migration complete."))}localStorage.removeItem(n)}}catch{S("warn","v2 -> v4 queue migration failed.")}}(),function(){let e=document.getElementById("oplk-styles");e||(e=document.createElement("style"),e.id="oplk-styles",document.head.appendChild(e)),e.textContent="\n        #offlinePatternModal,\n        #offlinePatternModal * {\n            direction: ltr !important;\n            unicode-bidi: isolate !important;\n        }\n\n        #offlinePatternGrid {\n            position: relative;\n            display: grid !important;\n            grid-template-columns: repeat(4, 1fr) !important;\n            grid-template-rows: repeat(4, 1fr) !important;\n            gap: 0 !important;\n            width: 260px;\n            height: 260px;\n            touch-action: none;\n            -ms-touch-action: none;\n            cursor: crosshair;\n            font-size: 0 !important;\n        }\n\n        .oplk-cell {\n            display: flex !important;\n            align-items: center !important;\n            justify-content: center !important;\n            font-size: 0 !important;\n        }\n\n        .oplk-dot {\n            width: 16px;\n            height: 16px;\n            border-radius: 50%;\n            background: #bae6fd;\n            border: 2px solid #7dd3fc;\n            pointer-events: none;\n            transition: transform 0.15s ease, background 0.15s ease,\n                        border-color 0.15s ease, box-shadow 0.15s ease;\n            flex-shrink: 0;\n            flex-grow: 0;\n        }\n\n        .oplk-dot.active {\n            background: #6366f1 !important;\n            border-color: #4f46e5 !important;\n            transform: scale(1.6) !important;\n            box-shadow: 0 0 12px rgba(99,102,241,0.6) !important;\n        }\n\n        .oplk-dot.error {\n            background: #ef4444 !important;\n            border-color: #b91c1c !important;\n            transform: scale(1.6) !important;\n            box-shadow: 0 0 12px rgba(239,68,68,0.5) !important;\n        }\n\n        #offlinePatternSvg {\n            position: absolute !important;\n            inset: 0 !important;\n            width: 100% !important;\n            height: 100% !important;\n            pointer-events: none;\n            z-index: 10;\n            overflow: visible;\n        }\n    ";let t=!1,n=[],o=[],i=null,r=null,s=null,c=null,l=null,d=0,u=[],f=null,m=null;const y=(e,t)=>"ar"===(localStorage.getItem("sys_lang")||"ar")?e:t;function g(e,t,n,o){e.addEventListener(t,n,o),u.push({target:e,type:t,handler:n,options:o})}function p(){for(const{target:e,type:t,handler:n,options:o}of u)e.removeEventListener(t,n,o);u=[]}function w(){p(),f?.disconnect(),f=null,m?.disconnect(),m=null,clearInterval(s);const e=document.getElementById("offlinePatternModal");e&&(e.style.display="none")}function h(){const e=document.getElementById("offlinePatternGrid");if(!e)return;const t=e.getBoundingClientRect();if(0===t.width||0===t.height)return void requestAnimationFrame(h);const n=e.querySelectorAll(".oplk-dot");16===n.length&&(o=[],n.forEach((e,n)=>{const i=e.getBoundingClientRect();o.push({idx:n,x:(i.left+i.right)/2-t.left,y:(i.top+i.bottom)/2-t.top})}))}function v(){const e=document.getElementById("offlinePatternGrid"),r=document.getElementById("offlinePatternSvg");if(e&&r){t=!1,n=[],o=[],i&&(cancelAnimationFrame(i),i=null),e.innerHTML="",r.innerHTML="",r.removeAttribute("data-state"),e.setAttribute("translate","no"),e.classList.add("notranslate");for(let t=0;t<16;t++){const n=document.createElement("div");n.className="oplk-cell",n.setAttribute("translate","no");const o=document.createElement("div");o.className="oplk-dot",o.dataset.idx=String(t),o.setAttribute("translate","no"),n.appendChild(o),e.appendChild(n)}requestAnimationFrame(()=>requestAnimationFrame(h))}}function b(e,t){const n=document.getElementById("offlinePatternGrid");if(!n||0===o.length)return-1;const i=n.getBoundingClientRect(),r=Math.min(i.width,i.height)/8,a=e-i.left,s=t-i.top;let c=-1,l=r;for(const e of o){const t=Math.hypot(a-e.x,s-e.y);t<l&&(l=t,c=e.idx)}return c}function I(e,i){const r=document.getElementById("offlinePatternSvg");if(!r)return;const a="error"===r.dataset.state,s=a?"#ef4444":"#6366f1";let c="";for(let e=0;e<n.length-1;e++){const t=o[n[e]],i=o[n[e+1]];t&&i&&(c+=`<line x1="${Number(t.x)}" y1="${Number(t.y)}" x2="${Number(i.x)}" y2="${Number(i.y)}"\n                    stroke="${s}" stroke-width="3.5"\n                    stroke-linecap="round" opacity="${a?.7:1}"/>`)}if(t&&void 0!==e&&n.length>0){const t=o[n[n.length-1]],r=document.getElementById("offlinePatternGrid")?.getBoundingClientRect();t&&r&&(c+=`<line x1="${Number(t.x)}" y1="${Number(t.y)}"\n                    x2="${Number(e-r.left)}" y2="${Number(i-r.top)}"\n                    stroke="${s}" stroke-width="3"\n                    stroke-linecap="round" opacity="0.4"\n                    stroke-dasharray="6 4"/>`)}r.innerHTML=c}function S(e){const t=document.querySelector(`.oplk-dot[data-idx="${e}"]`);t?.classList.add("active"),navigator.vibrate?.(12)}function P(e){t=!1;const n=document.getElementById("offlinePatternSvg"),o=document.getElementById("offlinePatternHint");if(n&&(n.dataset.state="error"),document.querySelectorAll(".oplk-dot.active").forEach(e=>{e.classList.remove("active"),e.classList.add("error")}),I(),o&&e&&(o.style.color="#ef4444",o.innerText=e),navigator.vibrate?.([60,40,60]),d++,d>=2)return clearInterval(s),void setTimeout(()=>{w(),window._pendingOfflineStudent=null,window._pendingOfflinePin=null,d=0,c=null;const e=document.getElementById("btnOfflinePattern"),t=document.getElementById("offlinePatternThumb"),n=document.getElementById("offlinePatternBtnIcon");e&&(e.style.background="#cbd5e1",e.style.borderColor="#94a3b8",e.dataset.on="false"),t&&(t.style.left="1px"),n&&(n.className="fa-solid fa-lock",n.style.color="#94a3b8"),j(y("❌ تجاوزت عدد المحاولات المسموحة — أعد المحاولة من البداية","❌ Pattern attempts exceeded — please try again"),"error")},900);setTimeout(()=>{v(),T(),o&&(o.style.color="#f59e0b",o.innerText=y("⚠️ محاولة أخيرة — ارسم النمط بعناية","⚠️ Last attempt — draw carefully"))},900)}function E(e){if("mouse"===e.pointerType&&0!==e.button)return;if(null!==r)return;h();const o=b(e.clientX,e.clientY);-1!==o&&(e.preventDefault(),e.target?.setPointerCapture?.(e.pointerId),r=e.pointerId,t=!0,n=[o],S(o),I(e.clientX,e.clientY))}function A(e){if(!t||e.pointerId!==r)return;e.preventDefault();const o=b(e.clientX,e.clientY);-1===o||n.includes(o)||(n.push(o),S(o)),i&&cancelAnimationFrame(i);const a=e.clientX,s=e.clientY;i=requestAnimationFrame(()=>I(a,s))}function O(e){t&&e.pointerId===r&&(r=null,t=!1,i&&(cancelAnimationFrame(i),i=null),I(),async function(){if(n.length<3)return void P(y("ارسم على الأقل 3 نقاط","Draw at least 3 dots"));const e=window._pendingOfflinePin,t=window._pendingOfflineStudent;if(!e||!t)return;if(!navigator.onLine)return c=JSON.stringify({type:"pattern",path:n}),window._offlineVerifyToken=null,clearInterval(s),void _(t,e);try{const o=window.auth?.currentUser;if(!o)return void P(y("يجب تسجيل الدخول","Please login first"));const i=await o.getIdToken(!0),r=await fetch("https://offlinemode.vercel.app/api/verifyOfflinePattern",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${i}`},body:JSON.stringify({sessionPin:e,patternPath:[...n]})}),a=await r.json();if(!r.ok)return P(a.error||y("❌ النمط غير صحيح","❌ Wrong pattern")),void(0===a.attemptsLeft&&setTimeout(()=>w(),900));window._offlineVerifyToken=a.verifyToken,c=JSON.stringify({type:"pattern",path:n,preVerified:!0}),clearInterval(s),_(t,e)}catch(o){c=JSON.stringify({type:"pattern",path:n}),window._offlineVerifyToken=null,clearInterval(s),_(t,e)}}())}function T(){const e=document.getElementById("offlinePatternGrid");if(e&&(p(),g(e,"pointerdown",E,{passive:!1}),g(e,"pointermove",A,{passive:!1}),g(e,"pointerup",O,{passive:!1}),g(e,"pointercancel",O,{passive:!1}),!("PointerEvent"in window))){const t=e=>A({...e,pointerId:"mouse"}),n=e=>O({...e,pointerId:"mouse"});g(e,"mousedown",e=>E({...e,pointerId:"mouse",pointerType:"mouse"})),g(e,"mousemove",t),g(e,"mouseup",n);const o=e=>{const t=e.touches[0];e.preventDefault(),A({clientX:t.clientX,clientY:t.clientY,pointerId:t.identifier})},i=e=>{const t=e.changedTouches[0];O({clientX:t.clientX,clientY:t.clientY,pointerId:t.identifier})};g(e,"touchstart",t=>{const n=t.touches[0];E({clientX:n.clientX,clientY:n.clientY,pointerId:n.identifier,pointerType:"touch",button:0,preventDefault:()=>t.preventDefault(),target:e})},{passive:!1}),g(e,"touchmove",o,{passive:!1}),g(e,"touchend",i,{passive:!1})}}function _(e,t){const n=document.getElementById("btnOfflinePattern"),o=document.getElementById("offlinePatternThumb"),i=document.getElementById("offlinePatternBtnIcon");n&&(n.style.background="#10b981",n.style.borderColor="#059669",n.dataset.on="true"),o&&(o.style.left="24px"),i&&(i.className="fa-solid fa-lock-open",i.style.color="#10b981"),w(),window._pendingOfflineStudent=null,window._pendingOfflinePin=null,d=0,F("process"),V(a,()=>{q(e,t)})}window.openOfflinePatternModal=function(){c=null,d=0;const e=document.getElementById("offlinePatternModal");e&&(e.style.display="flex",setTimeout(()=>{v(),requestAnimationFrame(()=>{requestAnimationFrame(()=>{T(),function(){const e=document.getElementById("offlinePatternGrid");if(!e)return;"ResizeObserver"in window&&(f?.disconnect(),f=new ResizeObserver(()=>{clearTimeout(l),l=setTimeout(h,100)}),f.observe(e)),g(window,"resize",()=>{clearTimeout(l),l=setTimeout(h,100)}),g(window,"orientationchange",()=>setTimeout(h,300))}(),function(){const e=document.getElementById("offlinePatternGrid");e&&"MutationObserver"in window&&(m?.disconnect(),m=new MutationObserver(e=>{for(const t of e)if("childList"===t.type&&t.addedNodes.length>0){requestAnimationFrame(()=>requestAnimationFrame(h));break}}),m.observe(e,{childList:!0,subtree:!0}))}(),function(){let e=12;const t=document.getElementById("offlinePatternTimer");clearInterval(s),s=setInterval(()=>{e--,t&&(t.innerText=e),e<=5&&t&&(t.style.color="#ef4444"),e<=0&&(clearInterval(s),w(),j(y("⏰ انتهى وقت رسم النمط","⏰ Pattern time expired"),"warning"))},1e3)}()})})},50))},window.resetOfflinePattern=function(){v(),requestAnimationFrame(()=>requestAnimationFrame(T))},window.skipOfflinePattern=function(){c=null,d=0,window._pendingOfflineStudent=null,window._pendingOfflinePin=null;const e=document.getElementById("btnOfflinePattern"),t=document.getElementById("offlinePatternThumb"),n=document.getElementById("offlinePatternBtnIcon");e&&(e.style.background="#cbd5e1",e.style.borderColor="#94a3b8",e.dataset.on="false"),t&&(t.style.left="1px"),n&&(n.className="fa-solid fa-lock",n.style.color="#94a3b8"),w()},window.getOfflinePattern=function(){return c},window.toggleOfflinePattern=function(){const e=document.getElementById("btnOfflinePattern"),t=document.getElementById("offlinePatternThumb"),n=document.getElementById("offlinePatternBtnIcon");if(!e)return;"true"===e.dataset.on?(e.style.background="#cbd5e1",e.style.borderColor="#94a3b8",t.style.left="1px",n.className="fa-solid fa-lock",n.style.color="#94a3b8",e.dataset.on="false",c=null):(e.style.background="#6366f1",e.style.borderColor="#4f46e5",t.style.left="24px",n.className="fa-solid fa-lock-open",n.style.color="#6366f1",e.dataset.on="true")}}();
+'use strict';
+
+const OA = {
+    STORAGE_KEY: "nursing_offline_queue_v4",
+    QUARANTINE_KEY: "nursing_offline_quarantine_v4",
+    RATE_KEY: "nursing_pin_rate_v1",
+    DEVICE_SALT_KEY: "nursing_device_salt_v1",
+    DEVICE_SECRET_KEY: "nursing_device_secret_v1",
+    PIN_LENGTH: 6,
+    COUNTDOWN_SEC: 3,
+    SYNC_BOOT_DELAY: 5000,
+    MAX_RETRIES: 3,
+    RETRY_BASE_MS: 1500,
+    MAX_QUEUE_SIZE: 200,
+    MAX_PIN_ATTEMPTS: 5,
+    LOCKOUT_MS: 5 * 60 * 1000,
+    CRYPTO_ALGO: "AES-GCM",
+    KEY_LENGTH: 256,
+    PBKDF2_ITERATIONS: 210_000,
+};
+
+let _firestoreCache = null;
+let _syncPromise = null;
+let _countdownTimer = null;
+
+const lang = () => localStorage.getItem('sys_lang') || 'ar';
+const t = (ar, en) => lang() === 'ar' ? ar : en;
+
+function toast(msg, ms = 4000, color = "#1e293b") {
+    if (window.showToast) window.showToast(msg, ms, color);
+}
+
+function beep() {
+    if (window.playSuccess) window.playSuccess();
+}
+
+function log(level, ...args) {
+    const prefix = `[NursingOffline][${new Date().toISOString()}]`;
+    const method = (console[level] && typeof console[level] === 'function') ? level : 'error';
+    console[method](prefix, ...args);
+}
+const Store = {
+    async get(key) {
+        if (window.PersistentStore && typeof window.PersistentStore.get === 'function') {
+            try {
+                const v = await window.PersistentStore.get(key);
+                if (v !== undefined && v !== null) return v;
+            } catch { /* fall through to localStorage */ }
+        }
+        try { return localStorage.getItem(key); } catch { return null; }
+    },
+    async set(key, value) {
+        if (window.PersistentStore && typeof window.PersistentStore.set === 'function') {
+            try { await window.PersistentStore.set(key, value); } catch { /* localStorage below still covers us */ }
+        }
+        try { localStorage.setItem(key, value); } catch { /* ignore quota/availability errors */ }
+    },
+    async remove(key) {
+        if (window.PersistentStore && typeof window.PersistentStore.delete === 'function') {
+            try { await window.PersistentStore.delete(key); } catch { /* ignore */ }
+        }
+        try { localStorage.removeItem(key); } catch { /* ignore */ }
+    },
+};
+
+const _keyCache = new Map();
+
+function _utf8ToB64(str) {
+    return btoa(Array.from(new TextEncoder().encode(str), b => String.fromCharCode(b)).join(''));
+}
+
+function _b64ToUtf8(b64) {
+    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+}
+
+async function _getDeviceSalt() {
+    let raw = await Store.get(OA.DEVICE_SALT_KEY);
+    if (!raw) {
+        const bytes = crypto.getRandomValues(new Uint8Array(16));
+        raw = btoa(String.fromCharCode(...bytes));
+        await Store.set(OA.DEVICE_SALT_KEY, raw);
+    }
+    return Uint8Array.from(atob(raw), c => c.charCodeAt(0));
+}
+
+async function _getDeviceSecret() {
+    let raw = await Store.get(OA.DEVICE_SECRET_KEY);
+    if (!raw) {
+        const bytes = crypto.getRandomValues(new Uint8Array(32));
+        raw = btoa(String.fromCharCode(...bytes));
+        await Store.set(OA.DEVICE_SECRET_KEY, raw);
+    }
+    return raw;
+}
+
+async function _getAesKey(uid) {
+    if (_keyCache.has(uid)) return _keyCache.get(uid);
+
+    if (_keyCache.size >= 10) {
+        const oldest = _keyCache.keys().next().value;
+        _keyCache.delete(oldest);
+    }
+
+    const deviceSecret = await _getDeviceSecret();
+    const salt = await _getDeviceSalt();
+
+    const rawMaterial = await crypto.subtle.importKey(
+        'raw',
+        new TextEncoder().encode(`${uid}::${deviceSecret}`),
+        { name: 'PBKDF2' },
+        false,
+        ['deriveKey']
+    );
+
+    const key = await crypto.subtle.deriveKey(
+        { name: 'PBKDF2', salt, iterations: OA.PBKDF2_ITERATIONS, hash: 'SHA-256' },
+        rawMaterial,
+        { name: OA.CRYPTO_ALGO, length: OA.KEY_LENGTH },
+        false,
+        ['encrypt', 'decrypt']
+    );
+
+    _keyCache.set(uid, key);
+    return key;
+}
+
+async function _getHmacKey(uid) {
+    const cacheKey = `hmac_${uid}`;
+    if (_keyCache.has(cacheKey)) return _keyCache.get(cacheKey);
+
+    const deviceSecret = await _getDeviceSecret();
+
+    const key = await crypto.subtle.importKey(
+        'raw',
+        new TextEncoder().encode(`hmac_${uid}_${deviceSecret}`),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign', 'verify']
+    );
+
+    _keyCache.set(cacheKey, key);
+    return key;
+}
+
+async function _encryptQueue(arr, uid) {
+    try {
+        const key = await _getAesKey(uid);
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const plain = new TextEncoder().encode(JSON.stringify(arr));
+
+        const cipher = await crypto.subtle.encrypt(
+            { name: OA.CRYPTO_ALGO, iv },
+            key,
+            plain
+        );
+
+        const combined = new Uint8Array(iv.byteLength + cipher.byteLength);
+        combined.set(iv, 0);
+        combined.set(new Uint8Array(cipher), iv.byteLength);
+
+        return btoa(String.fromCharCode(...combined));
+    } catch (e) {
+        log('error', 'Encrypt failed, falling back to plain JSON:', e.message);
+        return _utf8ToB64(JSON.stringify(arr));
+    }
+}
+
+async function _decryptQueue(raw, uid) {
+    try {
+        const combined = Uint8Array.from(atob(raw), c => c.charCodeAt(0));
+        const iv = combined.slice(0, 12);
+        const cipherBuf = combined.slice(12);
+        const key = await _getAesKey(uid);
+        const plain = await crypto.subtle.decrypt(
+            { name: OA.CRYPTO_ALGO, iv },
+            key,
+            cipherBuf
+        );
+        const parsed = JSON.parse(new TextDecoder().decode(plain));
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        try {
+            const fallbackUid = window.HARDWARE_ID || 'ANONYMOUS_DEVICE';
+            if (fallbackUid === uid) throw new Error('same uid');
+
+            const combined = Uint8Array.from(atob(raw), c => c.charCodeAt(0));
+            const iv = combined.slice(0, 12);
+            const cipherBuf = combined.slice(12);
+            const key = await _getAesKey(fallbackUid);
+            const plain = await crypto.subtle.decrypt(
+                { name: OA.CRYPTO_ALGO, iv },
+                key,
+                cipherBuf
+            );
+            const parsed = JSON.parse(new TextDecoder().decode(plain));
+            log('warn', 'Queue decrypted with ANONYMOUS_DEVICE fallback');
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            try {
+                const legacyDecoded = _b64ToUtf8(raw);
+                const parsed = JSON.parse(legacyDecoded);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch {
+                return [];
+            }
+        }
+    }
+}
+
+async function _signEntry(entry, uid) {
+    try {
+        const key = await _getHmacKey(uid);
+        const payload = JSON.stringify({
+            studentID: entry.studentID,
+            sessionPin: entry.sessionPin,
+            submissionTime: entry.submissionTime,
+            offlineVerifyToken: entry.offlineVerifyToken || null,
+            patternInput: entry.patternInput || null,
+        });
+
+        const sig = await crypto.subtle.sign(
+            'HMAC',
+            key,
+            new TextEncoder().encode(payload)
+        );
+
+        return btoa(String.fromCharCode(...new Uint8Array(sig)));
+    } catch {
+        return null;
+    }
+}
+
+async function _verifyEntry(entry, uid) {
+    if (!entry._sig) return false;
+
+    const expected = await _signEntry({ ...entry, _sig: undefined }, uid);
+    return expected === entry._sig;
+}
+
+function _getUidForCrypto() {
+    const currentUser = window.auth?.currentUser;
+    if (currentUser?.uid) return currentUser.uid;
+
+    return window.HARDWARE_ID || 'ANONYMOUS_DEVICE';
+}
+
+async function queueLoad() {
+    try {
+        const raw = await Store.get(OA.STORAGE_KEY);
+        if (!raw) return [];
+        const uid = _getUidForCrypto();
+        return await _decryptQueue(raw, uid);
+    } catch {
+        return [];
+    }
+}
+
+async function queueSave(arr) {
+    try {
+        const safe = arr.slice(-OA.MAX_QUEUE_SIZE);
+        const uid = _getUidForCrypto();
+        const encrypted = await _encryptQueue(safe, uid);
+        await Store.set(OA.STORAGE_KEY, encrypted);
+        _updateBadge(safe.length);
+    } catch (e) {
+        log('error', 'queueSave failed:', e.message);
+    }
+}
+
+async function quarantineEntry(entry) {
+    try {
+        const raw = await Store.get(OA.QUARANTINE_KEY);
+        const q = raw ? JSON.parse(raw) : [];
+        q.push({ ...entry, _sig: undefined, quarantinedAt: Date.now() });
+        await Store.set(OA.QUARANTINE_KEY, JSON.stringify(q));
+        log('warn', 'Entry quarantined:', entry.sessionPin);
+    } catch { /* best-effort; never block the sync flow on this */ }
+}
+
+function entryKey(studentID, sessionPin) {
+    return `${studentID}_${sessionPin}`;
+}
+
+function _checkRateLimit() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(OA.RATE_KEY) || '{}');
+        const now = Date.now();
+
+        if (raw.lockedUntil && now < raw.lockedUntil) {
+            const mins = Math.ceil((raw.lockedUntil - now) / 60_000);
+            offlineAlert(t(`⛔ تم تجاوز عدد المحاولات المسموح به.\nحاول مجدداً بعد ${mins} دقيقة.`, `⛔ Too many attempts. Try again in ${mins} minute(s).`), 'warning');
+            return false;
+        }
+
+        if (raw.lockedUntil && now >= raw.lockedUntil) {
+            localStorage.removeItem(OA.RATE_KEY);
+            return true;
+        }
+
+        const count = (raw.count || 0) + 1;
+
+        if (count >= OA.MAX_PIN_ATTEMPTS) {
+            localStorage.setItem(OA.RATE_KEY, JSON.stringify({
+                count,
+                lockedUntil: now + OA.LOCKOUT_MS,
+            }));
+            offlineAlert(t(`⛔ تم تجاوز ${OA.MAX_PIN_ATTEMPTS} محاولات. محظور لمدة 5 دقايق.`, `⛔ ${OA.MAX_PIN_ATTEMPTS} failed attempts. Locked for 5 minutes.`), 'warning');
+            return false;
+        }
+
+        localStorage.setItem(OA.RATE_KEY, JSON.stringify({ count }));
+        return true;
+
+    } catch {
+        return true;
+    }
+}
+
+function _resetRateLimit() {
+    localStorage.removeItem(OA.RATE_KEY);
+}
+
+function _updateBadge(count) {
+    let badge = document.getElementById('offlinePendingBadge');
+    if (!badge) {
+        const btn = document.querySelector('[onclick*="openOfflineRegistrationModal"]');
+        if (btn) {
+            badge = document.createElement('span');
+            badge.id = 'offlinePendingBadge';
+            badge.style.cssText = `
+                display:inline-flex;align-items:center;justify-content:center;
+                background:#ef4444;color:#fff;border-radius:9999px;
+                font-size:11px;font-weight:700;min-width:18px;height:18px;
+                padding:0 4px;margin-inline-start:6px;
+                transition:opacity .3s;
+            `;
+            btn.appendChild(badge);
+        }
+    }
+    if (badge) {
+        badge.textContent = count;
+        badge.style.opacity = count > 0 ? '1' : '0';
+    }
+}
+
+function controlOfflineButtonVisibility() {
+    const wrapper = document.getElementById('offlineActionsWrapper');
+    if (!wrapper) return;
+    wrapper.style.setProperty('display', navigator.onLine ? 'none' : 'block', 'important');
+}
+
+window.addEventListener('online', () => {
+    controlOfflineButtonVisibility();
+    syncOfflineData();
+});
+
+window.addEventListener('offline', () => {
+    controlOfflineButtonVisibility();
+    toast(t("⚠️ انقطع الاتصال.. وضع الأوفلاين متاح", "⚠️ Disconnected.. Offline Mode Active"), 4000, "#475569");
+});
+
+document.addEventListener('DOMContentLoaded', async () => {
+    controlOfflineButtonVisibility();
+    const q = await queueLoad();
+    _updateBadge(q.length);
+    setTimeout(syncOfflineData, OA.SYNC_BOOT_DELAY);
+});
+
+window.openOfflineRegistrationModal = function () {
+    const modal = document.getElementById('offlineRegModal');
+    const pinInput = document.getElementById('offSessionPin');
+    if (!modal) return;
+
+    if (pinInput) pinInput.value = '';
+    _setView('input');
+    modal.style.display = 'flex';
+
+    setTimeout(() => pinInput?.focus(), 150);
+};
+
+window.processOfflineQueue = async function () {
+    const pinEl = document.getElementById('offSessionPin');
+    if (!pinEl) return;
+
+    const sessionPin = pinEl.value.trim();
+
+    const now = new Date();
+    const currentHour = now.getHours();
+    if (currentHour >= 19 || currentHour < 7) {
+        offlineAlert(t(
+            '❌ عذراً، التسجيل الأوفلاين غير متاح بعد الساعة 7 مساءً. يجب عودة الإنترنت وإتمام التسجيل قبل هذا الموعد.',
+            '❌ Sorry, offline registration is not available after 7 PM.'
+        ), 'error');
+        return;
+    }
+
+    const studentData = await _getStudentFromCache();
+    if (!studentData) {
+        offlineAlert(t("⚠️ يجب تسجيل الدخول أولاً", "⚠️ Please Login First"), 'warning');
+        return;
+    }
+
+    if (!/^\d{6}$/.test(sessionPin)) {
+        offlineAlert(t("⚠️ الكود يجب أن يكون 6 أرقام", "⚠️ PIN must be 6 digits"), 'warning');
+        return;
+    }
+
+    if (!_checkRateLimit()) return;
+
+    const queue = await queueLoad();
+    const key = entryKey(studentData.id, sessionPin);
+
+    if (queue.some(item => entryKey(item.studentID, item.sessionPin) === key)) {
+        offlineAlert(t("⚠️ سجّلت هذه الجلسة بالفعل", "⚠️ Already registered this session"), 'warning');
+        return;
+    }
+
+    if (queue.length >= OA.MAX_QUEUE_SIZE) {
+        offlineAlert(t(
+            "⚠️ قائمة الانتظار ممتلئة، يرجى الاتصال بالإنترنت أولاً",
+            "⚠️ Queue full, please sync first"
+        ), 'warning');
+        return;
+    }
+
+    const patternToggle = document.getElementById('btnOfflinePattern');
+    const isPatternOn = patternToggle?.dataset.on === 'true';
+
+    if (isPatternOn) {
+        window._pendingOfflineStudent = studentData;
+        window._pendingOfflinePin = sessionPin;
+        window._offlinePatternAttempts = 0;
+        openOfflinePatternModal();
+    } else {
+        _setView('process');
+        _runCountdown(OA.COUNTDOWN_SEC, () => _saveEntry(studentData, sessionPin));
+    }
+};
+
+async function _saveEntry(studentData, sessionPin) {
+    const submissionTime = Date.now();
+    const offlineEntry = {
+        studentID: studentData.id,
+        studentName: studentData.name,
+        avatarClass: studentData.avatar,
+        sessionPin: sessionPin,
+        submissionTime: submissionTime,
+        patternInput: window.getOfflinePattern?.() || null,
+        offlineVerifyToken: window._offlineVerifyToken || null,
+        deviceId: window.HARDWARE_ID || "DEVICE_OFFLINE",
+        appVersion: window.APP_VERSION || "4.0",
+        group: studentData.group || "GENERAL",
+    };
+
+    window._offlineVerifyToken = null;
+
+    offlineEntry._sig = await _signEntry(offlineEntry, studentData.uid || _getUidForCrypto());
+
+    const queue = await queueLoad();
+    queue.push(offlineEntry);
+    await queueSave(queue);
+
+    _resetRateLimit();
+
+    toast(
+        t("✅ تم الحفظ أوفلاين.. سيتم التأكيد فور عودة النت",
+            "✅ Saved Offline.. Will sync on reconnect"),
+        5000, "#1e293b"
+    );
+    beep();
+
+    const modal = document.getElementById('offlineRegModal');
+    if (modal) modal.style.display = 'none';
+
+    if (navigator.onLine) syncOfflineData();
+}
+
+async function syncOfflineData() {
+    if (_syncPromise) {
+        log('info', 'Sync already running, awaiting...');
+        return _syncPromise;
+    }
+
+    if (!navigator.onLine) return;
+
+    const queue = await queueLoad();
+    if (queue.length === 0) return;
+
+    const user = window.auth?.currentUser;
+    if (!user) {
+        log('info', 'Sync skipped: no authenticated user');
+        return;
+    }
+
+    _syncPromise = _doSync(queue, user).finally(() => {
+        _syncPromise = null;
+    });
+
+    return _syncPromise;
+}
+
+async function _doSync(queue, user) {
+    log('info', `Sync started: ${queue.length} entries`);
+
+    try {
+        if (!_firestoreCache) {
+            _firestoreCache = await import("firebase/firestore");
+            log('info', 'Firestore module loaded & cached');
+        }
+
+        const { doc, getDoc } = _firestoreCache;
+        const db = window.db;
+        if (!db) { log('error', 'window.db not available'); return; }
+
+        const uid = user.uid;
+
+        const results = await Promise.allSettled(
+            queue.map(async (entry) => {
+                const isValid = await _verifyEntry(entry, uid);
+
+                if (!isValid) {
+                    log('warn', 'Unsigned or tampered entry detected, quarantining:', entry.sessionPin);
+                    toast(
+                        t('⚠️ تم اكتشاف تلاعب في بيانات محفوظة', '⚠️ Tampered entry detected'),
+                        5000, "#ef4444"
+                    );
+                    await quarantineEntry(entry);
+                    return { status: 'quarantine' };
+                }
+
+                const result = await _syncEntry(entry, { doc, getDoc, db, user });
+                return { status: result, entry };
+            })
+        );
+
+        const remainingQueue = [];
+        let successCount = 0;
+        let failCount = 0;
+        let quarantineCount = 0;
+
+        for (const r of results) {
+            if (r.status === 'rejected') {
+                failCount++;
+                continue;
+            }
+
+            const val = r.value;
+            if (!val || val.status === 'quarantine') {
+                quarantineCount++;
+            } else if (val.status === true) {
+                successCount++;
+            } else if (val.status === 'retry') {
+                remainingQueue.push(val.entry);
+                failCount++;
+            } else {
+                failCount++;
+            }
+        }
+
+        await queueSave(remainingQueue);
+        log('info', `Sync complete. Success: ${successCount} | Retry: ${remainingQueue.length} | Quarantined: ${quarantineCount} | Other failures: ${failCount}`);
+
+        _reportSyncOutcome({ successCount, remainingCount: remainingQueue.length, quarantineCount });
+
+    } catch (criticalError) {
+        log('error', 'Critical sync failure:', criticalError);
+        toast(
+            t(
+                '❌ خطأ غير متوقع أثناء المزامنة — تواصل مع الدعم',
+                '❌ Unexpected sync error — contact support'
+            ),
+            8000, "#ef4444"
+        );
+    }
+}
+
+function _reportSyncOutcome({ successCount, remainingCount, quarantineCount }) {
+    if (successCount > 0 && remainingCount === 0 && quarantineCount === 0) {
+        toast(
+            t(`✅ تم تأكيد ${successCount} تسجيل بنجاح`, `✅ ${successCount} registration(s) confirmed`),
+            5000, "#10b981"
+        );
+    } else if (successCount > 0 && remainingCount > 0 && quarantineCount === 0) {
+        toast(
+            t(
+                `✅ نجح ${successCount} | ⏳ ${remainingCount} سيُعاد المحاولة تلقائياً`,
+                `✅ ${successCount} confirmed | ⏳ ${remainingCount} will retry`
+            ),
+            6000, "#f59e0b"
+        );
+    } else if (successCount > 0 && quarantineCount > 0) {
+        toast(
+            t(
+                `✅ نجح ${successCount} | ❌ رُفض ${quarantineCount} نهائياً (نمط خاطئ أو بيانات تالفة)`,
+                `✅ ${successCount} confirmed | ❌ ${quarantineCount} permanently rejected`
+            ),
+            8000, "#ef4444"
+        );
+    } else if (remainingCount > 0 && successCount === 0 && quarantineCount === 0) {
+        toast(
+            t(
+                `⚠️ فشلت مزامنة ${remainingCount} تسجيل — سيتم إعادة المحاولة`,
+                `⚠️ ${remainingCount} pending — will retry automatically`
+            ),
+            6000, "#f59e0b"
+        );
+    } else if (quarantineCount > 0 && successCount === 0) {
+        toast(
+            t(
+                `❌ تم رفض ${quarantineCount} تسجيل نهائياً — تواصل مع الدكتور`,
+                `❌ ${quarantineCount} registration(s) permanently rejected — contact your doctor`
+            ),
+            8000, "#ef4444"
+        );
+    } else if (successCount === 0 && remainingCount === 0 && quarantineCount === 0) {
+        toast(
+            t(`✅ تمت المزامنة`, `✅ Sync complete`),
+            3000, "#64748b"
+        );
+    }
+}
+
+function _timeoutSignal(ms) {
+    if (!window.AbortController) return { signal: undefined, cancel: () => { } };
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), ms);
+    return { signal: controller.signal, cancel: () => clearTimeout(id) };
+}
+
+
+
+async function _syncEntry(entry, { user }) {
+    for (let attempt = 1; attempt <= OA.MAX_RETRIES; attempt++) {
+        try {
+            const result = await _syncEntryUnified(entry, user);
+            if (result !== 'retry') return result;
+        } catch (err) {
+            log('error', `Sync fatal error on attempt ${attempt}:`, err.message);
+        }
+
+        if (attempt < OA.MAX_RETRIES) {
+            await _sleep(OA.RETRY_BASE_MS * Math.pow(2, attempt - 1));
+        }
+    }
+    return 'retry';
+}
+
+async function _syncEntryUnified(entry, user) {
+    try {
+        const currentUser = window.auth?.currentUser;
+        if (!currentUser) return 'retry';
+        const idToken = await currentUser.getIdToken(true);
+
+        let patternPath = null;
+        if (entry.patternInput) {
+            try {
+                const parsed = JSON.parse(entry.patternInput);
+                patternPath = Array.isArray(parsed?.path) ? parsed.path : null;
+            } catch { patternPath = null; }
+        }
+
+        const { signal, cancel } = _timeoutSignal(8000);
+        let syncRes;
+        try {
+            syncRes = await fetch(
+                'https://offlinemode.vercel.app/api/syncOfflineAttendance',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${idToken}`
+                    },
+                    body: JSON.stringify({
+                        sessionPin: entry.sessionPin,
+                        submissionTime: entry.submissionTime,
+                        patternPath,
+                        deviceId: entry.deviceId || window.HARDWARE_ID || "DEVICE_OFFLINE"
+                    }),
+                    ...(signal ? { signal } : {})
+                }
+            );
+        } finally {
+            cancel();
+        }
+
+        if (syncRes.status >= 500) return 'retry';
+        if (syncRes.status === 401) {
+            log('warn', 'Token expired during sync — retrying');
+            return 'retry';
+        }
+        if (syncRes.status === 429) {
+            offlineAlert(t('⛔ تجاوزت عدد المحاولات — سيتم إعادة المحاولة تلقائياً', '⛔ Too many attempts — will retry automatically'), 'warning');
+            return 'retry';
+        }
+        if (syncRes.status === 410) {
+            log('warn', `Stale code detected on sync: ${entry.sessionPin}`);
+            offlineAlert(t(
+                `❌ انتهت صلاحية الكود`,
+                `❌ This code has expired`
+            ), 'error');
+            await quarantineEntry({ ...entry, quarantineReason: 'stale-code-410' });
+            return false;
+        }
+        if (syncRes.status === 403) {
+            const errData = await syncRes.json().catch(() => ({}));
+            log('warn', `Sync forbidden: ${errData.error || 'unknown'}`);
+            offlineAlert(t(
+                `❌ فشل تسجيل الحضور (${entry.sessionPin}) — ${errData.error || ''}`,
+                `❌ Attendance failed (${entry.sessionPin}) — ${errData.error || ''}`
+            ), 'error');
+            await quarantineEntry({ ...entry, quarantineReason: errData.error || 'sync-forbidden' });
+            return false;
+        }
+        if (!syncRes.ok) {
+            const errData = await syncRes.json().catch(() => ({}));
+            log('warn', `Sync rejected: ${errData.error || syncRes.status}`);
+            offlineAlert(t(
+                `❌ فشل تسجيل الحضور: ${errData.error || 'خطأ غير معروف'}`,
+                `❌ Attendance failed: ${errData.error || 'Unknown error'}`
+            ), 'error');
+            await quarantineEntry({ ...entry, quarantineReason: errData.error || 'sync-rejected' });
+            return false;
+        }
+
+        const data = await syncRes.json().catch(() => ({}));
+        _handleSyncSuccess(entry, data);
+        return true;
+
+    } catch (netErr) {
+        log('warn', `Sync network error: ${netErr.message}`);
+        return 'retry';
+    }
+}
+
+function _handleSyncSuccess(entry, data) {
+    beep();
+
+    if (data.mode === 'live') {
+        toast(t(`✅ تم تأكيد حضورك بنجاح`, `✅ Attendance confirmed`), 4000, "#10b981");
+        try {
+            localStorage.setItem('TARGET_DOCTOR_UID', data.doctorUID);
+            sessionStorage.setItem('TARGET_DOCTOR_UID', data.doctorUID);
+        } catch { /* non-critical UI hint storage */ }
+
+        if (typeof window.switchScreen === 'function') window.switchScreen('screenLiveSession');
+        if (typeof window.startLiveSnapshotListener === 'function') window.startLiveSnapshotListener();
+
+    } else {
+        offlineAlert(t(`✅ تم تسجيل حضورك (الجلسة كانت مغلقة)`, `✅ Attendance recorded (session was closed)`), 'success');
+    }
+
+    window.dispatchEvent(new CustomEvent('attendanceSynced', {
+        detail: { studentID: entry.studentID, sessionPin: entry.sessionPin, postSession: data.mode !== 'live', recID: data.recID }
+    }));
+
+    log('info', `✅ Sync complete via unified backend: ${entry.sessionPin} (${data.mode})`);
+}
+
+function _sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function _getStudentFromCache() {
+    try {
+        const currentUser = window.auth?.currentUser;
+
+        const raw = localStorage.getItem('cached_profile_data');
+        if (raw) {
+            const p = JSON.parse(raw);
+            if (currentUser && p.uid !== currentUser.uid) return null;
+            if (p.studentID) return {
+                id: String(p.studentID).trim(),
+                name: p.fullName || 'Student',
+                avatar: p.avatarClass || 'fa-user-graduate',
+                uid: p.uid,
+                group: p.group || "GENERAL",
+            };
+        }
+
+        if (window.PersistentStore) {
+            const idbRaw = await window.PersistentStore.get('cached_profile_data');
+            if (idbRaw) {
+                const p = JSON.parse(idbRaw);
+                if (p.studentID) {
+                    try { localStorage.setItem('cached_profile_data', idbRaw); } catch { }
+                    return {
+                        id: String(p.studentID).trim(),
+                        name: p.fullName || 'Student',
+                        avatar: p.avatarClass || 'fa-user-graduate',
+                        uid: p.uid,
+                        group: p.group || "GENERAL",
+                    };
+                }
+            }
+        }
+
+        if (currentUser && navigator.onLine) {
+            const { getDoc, doc } = await import("firebase/firestore");
+            const snap = await getDoc(doc(window.db, 'user_registrations', currentUser.uid));
+            if (!snap.exists()) return null;
+
+            const data = snap.data();
+            const info = data.registrationInfo || data;
+            const profile = {
+                uid: currentUser.uid,
+                studentID: info.studentID,
+                fullName: info.fullName || 'Student',
+                avatarClass: data.avatarClass || 'fa-user-graduate',
+            };
+
+            const profileStr = JSON.stringify(profile);
+            try { localStorage.setItem('cached_profile_data', profileStr); } catch { }
+            window.PersistentStore?.set('cached_profile_data', profileStr);
+
+            return {
+                id: String(profile.studentID).trim(),
+                name: profile.fullName,
+                avatar: profile.avatarClass,
+                uid: profile.uid,
+                group: profile.group || "GENERAL",
+            };
+        }
+
+        return null;
+
+    } catch (e) {
+        log('error', 'Failed to get student data:', e.message);
+        return null;
+    }
+}
+
+function _setView(view) {
+    const inputView = document.getElementById('offlineInputView');
+    const processView = document.getElementById('offlineProcessView');
+    const cancelBtn = document.getElementById('btnCancelOffline');
+
+    if (view === 'input') {
+        if (inputView) inputView.style.display = 'block';
+        if (processView) processView.style.display = 'none';
+        if (cancelBtn) cancelBtn.style.display = 'block';
+    } else {
+        if (inputView) inputView.style.display = 'none';
+        if (processView) processView.style.display = 'block';
+        if (cancelBtn) cancelBtn.style.display = 'none';
+    }
+}
+
+function _runCountdown(seconds, onDone) {
+    if (_countdownTimer) clearTimeout(_countdownTimer);
+
+    const timerEl = document.getElementById('offTimer');
+    let remaining = seconds;
+
+    function tick() {
+        if (timerEl) timerEl.innerText = remaining;
+        if (remaining <= 0) { onDone(); return; }
+        remaining--;
+        _countdownTimer = setTimeout(tick, 1000);
+    }
+
+    tick();
+}
+
+window.cancelOfflineRegistration = function () {
+    if (_countdownTimer) { clearTimeout(_countdownTimer); _countdownTimer = null; }
+    const modal = document.getElementById('offlineRegModal');
+    if (modal) modal.style.display = 'none';
+};
+
+window.forceSyncOfflineData = async function () {
+    if (_syncPromise) {
+        log('info', 'Waiting for ongoing sync before forcing...');
+        await _syncPromise;
+    }
+    return syncOfflineData();
+};
+
+window.inspectOfflineQueue = async function () {
+    if (window.APP_ENV === 'production') {
+        const user = window.auth?.currentUser;
+        if (!user) { console.warn('[NursingOffline] Not authenticated.'); return; }
+
+        try {
+            const token = await user.getIdTokenResult();
+            if (!token.claims?.admin) {
+                console.warn('[NursingOffline] Admin access required.');
+                return;
+            }
+        } catch {
+            console.warn('[NursingOffline] Could not verify admin claim.');
+            return;
+        }
+    }
+
+    const queue = await queueLoad();
+    const quarantineRaw = await Store.get(OA.QUARANTINE_KEY);
+    const quarantine = quarantineRaw ? JSON.parse(quarantineRaw) : [];
+    const rateInfo = JSON.parse(localStorage.getItem(OA.RATE_KEY) || '{}');
+
+    console.table(queue.map(e => ({ ...e, _sig: e._sig ? `${e._sig.slice(0, 12)}…` : 'none' })));
+    console.info(`Pending: ${queue.length} | Quarantined: ${quarantine.length}`);
+    console.info('Rate limit:', rateInfo);
+
+    return { queue, quarantine, rateInfo };
+};
+
+(async function _migrateLegacyQueues() {
+    const uid = _getUidForCrypto();
+
+    const V3_KEY = "nursing_offline_queue_v3";
+    try {
+        const v3Raw = localStorage.getItem(V3_KEY);
+        if (v3Raw) {
+            const existing = await queueLoad();
+            if (existing.length === 0) {
+                const decoded = await _decryptQueue(v3Raw, uid);
+                if (Array.isArray(decoded) && decoded.length > 0) {
+                    log('info', `Migrating ${decoded.length} entries from v3 to v4...`);
+                    await queueSave(decoded);
+                    log('info', 'v3 -> v4 migration complete.');
+                }
+            }
+            localStorage.removeItem(V3_KEY);
+        }
+    } catch {
+        log('warn', 'v3 -> v4 queue migration failed.');
+    }
+
+    const V2_KEY = "nursing_offline_queue_v2";
+    try {
+        const v2Raw = localStorage.getItem(V2_KEY);
+        if (v2Raw) {
+            const existing = await queueLoad();
+            if (existing.length === 0) {
+                const decoded = _b64ToUtf8(v2Raw);
+                const oldQueue = JSON.parse(decoded);
+                if (Array.isArray(oldQueue) && oldQueue.length > 0) {
+                    log('info', `Migrating ${oldQueue.length} entries from v2 to v4...`);
+                    await queueSave(oldQueue);
+                    log('info', 'v2 -> v4 migration complete.');
+                }
+            }
+            localStorage.removeItem(V2_KEY);
+        }
+    } catch {
+        log('warn', 'v2 -> v4 queue migration failed.');
+    }
+})();
+
+function offlineAlert(msg, type = 'error') {
+    const modal = document.getElementById('offlineAlertModal');
+    const msgEl = document.getElementById('offlineAlertMsg');
+    const icon = document.getElementById('offlineAlertIcon');
+    const wrap = document.getElementById('offlineAlertIconWrap');
+
+    if (!modal) { alert(msg); return; }
+
+    msgEl.innerText = msg;
+
+    const styles = {
+        error: ['fa-circle-exclamation', '#ef4444', 'rgba(239,68,68,0.15)', 'rgba(239,68,68,0.3)'],
+        success: ['fa-circle-check', '#10b981', 'rgba(16,185,129,0.15)', 'rgba(16,185,129,0.3)'],
+        warning: ['fa-triangle-exclamation', '#f59e0b', 'rgba(245,158,11,0.15)', 'rgba(245,158,11,0.3)'],
+    };
+
+    const [ic, color, bg, border] = styles[type] || styles.error;
+    icon.className = `fa-solid ${ic}`;
+    icon.style.color = color;
+    wrap.style.background = bg;
+    wrap.style.borderColor = border;
+
+    modal.style.display = 'flex';
+}
+
+(function initOfflinePattern() {
+    'use strict';
+
+    const CSS = `
+        #offlinePatternModal,
+        #offlinePatternModal * {
+            direction: ltr !important;
+            unicode-bidi: isolate !important;
+        }
+
+        #offlinePatternGrid {
+            position: relative;
+            display: grid !important;
+            grid-template-columns: repeat(4, 1fr) !important;
+            grid-template-rows: repeat(4, 1fr) !important;
+            gap: 0 !important;
+            width: 260px;
+            height: 260px;
+            touch-action: none;
+            -ms-touch-action: none;
+            cursor: crosshair;
+            font-size: 0 !important;
+        }
+
+        .oplk-cell {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            font-size: 0 !important;
+        }
+
+        .oplk-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #bae6fd;
+            border: 2px solid #7dd3fc;
+            pointer-events: none;
+            transition: transform 0.15s ease, background 0.15s ease,
+                        border-color 0.15s ease, box-shadow 0.15s ease;
+            flex-shrink: 0;
+            flex-grow: 0;
+        }
+
+        .oplk-dot.active {
+            background: #6366f1 !important;
+            border-color: #4f46e5 !important;
+            transform: scale(1.6) !important;
+            box-shadow: 0 0 12px rgba(99,102,241,0.6) !important;
+        }
+
+        .oplk-dot.error {
+            background: #ef4444 !important;
+            border-color: #b91c1c !important;
+            transform: scale(1.6) !important;
+            box-shadow: 0 0 12px rgba(239,68,68,0.5) !important;
+        }
+
+        #offlinePatternSvg {
+            position: absolute !important;
+            inset: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            pointer-events: none;
+            z-index: 10;
+            overflow: visible;
+        }
+    `;
+
+    let styleEl = document.getElementById('oplk-styles');
+    if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = 'oplk-styles';
+        document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = CSS;
+
+    let _drawing = false;
+    let _path = [];
+    let _dotPositions = [];
+    let _rafId = null;
+    let _activePointer = null;
+    let _timerTick = null;
+    let _savedPattern = null;
+    let _resizeTimer = null;
+    let _attempts = 0;
+    let _patternListeners = [];
+    let _patternResizeObserver = null;
+    let _patternMutationObserver = null;
+
+    const _lang = () => localStorage.getItem('sys_lang') || 'ar';
+    const _t = (ar, en) => _lang() === 'ar' ? ar : en;
+
+    function _addPatternListener(target, type, handler, options) {
+        target.addEventListener(type, handler, options);
+        _patternListeners.push({ target, type, handler, options });
+    }
+
+    function _detachEvents() {
+        for (const { target, type, handler, options } of _patternListeners) {
+            target.removeEventListener(type, handler, options);
+        }
+        _patternListeners = [];
+    }
+
+    function _teardownPatternModal() {
+        _detachEvents();
+        _patternResizeObserver?.disconnect();
+        _patternResizeObserver = null;
+        _patternMutationObserver?.disconnect();
+        _patternMutationObserver = null;
+        clearInterval(_timerTick);
+    }
+
+    function _closePatternModal() {
+        _teardownPatternModal();
+        const modal = document.getElementById('offlinePatternModal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    function calcPositions() {
+        const grid = document.getElementById('offlinePatternGrid');
+        if (!grid) return;
+
+        const gr = grid.getBoundingClientRect();
+        if (gr.width === 0 || gr.height === 0) {
+            requestAnimationFrame(calcPositions);
+            return;
+        }
+
+        const dots = grid.querySelectorAll('.oplk-dot');
+        if (dots.length !== 16) return;
+
+        _dotPositions = [];
+        dots.forEach((dot, i) => {
+            const r = dot.getBoundingClientRect();
+            _dotPositions.push({
+                idx: i,
+                x: (r.left + r.right) / 2 - gr.left,
+                y: (r.top + r.bottom) / 2 - gr.top,
+            });
+        });
+    }
+
+    function buildGrid() {
+        const grid = document.getElementById('offlinePatternGrid');
+        const svg = document.getElementById('offlinePatternSvg');
+        if (!grid || !svg) return;
+
+        _drawing = false;
+        _path = [];
+        _dotPositions = [];
+        if (_rafId) { cancelAnimationFrame(_rafId); _rafId = null; }
+
+        grid.innerHTML = '';
+        svg.innerHTML = '';
+        svg.removeAttribute('data-state');
+
+        grid.setAttribute('translate', 'no');
+        grid.classList.add('notranslate');
+
+        for (let i = 0; i < 16; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'oplk-cell';
+            cell.setAttribute('translate', 'no');
+
+            const dot = document.createElement('div');
+            dot.className = 'oplk-dot';
+            dot.dataset.idx = String(i);
+            dot.setAttribute('translate', 'no');
+
+            cell.appendChild(dot);
+            grid.appendChild(cell);
+        }
+
+        requestAnimationFrame(() => requestAnimationFrame(calcPositions));
+    }
+
+    function hitTest(clientX, clientY) {
+        const grid = document.getElementById('offlinePatternGrid');
+        if (!grid || _dotPositions.length === 0) return -1;
+
+        const gr = grid.getBoundingClientRect();
+        const dynamicRadius = Math.min(gr.width, gr.height) / 8;
+        const rx = clientX - gr.left;
+        const ry = clientY - gr.top;
+
+        let best = -1, bestDist = dynamicRadius;
+        for (const dp of _dotPositions) {
+            const d = Math.hypot(rx - dp.x, ry - dp.y);
+            if (d < bestDist) { bestDist = d; best = dp.idx; }
+        }
+        return best;
+    }
+
+    function renderLines(liveX, liveY) {
+        const svg = document.getElementById('offlinePatternSvg');
+        if (!svg) return;
+
+        const isError = svg.dataset.state === 'error';
+        const stroke = isError ? '#ef4444' : '#6366f1';
+        let html = '';
+
+        for (let k = 0; k < _path.length - 1; k++) {
+            const a = _dotPositions[_path[k]];
+            const b = _dotPositions[_path[k + 1]];
+            if (a && b) {
+                html += `<line x1="${Number(a.x)}" y1="${Number(a.y)}" x2="${Number(b.x)}" y2="${Number(b.y)}"
+                    stroke="${stroke}" stroke-width="3.5"
+                    stroke-linecap="round" opacity="${isError ? 0.7 : 1}"/>`;
+            }
+        }
+
+        if (_drawing && liveX !== undefined && _path.length > 0) {
+            const last = _dotPositions[_path[_path.length - 1]];
+            const gr = document.getElementById('offlinePatternGrid')?.getBoundingClientRect();
+            if (last && gr) {
+                html += `<line x1="${Number(last.x)}" y1="${Number(last.y)}"
+                    x2="${Number(liveX - gr.left)}" y2="${Number(liveY - gr.top)}"
+                    stroke="${stroke}" stroke-width="3"
+                    stroke-linecap="round" opacity="0.4"
+                    stroke-dasharray="6 4"/>`;
+            }
+        }
+
+        svg.innerHTML = html;
+    }
+
+    function activateDot(idx) {
+        const dot = document.querySelector(`.oplk-dot[data-idx="${idx}"]`);
+        dot?.classList.add('active');
+        navigator.vibrate?.(12);
+    }
+
+    function showError(msg) {
+        _drawing = false;
+        const svg = document.getElementById('offlinePatternSvg');
+        const hint = document.getElementById('offlinePatternHint');
+
+        if (svg) svg.dataset.state = 'error';
+        document.querySelectorAll('.oplk-dot.active').forEach(d => {
+            d.classList.remove('active');
+            d.classList.add('error');
+        });
+        renderLines();
+
+        if (hint && msg) { hint.style.color = '#ef4444'; hint.innerText = msg; }
+        navigator.vibrate?.([60, 40, 60]);
+
+        _attempts++;
+
+        if (_attempts >= 2) {
+            clearInterval(_timerTick);
+            setTimeout(() => {
+                _closePatternModal();
+
+                window._pendingOfflineStudent = null;
+                window._pendingOfflinePin = null;
+                _attempts = 0;
+                _savedPattern = null;
+
+                const btn = document.getElementById('btnOfflinePattern');
+                const thumb = document.getElementById('offlinePatternThumb');
+                const icon = document.getElementById('offlinePatternBtnIcon');
+                if (btn) { btn.style.background = '#cbd5e1'; btn.style.borderColor = '#94a3b8'; btn.dataset.on = 'false'; }
+                if (thumb) thumb.style.left = '1px';
+                if (icon) { icon.className = 'fa-solid fa-lock'; icon.style.color = '#94a3b8'; }
+
+                if (typeof offlineAlert === 'function') {
+                    offlineAlert(_t(
+                        '❌ تجاوزت عدد المحاولات المسموحة — أعد المحاولة من البداية',
+                        '❌ Pattern attempts exceeded — please try again'
+                    ), 'error');
+                }
+            }, 900);
+            return;
+        }
+
+        setTimeout(() => {
+            buildGrid();
+            attachEvents();
+            if (hint) {
+                hint.style.color = '#f59e0b';
+                hint.innerText = _t(
+                    '⚠️ محاولة أخيرة — ارسم النمط بعناية',
+                    '⚠️ Last attempt — draw carefully'
+                );
+            }
+        }, 900);
+    }
+
+    function onPointerDown(e) {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        if (_activePointer !== null) return;
+
+        calcPositions();
+        const idx = hitTest(e.clientX, e.clientY);
+        if (idx === -1) return;
+
+        e.preventDefault();
+        e.target?.setPointerCapture?.(e.pointerId);
+        _activePointer = e.pointerId;
+        _drawing = true;
+        _path = [idx];
+        activateDot(idx);
+        renderLines(e.clientX, e.clientY);
+    }
+
+    function onPointerMove(e) {
+        if (!_drawing || e.pointerId !== _activePointer) return;
+        e.preventDefault();
+
+        const idx = hitTest(e.clientX, e.clientY);
+        if (idx !== -1 && !_path.includes(idx)) {
+            _path.push(idx);
+            activateDot(idx);
+        }
+
+        if (_rafId) cancelAnimationFrame(_rafId);
+        const cx = e.clientX, cy = e.clientY;
+        _rafId = requestAnimationFrame(() => renderLines(cx, cy));
+    }
+
+    function onPointerUp(e) {
+        if (!_drawing || e.pointerId !== _activePointer) return;
+        _activePointer = null;
+        _drawing = false;
+        if (_rafId) { cancelAnimationFrame(_rafId); _rafId = null; }
+        renderLines();
+        finalizePattern();
+    }
+
+    function attachEvents() {
+        const grid = document.getElementById('offlinePatternGrid');
+        if (!grid) return;
+
+        _detachEvents();
+
+        _addPatternListener(grid, 'pointerdown', onPointerDown, { passive: false });
+        _addPatternListener(grid, 'pointermove', onPointerMove, { passive: false });
+        _addPatternListener(grid, 'pointerup', onPointerUp, { passive: false });
+        _addPatternListener(grid, 'pointercancel', onPointerUp, { passive: false });
+
+        if (!('PointerEvent' in window)) {
+            const mouseDown = e => onPointerDown({ ...e, pointerId: 'mouse', pointerType: 'mouse' });
+            const mouseMove = e => onPointerMove({ ...e, pointerId: 'mouse' });
+            const mouseUp = e => onPointerUp({ ...e, pointerId: 'mouse' });
+            _addPatternListener(grid, 'mousedown', mouseDown);
+            _addPatternListener(grid, 'mousemove', mouseMove);
+            _addPatternListener(grid, 'mouseup', mouseUp);
+
+            const touchStart = e => {
+                const touch = e.touches[0];
+                onPointerDown({
+                    clientX: touch.clientX, clientY: touch.clientY,
+                    pointerId: touch.identifier, pointerType: 'touch',
+                    button: 0,
+                    preventDefault: () => e.preventDefault(),
+                    target: grid
+                });
+            };
+            const touchMove = e => {
+                const touch = e.touches[0];
+                e.preventDefault();
+                onPointerMove({ clientX: touch.clientX, clientY: touch.clientY, pointerId: touch.identifier });
+            };
+            const touchEnd = e => {
+                const touch = e.changedTouches[0];
+                onPointerUp({ clientX: touch.clientX, clientY: touch.clientY, pointerId: touch.identifier });
+            };
+            _addPatternListener(grid, 'touchstart', touchStart, { passive: false });
+            _addPatternListener(grid, 'touchmove', touchMove, { passive: false });
+            _addPatternListener(grid, 'touchend', touchEnd, { passive: false });
+        }
+    }
+
+    function watchResize() {
+        const grid = document.getElementById('offlinePatternGrid');
+        if (!grid) return;
+
+        if ('ResizeObserver' in window) {
+            _patternResizeObserver?.disconnect();
+            _patternResizeObserver = new ResizeObserver(() => {
+                clearTimeout(_resizeTimer);
+                _resizeTimer = setTimeout(calcPositions, 100);
+            });
+            _patternResizeObserver.observe(grid);
+        }
+
+        const onResize = () => {
+            clearTimeout(_resizeTimer);
+            _resizeTimer = setTimeout(calcPositions, 100);
+        };
+        const onOrientation = () => setTimeout(calcPositions, 300);
+
+        _addPatternListener(window, 'resize', onResize);
+        _addPatternListener(window, 'orientationchange', onOrientation);
+    }
+
+    function watchMutations() {
+        const grid = document.getElementById('offlinePatternGrid');
+        if (!grid || !('MutationObserver' in window)) return;
+
+        _patternMutationObserver?.disconnect();
+        _patternMutationObserver = new MutationObserver(mutations => {
+            for (const m of mutations) {
+                if (m.type === 'childList' && m.addedNodes.length > 0) {
+                    requestAnimationFrame(() => requestAnimationFrame(calcPositions));
+                    break;
+                }
+            }
+        });
+        _patternMutationObserver.observe(grid, { childList: true, subtree: true });
+    }
+
+    function startTimer() {
+        let remaining = 12;
+        const timerEl = document.getElementById('offlinePatternTimer');
+        clearInterval(_timerTick);
+        _timerTick = setInterval(() => {
+            remaining--;
+            if (timerEl) timerEl.innerText = remaining;
+            if (remaining <= 5 && timerEl) timerEl.style.color = '#ef4444';
+            if (remaining <= 0) {
+                clearInterval(_timerTick);
+                _closePatternModal();
+                if (typeof offlineAlert === 'function') {
+                    offlineAlert(_t('⏰ انتهى وقت رسم النمط', '⏰ Pattern time expired'), 'warning');
+                }
+            }
+        }, 1000);
+    }
+
+    async function finalizePattern() {
+        if (_path.length < 3) {
+            showError(_t('ارسم على الأقل 3 نقاط', 'Draw at least 3 dots'));
+            return;
+        }
+
+        const pin = window._pendingOfflinePin;
+        const student = window._pendingOfflineStudent;
+        if (!pin || !student) return;
+
+        if (!navigator.onLine) {
+            _savedPattern = JSON.stringify({ type: 'pattern', path: _path });
+            window._offlineVerifyToken = null;
+            clearInterval(_timerTick);
+            _continueAfterPattern(student, pin);
+            return;
+        }
+
+        try {
+            const user = window.auth?.currentUser;
+            if (!user) { showError(_t('يجب تسجيل الدخول', 'Please login first')); return; }
+
+            const idToken = await user.getIdToken(true);
+
+            const verifyRes = await fetch(
+                'https://offlinemode.vercel.app/api/verifyOfflinePattern',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${idToken}`
+                    },
+                    body: JSON.stringify({
+                        sessionPin: pin,
+                        patternPath: [..._path]
+                    })
+                }
+            );
+
+            const verifyData = await verifyRes.json();
+
+            if (!verifyRes.ok) {
+                showError(verifyData.error || _t('❌ النمط غير صحيح', '❌ Wrong pattern'));
+                if (verifyData.attemptsLeft === 0) {
+                    setTimeout(() => _closePatternModal(), 900);
+                }
+                return;
+            }
+            window._offlineVerifyToken = verifyData.verifyToken;
+            _savedPattern = JSON.stringify({ type: 'pattern', path: _path, preVerified: true });
+            clearInterval(_timerTick);
+            _continueAfterPattern(student, pin);
+
+        } catch (e) {
+            _savedPattern = JSON.stringify({ type: 'pattern', path: _path });
+            window._offlineVerifyToken = null;
+            clearInterval(_timerTick);
+            _continueAfterPattern(student, pin);
+        }
+    }
+
+    function _continueAfterPattern(student, pin) {
+        const btn = document.getElementById('btnOfflinePattern');
+        const thumb = document.getElementById('offlinePatternThumb');
+        const icon = document.getElementById('offlinePatternBtnIcon');
+        if (btn) { btn.style.background = '#10b981'; btn.style.borderColor = '#059669'; btn.dataset.on = 'true'; }
+        if (thumb) thumb.style.left = '24px';
+        if (icon) { icon.className = 'fa-solid fa-lock-open'; icon.style.color = '#10b981'; }
+
+        _closePatternModal();
+
+        window._pendingOfflineStudent = null;
+        window._pendingOfflinePin = null;
+        _attempts = 0;
+
+        if (typeof _setView === 'function') _setView('process');
+        if (typeof _runCountdown === 'function') {
+            _runCountdown(OA.COUNTDOWN_SEC, () => {
+                if (typeof _saveEntry === 'function') _saveEntry(student, pin);
+            });
+        }
+    }
+
+    window.openOfflinePatternModal = function () {
+        _savedPattern = null;
+        _attempts = 0;
+        const modal = document.getElementById('offlinePatternModal');
+        if (!modal) return;
+        modal.style.display = 'flex';
+
+        setTimeout(() => {
+            buildGrid();
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    attachEvents();
+                    watchResize();
+                    watchMutations();
+                    startTimer();
+                });
+            });
+        }, 50);
+    };
+
+    window.resetOfflinePattern = function () {
+        buildGrid();
+        requestAnimationFrame(() => requestAnimationFrame(attachEvents));
+    };
+
+    window.skipOfflinePattern = function () {
+        _savedPattern = null;
+        _attempts = 0;
+        window._pendingOfflineStudent = null;
+        window._pendingOfflinePin = null;
+
+        const btn = document.getElementById('btnOfflinePattern');
+        const thumb = document.getElementById('offlinePatternThumb');
+        const icon = document.getElementById('offlinePatternBtnIcon');
+        if (btn) { btn.style.background = '#cbd5e1'; btn.style.borderColor = '#94a3b8'; btn.dataset.on = 'false'; }
+        if (thumb) thumb.style.left = '1px';
+        if (icon) { icon.className = 'fa-solid fa-lock'; icon.style.color = '#94a3b8'; }
+
+        _closePatternModal();
+    };
+
+    window.getOfflinePattern = function () {
+        return _savedPattern;
+    };
+
+    window.toggleOfflinePattern = function () {
+        const btn = document.getElementById('btnOfflinePattern');
+        const thumb = document.getElementById('offlinePatternThumb');
+        const icon = document.getElementById('offlinePatternBtnIcon');
+        if (!btn) return;
+
+        const isOn = btn.dataset.on === 'true';
+        if (!isOn) {
+            btn.style.background = '#6366f1';
+            btn.style.borderColor = '#4f46e5';
+            thumb.style.left = '24px';
+            icon.className = 'fa-solid fa-lock-open';
+            icon.style.color = '#6366f1';
+            btn.dataset.on = 'true';
+        } else {
+            btn.style.background = '#cbd5e1';
+            btn.style.borderColor = '#94a3b8';
+            thumb.style.left = '1px';
+            icon.className = 'fa-solid fa-lock';
+            icon.style.color = '#94a3b8';
+            btn.dataset.on = 'false';
+            _savedPattern = null;
+        }
+    };
+
+})();

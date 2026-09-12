@@ -3,7 +3,7 @@ import {
     getDocs, getDoc, setDoc,
     query, where, orderBy, limit,
     serverTimestamp,
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+} from "firebase/firestore";
 
 const TYPE_CONFIG = Object.freeze({
     info:    { headerBg: 'rgba(14,165,233,0.08)',  accentColor: '#0ea5e9', badgeSymbol: '◈', label: 'إعلان',  labelEn: 'INFO'    },
@@ -260,7 +260,7 @@ function _patternIconSVG(size = 36) {
 }
 
 const _SAP_ANN_CONTENT = {
-    title:       ' SAP ',
+    title:       'مرحباً بك في SAP ',
     subtitle:    ' بنفكرك ',
     i1t: 'ضبط الوقت التلقائي',
     i1b: 'تأكد أنك مفعل ضبط الوقت التلقائي علي جهازك  لضمان تسجيل حضورك بدقة كاملة.',

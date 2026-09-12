@@ -1,0 +1,379 @@
+<!-- ============================================================
+  الخطوة 1 : الزر — ضيفه جوه dean-grid-layout
+  (مخفي بالأصل — يظهر أوتوماتيك لو role == "dean")
+  ============================================================ -->
+
+<button id="farBtn" onclick="openFARSystem()" class="dean-btn-modern far-style" style="display:none;">
+    <div class="dean-icon-box">
+        <i class="fa-solid fa-user-secret fa-fade"></i>
+    </div>
+    <div class="dean-btn-text">
+        <span class="main-text">الاستخبارات</span>
+        <span class="sub-text">كشف الغش — FAR</span>
+    </div>
+</button>
+
+
+<!-- ============================================================
+  الخطوة 2 : CSS — ضيفه في أي <style> في الصفحة
+  ============================================================ -->
+<style>
+    .dean-btn-modern.far-style {
+        background: linear-gradient(135deg, #0a0c0f, #1e2530);
+        border: 1px solid #e8c84a;
+        color: #e8c84a;
+    }
+
+    .dean-btn-modern.far-style .dean-icon-box {
+        background: rgba(232, 200, 74, .15);
+        color: #e8c84a;
+    }
+
+    #farModal {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, .85);
+        backdrop-filter: blur(8px);
+        z-index: 2147483647;
+        display: none;
+        align-items: flex-start;
+        justify-content: center;
+        overflow-y: auto;
+        padding: 20px 10px 40px;
+    }
+
+    .far-box {
+        background: #0a0c0f;
+        border: 1px solid #1e2530;
+        border-radius: 12px;
+        width: 100%;
+        max-width: 700px;
+    }
+
+    .far-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 20px;
+        background: #0f1318;
+        border-bottom: 1px solid #1e2530;
+    }
+
+    .far-brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .far-badge-top {
+        background: #e84a4a;
+        color: #fff;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 2px;
+        padding: 3px 8px;
+        border-radius: 3px;
+    }
+
+    .far-brand-title {
+        color: #e8f0f8;
+        font-size: 14px;
+        font-weight: 700;
+    }
+
+    .far-close-btn {
+        background: none;
+        border: none;
+        color: #6a7a8a;
+        font-size: 20px;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 6px;
+    }
+
+    .far-body {
+        padding: 20px;
+    }
+
+    .far-log {
+        background: #0f1318;
+        border: 1px solid #1e2530;
+        border-radius: 6px;
+        padding: 12px 16px;
+        font-family: monospace;
+        font-size: 11px;
+        color: #6a7a8a;
+        line-height: 2;
+        max-height: 120px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        margin-bottom: 16px;
+    }
+
+    #farStats {
+        display: none;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+
+    .far-stat {
+        background: #0f1318;
+        border: 1px solid #1e2530;
+        border-radius: 6px;
+        padding: 12px 14px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .far-stat::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 3px;
+        height: 100%;
+    }
+
+    .far-stat.accent::before {
+        background: #e8c84a;
+    }
+
+    .far-stat.danger::before {
+        background: #e84a4a;
+    }
+
+    .far-stat.medium::before {
+        background: #e8944a;
+    }
+
+    .far-stat.ok::before {
+        background: #4ae8a0;
+    }
+
+    .far-stat-label {
+        font-size: 10px;
+        color: #6a7a8a;
+        text-transform: uppercase;
+        margin-bottom: 6px;
+    }
+
+    .far-stat-val {
+        font-size: 26px;
+        font-weight: 700;
+        color: #e8f0f8;
+        line-height: 1;
+    }
+
+    .far-stat.danger .far-stat-val {
+        color: #e84a4a;
+    }
+
+    .far-stat.medium .far-stat-val {
+        color: #e8944a;
+    }
+
+    .far-stat.ok .far-stat-val {
+        color: #4ae8a0;
+    }
+
+    .far-stat.accent .far-stat-val {
+        color: #e8c84a;
+    }
+
+    .far-section-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+
+    .far-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+    }
+
+    .danger-dot {
+        background: #e84a4a;
+        box-shadow: 0 0 6px #e84a4a;
+    }
+
+    .ok-dot {
+        background: #4ae8a0;
+        box-shadow: 0 0 6px #4ae8a0;
+    }
+
+    .far-section-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: #e8f0f8;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+    }
+
+    .far-badge {
+        background: #141920;
+        color: #6a7a8a;
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 100px;
+    }
+
+    .far-card {
+        background: #0f1318;
+        border: 1px solid #1e2530;
+        border-radius: 6px;
+        margin-bottom: 10px;
+        overflow: hidden;
+    }
+
+    .far-card.card-high {
+        border-right: 3px solid #e84a4a;
+    }
+
+    .far-card.card-medium {
+        border-right: 3px solid #e8944a;
+    }
+
+    .far-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        background: #141920;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .far-fp {
+        font-size: 10px;
+        color: #6a7a8a;
+        font-family: monospace;
+    }
+
+    .far-count {
+        font-size: 11px;
+        color: #6a7a8a;
+        margin-right: 10px;
+    }
+
+    .far-risk-badge {
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 2px;
+        padding: 3px 8px;
+        border-radius: 3px;
+    }
+
+    .badge-high {
+        background: rgba(232, 74, 74, .15);
+        color: #e84a4a;
+        border: 1px solid #e84a4a;
+    }
+
+    .badge-medium {
+        background: rgba(232, 148, 74, .15);
+        color: #e8944a;
+        border: 1px solid #e8944a;
+    }
+
+    .badge-ok {
+        background: rgba(74, 232, 160, .15);
+        color: #4ae8a0;
+        border: 1px solid #4ae8a0;
+    }
+
+    .far-card-body {
+        padding: 14px 16px;
+        display: none;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .far-card-body.open {
+        display: flex;
+    }
+
+    .far-line {
+        background: #0a0c0f;
+        border: 1px solid #1e2530;
+        border-radius: 6px;
+        padding: 12px 14px;
+    }
+
+    .far-line-summary {
+        font-size: 13px;
+        line-height: 1.7;
+        color: #e8f0f8;
+        margin-bottom: 10px;
+    }
+
+    .far-line-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        font-size: 11px;
+        color: #6a7a8a;
+        margin-bottom: 8px;
+    }
+
+    .far-ip-row {
+        font-size: 11px;
+        font-family: monospace;
+        padding: 8px 12px;
+        border-radius: 4px;
+    }
+
+    .ip-match {
+        background: rgba(232, 74, 74, .1);
+        color: #e84a4a;
+    }
+
+    .ip-diff {
+        background: rgba(232, 148, 74, .1);
+        color: #e8944a;
+    }
+
+    .far-clean-card {
+        background: #0f1318;
+        border: 1px solid #1e2530;
+        border-right: 3px solid #4ae8a0;
+        border-radius: 6px;
+        padding: 10px 16px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+    }
+
+    .far-clean-name {
+        color: #e8f0f8;
+        font-weight: 600;
+        font-size: 13px;
+        flex: 1;
+    }
+
+    .far-clean-id {
+        font-size: 11px;
+        color: #6a7a8a;
+        font-family: monospace;
+    }
+
+    .far-scan-btn {
+        background: #e8c84a;
+        color: #0a0c0f;
+        border: none;
+        border-radius: 6px;
+        font-weight: 700;
+        font-size: 13px;
+        padding: 10px 24px;
+        cursor: pointer;
+        margin-bottom: 16px;
+    }
+
+    .far-scan-btn:disabled {
+        opacity: .4;
+        cursor: not-allowed;
+    }
+</style>

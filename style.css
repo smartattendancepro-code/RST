@@ -191,12 +191,12 @@ body {
 .card-banner {
     width: 100%;
     height: 140px;
-    
+
     background-image: url('banner.jpg');
-    
-    background-size: cover;      
-    background-position: center; 
-    
+
+    background-size: cover;
+    background-position: center;
+
     position: relative;
     border-radius: 24px 24px 0 0;
     overflow: hidden;
@@ -4099,45 +4099,58 @@ p {
 }
 
 #screenLiveSession {
-    position: fixed;       /* ثبت الشاشة عشان متتحركش مع السكرول */
-    top: 0; 
+    position: fixed;
+    /* ثبت الشاشة عشان متتحركش مع السكرول */
+    top: 0;
     left: 0;
-    width: 100%; 
+    width: 100%;
     height: 100%;
     background: #f1f5f9;
-    z-index: 99999;        /* طبقة عالية بس أقل من زر الهوم */
-    
-    display: flex;         /* تأكد إنها flex */
+    z-index: 99999;
+    /* طبقة عالية بس أقل من زر الهوم */
+
+    display: flex;
+    /* تأكد إنها flex */
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start; /* يبدأ رص العناصر من الأعلى */
-    
+    justify-content: flex-start;
+    /* يبدأ رص العناصر من الأعلى */
+
     /* ⬇️ التعديل الجراحي هنا: تقليل المسافة العلوية */
-    padding-top: 40px;     
-    
-    overflow: hidden;      /* منع الصفحة كلها من السكرول */
+    padding-top: 40px;
+
+    overflow: hidden;
+    /* منع الصفحة كلها من السكرول */
 }
+
 /* ده كود جديد للتحكم في منطقة الطلاب فقط */
 #liveStudentsGrid {
     width: 100%;
-    max-width: 450px;      /* نفس عرض الكارت عشان التناسق */
-    flex: 1;               /* ياخد باقي المساحة المتاحة في الشاشة */
-    overflow-y: auto;      /* يسمح بالسكرول هنا بس */
-    padding-bottom: 50px;  /* مسافة تحت عشان آخر طالب يبان */
-    
+    max-width: 450px;
+    /* نفس عرض الكارت عشان التناسق */
+    flex: 1;
+    /* ياخد باقي المساحة المتاحة في الشاشة */
+    overflow-y: auto;
+    /* يسمح بالسكرول هنا بس */
+    padding-bottom: 50px;
+    /* مسافة تحت عشان آخر طالب يبان */
+
     /* تنسيق الشبكة */
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
     gap: 10px;
-    align-content: start;  /* يرص الطلاب من فوق */
+    align-content: start;
+    /* يرص الطلاب من فوق */
 }
 
 .home-floating-btn {
-    position: fixed;       /* تأكد إنها fixed مش absolute */
+    position: fixed;
+    /* تأكد إنها fixed مش absolute */
     top: 25px;
     right: 25px;
-    z-index: 10000000;     /* رقم عالي جداً عشان يكون فوق اللايف */
-    
+    z-index: 10000000;
+    /* رقم عالي جداً عشان يكون فوق اللايف */
+
     /* باقي التنسيقات سيبها زي ما هي */
     width: 45px;
     height: 45px;
@@ -8482,6 +8495,7 @@ input:checked+.slider:before {
     font-weight: 800;
     color: #334155;
 }
+
 .live-sim-grid {
     width: 100%;
     display: flex;
@@ -8967,10 +8981,11 @@ input:checked+.slider:before {
     margin: 0;
     font-weight: 700;
 }
+
 .is-me-card {
-    border: 2px solid #0ea5e9 !important; 
-    background: #f0f9ff !important;       
-    transform: scale(1.02);               
+    border: 2px solid #0ea5e9 !important;
+    background: #f0f9ff !important;
+    transform: scale(1.02);
     z-index: 10;
 }
 
@@ -8986,16 +9001,17 @@ input:checked+.slider:before {
     padding: 2px 12px;
     border-radius: 20px;
     border: 2px solid white;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     z-index: 20;
 }
+
 .btn-sheet-cancel {
     background: transparent;
-    color: #94a3b8;          
-    border: 2px solid #e2e8f0; 
+    color: #94a3b8;
+    border: 2px solid #e2e8f0;
     width: 100%;
     padding: 12px;
-    border-radius: 16px;     
+    border-radius: 16px;
     font-weight: 800;
     font-family: 'Cairo', sans-serif;
     margin-top: 10px;
@@ -9013,12 +9029,17 @@ input:checked+.slider:before {
 .btn-sheet-cancel:active {
     transform: scale(0.97);
 }
+
 @keyframes blinker {
-    50% { opacity: 0; }
+    50% {
+        opacity: 0;
+    }
 }
+
 .blink-dot {
     animation: blinker 1.5s linear infinite;
 }
+
 .data-entry-btn {
     width: 100%;
     padding: 15px 20px;
@@ -9033,13 +9054,14 @@ input:checked+.slider:before {
     justify-content: center;
     gap: 10px;
     transition: all 0.3s ease;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    color: white !important; 
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    color: white !important;
 }
 
 .btn-manage-db {
     background: linear-gradient(135deg, #10b981, #059669);
 }
+
 .btn-manage-db:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 12px rgba(16, 185, 129, 0.3);
@@ -9048,6 +9070,7 @@ input:checked+.slider:before {
 .btn-archive {
     background: linear-gradient(135deg, #3b82f6, #2563eb);
 }
+
 .btn-archive:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 12px rgba(59, 130, 246, 0.3);
@@ -9055,15 +9078,15 @@ input:checked+.slider:before {
 
 #attendanceRecordsModal .card-label,
 #attendanceRecordsModal label {
-    background: transparent !important;       
-    color: #1e293b !important;               
-    padding: 0 !important;                    
-    margin-bottom: 8px !important;           
+    background: transparent !important;
+    color: #1e293b !important;
+    padding: 0 !important;
+    margin-bottom: 8px !important;
     font-size: 13px !important;
     font-weight: 800 !important;
     display: block !important;
-    text-align: right !important;           
-    border: none !important;               
+    text-align: right !important;
+    border: none !important;
     box-shadow: none !important;
     width: 100% !important;
 }
@@ -9073,29 +9096,29 @@ input:checked+.slider:before {
 #attendanceRecordsModal input[type="date"] {
     width: 100% !important;
     padding: 12px 15px !important;
-    background-color: #f8fafc !important;    
-    border: 1.5px solid #cbd5e1 !important;   
-    border-radius: 12px !important;          
+    background-color: #f8fafc !important;
+    border: 1.5px solid #cbd5e1 !important;
+    border-radius: 12px !important;
     font-family: 'Cairo', sans-serif !important;
     font-weight: 600 !important;
     color: #334155 !important;
     font-size: 14px !important;
     outline: none !important;
     transition: all 0.3s ease !important;
-    height: 50px !important;                  
+    height: 50px !important;
     box-shadow: none !important;
     text-align: right !important;
 }
 
 #attendanceRecordsModal select:focus,
 #attendanceRecordsModal input:focus {
-    border-color: #0ea5e9 !important;         
-    background-color: #ffffff !important;    
+    border-color: #0ea5e9 !important;
+    background-color: #ffffff !important;
     box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.1) !important;
 }
 
 #historyDateInput {
-    text-align: center !important;            
+    text-align: center !important;
     letter-spacing: 1px !important;
     cursor: pointer !important;
 }
@@ -9125,7 +9148,7 @@ input:checked+.slider:before {
 .toggle-btn.active {
     background: #ffffff !important;
     color: #0ea5e9 !important;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.05) !important;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05) !important;
 }
 
 #attendanceRecordsModal .btn-main {
@@ -9138,7 +9161,8 @@ input:checked+.slider:before {
 .confirm-avatar-box {
     width: 90px;
     height: 90px;
-    background: linear-gradient(135deg, #ecfdf5, #d1fae5); /* خلفية خضراء فاتحة */
+    background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+    /* خلفية خضراء فاتحة */
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -9203,6 +9227,7 @@ input:checked+.slider:before {
 .btn-confirm-green:active {
     transform: scale(0.97);
 }
+
 .makani-card.no-hover {
     transform: none !important;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
@@ -9217,7 +9242,7 @@ input:checked+.slider:before {
 }
 
 .hall-badge-formal {
-    background: #0f172a; 
+    background: #0f172a;
     color: white;
     padding: 12px;
     border-radius: 12px;
@@ -9236,4 +9261,17 @@ input:checked+.slider:before {
     width: 4px;
     height: 100%;
     background: #0ea5e9;
+}
+
+.profile-overlay {
+    align-items: flex-start !important;
+    overflow-y: auto !important;
+    padding: 20px 0 40px 0 !important;
+}
+
+.pro-card {
+    overflow-y: auto !important;
+    max-height: 90vh !important;
+    -webkit-overflow-scrolling: touch !important;
+    margin: auto !important;
 }

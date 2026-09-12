@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>أرشيف التحميلات</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Cairo', sans-serif; background: #f8fafc; margin: 0; padding: 20px; }
+        .header { text-align: center; margin-bottom: 25px; }
+        .file-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 10px; display: flex; align-items: center; gap: 15px; border: 1px solid #e2e8f0; }
+        .icon { font-size: 24px; width: 45px; height: 45px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+        .excel { background: #ecfdf5; color: #10b981; }
+        .pdf { background: #fef2f2; color: #ef4444; }
+        .info { flex: 1; }
+        .name { font-weight: 700; font-size: 14px; display: block; }
+        .date { font-size: 11px; color: #94a3b8; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <button onclick="location.href='index.html'" style="float:right; border:none; background:none; font-size:20px;"><i class="fa-solid fa-arrow-right"></i></button>
+        <h2 style="margin:0;">ملفاتي المحملة 📥</h2>
+    </div>
+    <div id="list"></div>
+
+    <script>
+        // التأكد إن اللي داخل دكتور
+        if (!sessionStorage.getItem("secure_admin_session_token_v99")) { location.href = 'index.html'; }
+
+        const history = JSON.parse(localStorage.getItem('doc_download_history') || "[]");
+        document.getElementById('list').innerHTML = history.map(f => `
+            <div class="file-card">
+                <div class="icon ${f.type === 'Excel' ? 'excel' : 'pdf'}"><i class="fa-solid ${f.type === 'Excel' ? 'fa-file-excel' : 'fa-file-pdf'}"></i></div>
+                <div class="info">
+                    <span class="name">${f.name}</span>
+                    <span class="date">${f.date}</span>
+                </div>
+            </div>
+        `).join('') || '<p style="text-align:center; color:#94a3b8;">لا توجد ملفات حالياً</p>';
+    </script>
+</body>
+</html>

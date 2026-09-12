@@ -948,11 +948,7 @@
             }
         }
 
-        // ── 5. حساب الغياب (الفرق بين جدول الجروب وحضور الطالب) ──
-        // بنلف على مواد الجروب، ونشوف الطالب حضر منها كام
         for (const [normKey, details] of Object.entries(groupDetailsMap)) {
-            // كم مرة حضر الطالب هذه المادة؟ (نبحث في سجله)
-            // لازم نلف في سجل الطالب لأن المفتاح ممكن يختلف قليلاً
             let studentAttendedCount = 0;
             for (const [stKey, stVal] of Object.entries(myAttendedMap)) {
                 if (normalize(stKey) === normKey) {
