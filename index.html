@@ -628,8 +628,8 @@
                 </div>
             </div>
 
-            <script src="geo.js?v=7.5.2"></script>
-           <script src="dist/ovls.js?v=2"></script>
+            <script src="geo.js?v=7.5.2" defer></script>
+            <script src="dist/ovls.js?v=2" defer></script>
 
 
             <style>
@@ -732,7 +732,7 @@
                                 <i class="fa-solid fa-envelope icon-inside"></i>
                                 <input type="email" id="studentLoginEmail" class="floating-input" placeholder=" "
                                     required>
-                              <label class="floating-label">Email</label>
+                                <label class="floating-label">Email</label>
                             </div>
                             <div class="floating-group">
                                 <i class="fa-solid fa-lock icon-inside"></i>
@@ -1062,986 +1062,998 @@
                     transform: scale(0.9);
                 }
             </style>
-
             <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
-</body>
+            <style>
+                .faculty-modal.modal-overlay {
+                    background: rgba(15, 23, 42, 0.5);
+                    backdrop-filter: blur(15px);
+                    -webkit-backdrop-filter: blur(15px);
+                    display: none;
+                    align-items: center;
+                    justify-content: center;
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    z-index: 999999;
+                }
 
-</html>
-<style>
-    .faculty-modal.modal-overlay {
-        background: rgba(15, 23, 42, 0.5);
-        backdrop-filter: blur(15px);
-        -webkit-backdrop-filter: blur(15px);
-        display: none;
-        align-items: center;
-        justify-content: center;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        z-index: 999999;
-    }
+                .faculty-modal .modal-box {
+                    background: rgba(255, 255, 255, 0.15);
+                    backdrop-filter: blur(30px);
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    box-shadow: 0 40px 80px rgba(0, 0, 0, 0.4);
+                    border-radius: 25px;
+                    width: 95%;
+                    max-width: 450px;
+                    color: #fff;
+                }
 
-    .faculty-modal .modal-box {
-        background: rgba(255, 255, 255, 0.15);
-        backdrop-filter: blur(30px);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        box-shadow: 0 40px 80px rgba(0, 0, 0, 0.4);
-        border-radius: 25px;
-        width: 95%;
-        max-width: 450px;
-        color: #fff;
-    }
+                .input-group {
+                    position: relative;
+                    margin-bottom: 22px;
+                    width: 100%;
+                }
 
-    .input-group {
-        position: relative;
-        margin-bottom: 22px;
-        width: 100%;
-    }
+                .modern-input {
+                    width: 100% !important;
+                    background: transparent !important;
+                    border: 1.5px solid rgba(255, 255, 255, 0.3) !important;
+                    padding: 15px 18px;
+                    border-radius: 12px;
+                    color: #fff !important;
+                    outline: none;
+                    box-sizing: border-box;
+                    font-size: 14px;
+                    transition: all 0.3s ease;
+                }
 
-    .modern-input {
-        width: 100% !important;
-        background: transparent !important;
-        border: 1.5px solid rgba(255, 255, 255, 0.3) !important;
-        padding: 15px 18px;
-        border-radius: 12px;
-        color: #fff !important;
-        outline: none;
-        box-sizing: border-box;
-        font-size: 14px;
-        transition: all 0.3s ease;
-    }
+                .modern-input-pass {
+                    padding-right: 55px !important;
+                }
 
-    .modern-input-pass {
-        padding-right: 55px !important;
-    }
+                .input-group label {
+                    position: absolute;
+                    top: 50%;
+                    left: 15px;
+                    transform: translateY(-50%);
+                    font-size: 14px;
+                    color: rgba(255, 255, 255, 0.6);
+                    pointer-events: none;
+                    transition: all 0.2s ease;
+                    padding: 0 8px;
+                    background: transparent;
+                }
 
-    .input-group label {
-        position: absolute;
-        top: 50%;
-        left: 15px;
-        transform: translateY(-50%);
-        font-size: 14px;
-        color: rgba(255, 255, 255, 0.6);
-        pointer-events: none;
-        transition: all 0.2s ease;
-        padding: 0 8px;
-        background: transparent;
-    }
+                .modern-input:focus~label,
+                .modern-input:not(:placeholder-shown)~label,
+                .input-group.has-value label {
+                    top: 0;
+                    font-size: 12px;
+                    color: #fff;
+                    font-weight: 600;
+                    background: #2e384d;
+                    border-radius: 4px;
+                }
 
-    .modern-input:focus~label,
-    .modern-input:not(:placeholder-shown)~label,
-    .input-group.has-value label {
-        top: 0;
-        font-size: 12px;
-        color: #fff;
-        font-weight: 600;
-        background: #2e384d;
-        border-radius: 4px;
-    }
+                .modern-input:focus {
+                    border-color: #fff !important;
+                    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.05);
+                }
 
-    .modern-input:focus {
-        border-color: #fff !important;
-        box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.05);
-    }
+                select.modern-input option {
+                    background: #1e293b;
+                    color: #fff;
+                }
 
-    select.modern-input option {
-        background: #1e293b;
-        color: #fff;
-    }
+                .password-wrapper {
+                    position: relative;
+                    width: 100%;
+                }
 
-    .password-wrapper {
-        position: relative;
-        width: 100%;
-    }
+                .toggle-eye {
+                    position: absolute;
+                    right: 18px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    cursor: pointer;
+                    color: rgba(255, 255, 255, 0.5);
+                    z-index: 20;
+                    font-size: 18px;
+                    display: flex;
+                    align-items: center;
+                    height: 100%;
+                }
 
-    .toggle-eye {
-        position: absolute;
-        right: 18px;
-        top: 50%;
-        transform: translateY(-50%);
-        cursor: pointer;
-        color: rgba(255, 255, 255, 0.5);
-        z-index: 20;
-        font-size: 18px;
-        display: flex;
-        align-items: center;
-        height: 100%;
-    }
+                #facMasterKey {
+                    text-align: center;
+                    letter-spacing: 2px;
+                    font-weight: 800;
+                    background: rgba(255, 255, 255, 0.1) !important;
+                    border: 1.5px dashed rgba(255, 255, 255, 0.4) !important;
+                    color: #fff !important;
+                    text-transform: uppercase;
+                }
 
-    #facMasterKey {
-        text-align: center;
-        letter-spacing: 2px;
-        font-weight: 800;
-        background: rgba(255, 255, 255, 0.1) !important;
-        border: 1.5px dashed rgba(255, 255, 255, 0.4) !important;
-        color: #fff !important;
-        text-transform: uppercase;
-    }
+                .glass-btn-submit {
+                    width: 100%;
+                    height: 55px;
+                    background: #fff;
+                    color: #0f172a;
+                    border: none;
+                    border-radius: 15px;
+                    font-weight: 800;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 12px;
+                    transition: 0.3s;
+                }
 
-    .glass-btn-submit {
-        width: 100%;
-        height: 55px;
-        background: #fff;
-        color: #0f172a;
-        border: none;
-        border-radius: 15px;
-        font-weight: 800;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 12px;
-        transition: 0.3s;
-    }
-
-    .signup-scroll-area {
-        max-height: 480px;
-        overflow-y: auto;
-        padding: 10px 5px;
-    }
-</style>
+                .signup-scroll-area {
+                    max-height: 480px;
+                    overflow-y: auto;
+                    padding: 10px 5px;
+                }
+            </style>
 
 
-<style>
-    .fac-tab {
-        flex: 1;
-        padding: 15px;
-        border: none;
-        background: none;
-        font-weight: 800;
-        color: #94a3b8;
-        cursor: pointer;
-        transition: 0.3s;
-        font-family: 'Cairo', sans-serif;
-    }
+            <style>
+                .fac-tab {
+                    flex: 1;
+                    padding: 15px;
+                    border: none;
+                    background: none;
+                    font-weight: 800;
+                    color: #94a3b8;
+                    cursor: pointer;
+                    transition: 0.3s;
+                    font-family: 'Cairo', sans-serif;
+                }
 
-    .fac-tab.active {
-        color: #0f172a;
-        border-bottom: 3px solid #0f172a;
-        background: white;
-    }
+                .fac-tab.active {
+                    color: #0f172a;
+                    border-bottom: 3px solid #0f172a;
+                    background: white;
+                }
 
-    .modern-input:focus {
-        border-color: #0f172a;
-        box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.1);
-    }
-</style>
-<style>
-    #screenLiveSession {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: #f8fafc;
-        z-index: 2147483647;
-        display: none;
-        flex-direction: column;
-        align-items: center;
-        justify-content: flex-start !important;
-        padding: 10px 10px 0 10px;
-        overflow-y: auto;
-        pointer-events: auto !important;
-        touch-action: auto !important;
-    }
+                .modern-input:focus {
+                    border-color: #0f172a;
+                    box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.1);
+                }
+            </style>
+            <style>
+                #screenLiveSession {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: #f8fafc;
+                    z-index: 2147483647;
+                    display: none;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: flex-start !important;
+                    padding: 10px 10px 0 10px;
+                    overflow-y: auto;
+                    pointer-events: auto !important;
+                    touch-action: auto !important;
+                }
 
-    .live-top-bar {
-        width: 100%;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 5px 15px;
-        background: transparent;
-        position: relative;
-        z-index: 10;
-        margin-bottom: 5px;
-    }
+                .live-top-bar {
+                    width: 100%;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 5px 15px;
+                    background: transparent;
+                    position: relative;
+                    z-index: 10;
+                    margin-bottom: 5px;
+                }
 
-    .home-floating-btn {
-        position: static !important;
-        transform: none !important;
-        margin: 0 !important;
-        width: 45px;
-        height: 45px;
-        background: #ffffff;
-        border-radius: 14px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-        border: 1px solid #e2e8f0;
-        color: #334155;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
+                .home-floating-btn {
+                    position: static !important;
+                    transform: none !important;
+                    margin: 0 !important;
+                    width: 45px;
+                    height: 45px;
+                    background: #ffffff;
+                    border-radius: 14px;
+                    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+                    border: 1px solid #e2e8f0;
+                    color: #334155;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
 
-    .home-floating-btn:active {
-        transform: scale(0.9);
-    }
+                .home-floating-btn:active {
+                    transform: scale(0.9);
+                }
 
-    .live-pill {
-        background: #fee2e2;
-        color: #ef4444;
-        padding: 8px 18px;
-        border-radius: 30px;
-        font-size: 11px;
-        font-weight: 800;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        border: 1px solid #fecaca;
-        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.1);
-        font-family: 'Outfit', sans-serif;
-        letter-spacing: 0.5px;
-    }
+                .live-pill {
+                    background: #fee2e2;
+                    color: #ef4444;
+                    padding: 8px 18px;
+                    border-radius: 30px;
+                    font-size: 11px;
+                    font-weight: 800;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    border: 1px solid #fecaca;
+                    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.1);
+                    font-family: 'Outfit', sans-serif;
+                    letter-spacing: 0.5px;
+                }
 
-    .pulse {
-        width: 8px;
-        height: 8px;
-        background: #ef4444;
-        border-radius: 50%;
-        animation: blink 1s infinite;
-    }
+                .pulse {
+                    width: 8px;
+                    height: 8px;
+                    background: #ef4444;
+                    border-radius: 50%;
+                    animation: blink 1s infinite;
+                }
 
-    @keyframes blink {
-        50% {
-            opacity: 0.4;
-        }
-    }
+                @keyframes blink {
+                    50% {
+                        opacity: 0.4;
+                    }
+                }
 
-    .royal-card {
-        background: #ffffff;
-        width: 98%;
-        border-radius: 24px;
-        box-shadow: 0 20px 60px -10px rgba(14, 165, 233, 0.15);
-        border: 1px solid rgba(255, 255, 255, 0.8);
-        position: relative;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-        margin-top: 0 !important;
-    }
+                .royal-card {
+                    background: #ffffff;
+                    width: 98%;
+                    border-radius: 24px;
+                    box-shadow: 0 20px 60px -10px rgba(14, 165, 233, 0.15);
+                    border: 1px solid rgba(255, 255, 255, 0.8);
+                    position: relative;
+                    overflow: hidden;
+                    display: flex;
+                    flex-direction: column;
+                    margin-top: 0 !important;
+                }
 
-    .royal-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 6px;
-        height: 100%;
-        background: linear-gradient(to bottom, #0ea5e9, #3b82f6);
-    }
+                .royal-card::before {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 6px;
+                    height: 100%;
+                    background: linear-gradient(to bottom, #0ea5e9, #3b82f6);
+                }
 
-    .royal-header {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        padding: 20px;
-        gap: 15px;
-        direction: ltr;
-    }
+                .royal-header {
+                    display: flex;
+                    flex-direction: row;
+                    align-items: center;
+                    padding: 20px;
+                    gap: 15px;
+                    direction: ltr;
+                }
 
-    .royal-avatar-box {
-        width: 70px;
-        height: 70px;
-        background: #f0f9ff;
-        border-radius: 20px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 35px;
-        color: #0284c7;
-        border: 2px solid #bae6fd;
-        box-shadow: 0 5px 15px rgba(14, 165, 233, 0.15);
-        flex-shrink: 0;
-    }
+                .royal-avatar-box {
+                    width: 70px;
+                    height: 70px;
+                    background: #f0f9ff;
+                    border-radius: 20px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 35px;
+                    color: #0284c7;
+                    border: 2px solid #bae6fd;
+                    box-shadow: 0 5px 15px rgba(14, 165, 233, 0.15);
+                    flex-shrink: 0;
+                }
 
-    .royal-text {
-        text-align: left;
-        flex: 1;
-    }
+                .royal-text {
+                    text-align: left;
+                    flex: 1;
+                }
 
-    .r-name {
-        font-size: 20px;
-        font-weight: 900;
-        color: #0f172a;
-        margin-bottom: 5px;
-        display: block;
-        font-family: 'Outfit', sans-serif;
-    }
+                .r-name {
+                    font-size: 20px;
+                    font-weight: 900;
+                    color: #0f172a;
+                    margin-bottom: 5px;
+                    display: block;
+                    font-family: 'Outfit', sans-serif;
+                }
 
-    .r-sub {
-        font-size: 13px;
-        color: #0ea5e9;
-        font-weight: 700;
-        background: #f0f9ff;
-        padding: 5px 15px;
-        border-radius: 8px;
-        display: inline-block;
-        font-family: 'Outfit', sans-serif;
-    }
+                .r-sub {
+                    font-size: 13px;
+                    color: #0ea5e9;
+                    font-weight: 700;
+                    background: #f0f9ff;
+                    padding: 5px 15px;
+                    border-radius: 8px;
+                    display: inline-block;
+                    font-family: 'Outfit', sans-serif;
+                }
 
-    .royal-stats {
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
-        padding: 15px 0;
-        background: #fafafa;
-        border-top: 1px solid #f1f5f9;
-        direction: ltr;
-    }
+                .royal-stats {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr 1fr;
+                    padding: 15px 0;
+                    background: #fafafa;
+                    border-top: 1px solid #f1f5f9;
+                    direction: ltr;
+                }
 
-    .r-stat {
-        text-align: center;
-        border-right: 1px solid #e2e8f0;
-    }
+                .r-stat {
+                    text-align: center;
+                    border-right: 1px solid #e2e8f0;
+                }
 
-    .r-stat:last-child {
-        border-right: none;
-    }
+                .r-stat:last-child {
+                    border-right: none;
+                }
 
-    .rs-label {
-        display: block;
-        font-size: 10px;
-        color: #94a3b8;
-        font-weight: 800;
-        margin-bottom: 4px;
-        text-transform: uppercase;
-    }
+                .rs-label {
+                    display: block;
+                    font-size: 10px;
+                    color: #94a3b8;
+                    font-weight: 800;
+                    margin-bottom: 4px;
+                    text-transform: uppercase;
+                }
 
-    .rs-val {
-        font-size: 18px;
-        font-weight: 900;
-        color: #334155;
-        font-family: 'Outfit', sans-serif;
-    }
+                .rs-val {
+                    font-size: 18px;
+                    font-weight: 900;
+                    color: #334155;
+                    font-family: 'Outfit', sans-serif;
+                }
 
-    .rs-val.green {
-        color: #10b981;
-    }
+                .rs-val.green {
+                    color: #10b981;
+                }
 
-    .rs-val.blue {
-        color: #0ea5e9;
-    }
+                .rs-val.blue {
+                    color: #0ea5e9;
+                }
 
-    .bottom-action-area {
-        width: 100%;
-        background: #ffffff;
-        padding: 15px 15px 25px 15px;
-        border-top: 1px solid #e2e8f0;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        justify-content: center;
-        box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.03);
-        margin-top: auto;
-    }
+                .bottom-action-area {
+                    width: 100%;
+                    background: #ffffff;
+                    padding: 15px 15px 25px 15px;
+                    border-top: 1px solid #e2e8f0;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 10px;
+                    justify-content: center;
+                    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.03);
+                    margin-top: auto;
+                }
 
-    .btn-end-session-eng {
-        background: linear-gradient(135deg, #ef4444, #b91c1c);
-        color: white;
-        border: none;
-        width: 100%;
-        padding: 15px;
-        border-radius: 18px;
-        font-weight: 800;
-        font-size: 15px;
-        box-shadow: 0 12px 25px rgba(239, 68, 68, 0.3);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 12px;
-        transition: transform 0.2s;
-        font-family: 'Outfit', sans-serif;
-        text-transform: uppercase;
-    }
+                .btn-end-session-eng {
+                    background: linear-gradient(135deg, #ef4444, #b91c1c);
+                    color: white;
+                    border: none;
+                    width: 100%;
+                    padding: 15px;
+                    border-radius: 18px;
+                    font-weight: 800;
+                    font-size: 15px;
+                    box-shadow: 0 12px 25px rgba(239, 68, 68, 0.3);
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 12px;
+                    transition: transform 0.2s;
+                    font-family: 'Outfit', sans-serif;
+                    text-transform: uppercase;
+                }
 
-    .btn-end-session-eng:active {
-        transform: scale(0.96);
-    }
+                .btn-end-session-eng:active {
+                    transform: scale(0.96);
+                }
 
-    .live-students-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
-        gap: 15px;
-        width: 100%;
-        padding: 15px;
-        padding-bottom: 50px;
-    }
+                .live-students-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+                    gap: 15px;
+                    width: 100%;
+                    padding: 15px;
+                    padding-bottom: 50px;
+                }
 
-    .action-buttons-row {
-        display: flex;
-        justify-content: center;
-        gap: 8px;
-        margin-top: 10px;
-        border-top: 1px solid #f1f5f9;
-        padding-top: 8px;
-        width: 100%;
-    }
+                .action-buttons-row {
+                    display: flex;
+                    justify-content: center;
+                    gap: 8px;
+                    margin-top: 10px;
+                    border-top: 1px solid #f1f5f9;
+                    padding-top: 8px;
+                    width: 100%;
+                }
 
-    .mini-action-btn {
-        width: 32px;
-        height: 32px;
-        border-radius: 8px;
-        border: none;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 14px;
-        cursor: pointer;
-        transition: all 0.2s;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-    }
+                .mini-action-btn {
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 8px;
+                    border: none;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 14px;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+                }
 
-    .search-floating-wrapper {
-        position: relative;
-        width: 95%;
-        margin: 10px auto;
-        z-index: 5;
-    }
+                .search-floating-wrapper {
+                    position: relative;
+                    width: 95%;
+                    margin: 10px auto;
+                    z-index: 5;
+                }
 
-    .modern-search-input {
-        width: 100%;
-        padding: 12px 50px 12px 20px;
-        border-radius: 16px;
-        border: 1px solid #e2e8f0;
-        background: #ffffff;
-        font-family: 'Outfit', sans-serif;
-        font-size: 14px;
-        font-weight: 600;
-        color: #1e293b;
-        outline: none;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
-    }
+                .modern-search-input {
+                    width: 100%;
+                    padding: 12px 50px 12px 20px;
+                    border-radius: 16px;
+                    border: 1px solid #e2e8f0;
+                    background: #ffffff;
+                    font-family: 'Outfit', sans-serif;
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: #1e293b;
+                    outline: none;
+                    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+                }
 
-    .modern-search-input:focus {
-        border-color: #0ea5e9;
-        box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.1);
-    }
+                .modern-search-input:focus {
+                    border-color: #0ea5e9;
+                    box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.1);
+                }
 
-    .search-icon-box {
-        position: absolute;
-        right: 15px;
-        top: 50%;
-        transform: translateY(-50%);
-        color: #94a3b8;
-        font-size: 16px;
-        pointer-events: none;
-    }
-</style>
+                .search-icon-box {
+                    position: absolute;
+                    right: 15px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    color: #94a3b8;
+                    font-size: 16px;
+                    pointer-events: none;
+                }
+            </style>
 
-<div id="screenLiveSession" style="display: none;">
+            <div id="screenLiveSession" style="display: none;">
 
-    <div class="live-top-bar">
-        <div class="live-pill" id="liveStatusPill">
-            <span class="pulse"></span>
-            <span id="liveStatusText" data-i18n="live_status_active">الجلسة نشطة حالياً</span>
-        </div>
+                <div class="live-top-bar">
+                    <div class="live-pill" id="liveStatusPill">
+                        <span class="pulse"></span>
+                        <span id="liveStatusText" data-i18n="live_status_active">الجلسة نشطة حالياً</span>
+                    </div>
 
-        <button class="home-floating-btn" onclick="goHome()" title="Exit">
-            <i class="fa-solid fa-house"></i>
-        </button>
-    </div>
-
-    <div
-        style="width: 100%; flex: 1; display: flex; flex-direction: column; align-items: center; overflow-y: auto; padding-bottom: 20px;">
-
-        <div class="royal-card">
-            <div class="royal-header">
-                <div class="royal-avatar-box" id="liveDocAvatar">
-                    <i class="fa-solid fa-user-doctor"></i>
+                    <button class="home-floating-btn" onclick="goHome()" title="Exit">
+                        <i class="fa-solid fa-house"></i>
+                    </button>
                 </div>
-                <div class="royal-text">
-                    <span class="r-name" id="liveDocName" data-i18n="loading_text">جاري التحميل...</span>
-                    <div style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;">
-                        <span class="r-sub" id="liveSubjectTag" data-i18n="subject_label">اسم المادة</span>
-                        <span id="liveGroupTag" onclick="openGroupManager()"
-                            style="cursor: pointer; background: #eef2ff; color: #6366f1; padding: 2px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; border: 1px solid #c7d2fe;">
-                            المجموعة: --
+
+                <div
+                    style="width: 100%; flex: 1; display: flex; flex-direction: column; align-items: center; overflow-y: auto; padding-bottom: 20px;">
+
+                    <div class="royal-card">
+                        <div class="royal-header">
+                            <div class="royal-avatar-box" id="liveDocAvatar">
+                                <i class="fa-solid fa-user-doctor"></i>
+                            </div>
+                            <div class="royal-text">
+                                <span class="r-name" id="liveDocName" data-i18n="loading_text">جاري التحميل...</span>
+                                <div style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;">
+                                    <span class="r-sub" id="liveSubjectTag" data-i18n="subject_label">اسم المادة</span>
+                                    <span id="liveGroupTag" onclick="openGroupManager()"
+                                        style="cursor: pointer; background: #eef2ff; color: #6366f1; padding: 2px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; border: 1px solid #c7d2fe;">
+                                        المجموعة: --
+                                    </span>
+                                </div>
+                                <div id="liveHallTag"
+                                    style="font-size: 12px; color: #64748b; margin-top: 4px; font-weight: bold;">
+                                    <i class="fa-solid fa-building-columns"></i> <span
+                                        data-i18n="hall_label">القاعة</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="royal-stats"
+                            style="grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 15px; background: #f8fafc;">
+
+                            <div class="r-stat"
+                                style="border: none; background: white; border-radius: 15px; padding: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
+                                <span class="rs-label" data-i18n="present_count_label">الحاضرين</span>
+                                <span id="livePresentCount" class="rs-val green">0</span>
+                            </div>
+
+                            <div class="r-stat" id="doorControlBtn" onclick="openDoorActionModal()"
+                                style="cursor: pointer; border: 1.5px dashed #0ea5e9; border-radius: 15px; background: #f0f9ff; padding: 10px; transition: 0.3s;">
+                                <span class="rs-label" style="color: #0284c7;" data-i18n="entrance_gate_label">بوابة
+                                    الدخول</span>
+                                <span id="doorStatusText" class="rs-val blue" style="font-size: 16px;"
+                                    data-i18n="gate_closed_status">
+                                    <i class="fa-solid fa-door-closed"></i> مغلقة
+                                </span>
+                            </div>
+
+                            <div class="r-stat" id="codeStatBlock"
+                                style="border: none; background: white; border-radius: 15px; padding: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
+                                <span class="rs-label" data-i18n="session_code_label">كود الجلسة</span>
+                                <span id="liveSessionCodeDisplay" class="rs-val"
+                                    style="letter-spacing: 2px;">------</span>
+                            </div>
+
+                            <div class="r-stat" id="extraStatBlock"
+                                style="border: none; background: white; border-radius: 15px; padding: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
+                                <span class="rs-label" data-i18n="extra_count_label">إضافي</span>
+                                <span id="liveExtraCount" class="rs-val" style="color: #94a3b8;">0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="search-floating-wrapper">
+                        <input type="text" id="liveSearchInput" class="modern-search-input"
+                            data-i18n-placeholder="live_search_placeholder" placeholder="بحث بالاسم أو الكود..."
+                            onkeyup="filterLiveStudents()">
+                        <div class="search-icon-box">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                        </div>
+                    </div>
+
+                    <div id="liveStudentsGrid" class="live-students-grid" style="width: 100%; padding: 10px;"></div>
+                </div>
+
+
+            </div>
+
+            <div id="dailyWelcomeModal" class="modal-overlay" style="z-index: 2147483647; display: none;"
+                onclick="closeDailyWelcome()">
+                <div class="modal-box modern-glass-popup" onclick="event.stopPropagation(); closeDailyWelcome();">
+                    <div class="welcome-icon-circle"><i class="fa-solid fa-face-smile-beam"></i></div>
+                    <h2 class="welcome-title"><span data-i18n="hi_text">أهلاً</span>، <span
+                            id="welcomeUserName">Student</span>! 😊
+                    </h2>
+                    <div class="welcome-divider"></div>
+                    <p class="welcome-text">
+                        <span data-i18n="glad_here_text">سعداء بوجودك معنا اليوم.</span><br>
+                        <span data-i18n="better_than_yesterday">لنكن أفضل مما كنا عليه بالأمس!</span> ✨
+                    </p>
+                    <button onclick="closeDailyWelcome()" class="btn-main welcome-btn" data-i18n="lets_go_btn">هيا
+                        بنا</button>
+                </div>
+            </div>
+
+            <style>
+                #urg_normal:checked+label {
+                    background: #ffffff;
+                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+                    color: #1f2937 !important;
+                }
+
+                #urg_high:checked+label {
+                    background: #fee2e2;
+                    box-shadow: 0 1px 3px rgba(239, 68, 68, 0.2);
+                    color: #b91c1c !important;
+                }
+            </style>
+            <div id="feedbackModal" class="modal-overlay" style="z-index: 2147483647; display: none;">
+                <div class="modal-box" style="text-align: center; max-width: 350px;">
+                    <div style="margin-bottom: 15px;">
+                        <div
+                            style="width: 70px; height: 70px; background: #fffbeb; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto; border: 4px solid #fff;">
+                            <i class="fa-solid fa-star" style="font-size: 35px; color: #f59e0b;"></i>
+                        </div>
+                    </div>
+
+                    <h3 class="modal-title" style="color: #1e293b; margin-bottom: 5px;" data-i18n="feedback_title">رأيك
+                        يهمنا</h3>
+
+                    <p style="color: #64748b; font-size: 13px; margin-bottom: 20px;">
+                        <span data-i18n="feedback_subtitle">يرجى تقييم محاضرة اليوم للمتابعة:</span><br>
+                        <b id="feedbackSubjectName" style="color: #0ea5e9; font-size: 15px;">--</b> <br>
+
+                        <span style="font-size: 12px; background: #f1f5f9; padding: 2px 8px; border-radius: 6px;">
+                            <span data-i18n="doctor_prefix">د.</span>
+                            <span id="feedbackDocName" class="en-font">--</span>
+                        </span>
+                    </p>
+
+                    <div class="star-rating-container" dir="ltr">
+                        <i class="fa-solid fa-star star-btn" data-value="1" onclick="selectStar(1)"></i>
+                        <i class="fa-solid fa-star star-btn" data-value="2" onclick="selectStar(2)"></i>
+                        <i class="fa-solid fa-star star-btn" data-value="3" onclick="selectStar(3)"></i>
+                        <i class="fa-solid fa-star star-btn" data-value="4" onclick="selectStar(4)"></i>
+                        <i class="fa-solid fa-star star-btn" data-value="5" onclick="selectStar(5)"></i>
+                    </div>
+
+                    <div id="ratingText"
+                        style="font-size: 12px; font-weight: bold; color: #f59e0b; height: 20px; margin-bottom: 10px;">
+                    </div>
+
+                    <input type="hidden" id="selectedRating" value="0">
+                    <input type="hidden" id="targetAttendanceDocId" value="">
+
+                    <div class="privacy-alert-box">
+                        <i class="fa-solid fa-user-shield"></i>
+                        <span data-i18n="privacy_notice_formal">
+                            تنويه: يتم إرسال هذا التقييم للمحاضر بسرية تامة.
                         </span>
                     </div>
-                    <div id="liveHallTag" style="font-size: 12px; color: #64748b; margin-top: 4px; font-weight: bold;">
-                        <i class="fa-solid fa-building-columns"></i> <span data-i18n="hall_label">القاعة</span>
+
+                    <button onclick="submitFeedback()" class="btn-main"
+                        style="width: 100%; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3); background: linear-gradient(135deg, #f59e0b, #d97706);">
+                        <span data-i18n="send_feedback_btn">إرسال التقييم</span> <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+
+            <style>
+                .star-rating-container {
+                    display: flex;
+                    justify-content: center;
+                    gap: 12px;
+                    margin-bottom: 10px;
+                }
+
+                .star-btn {
+                    font-size: 28px;
+                    color: #e2e8f0;
+                    cursor: pointer;
+                    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), color 0.2s;
+                }
+
+                .star-btn:active {
+                    transform: scale(0.8);
+                }
+
+                .star-btn.active {
+                    color: #f59e0b;
+                    transform: scale(1.1);
+                    text-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
+                }
+
+                .privacy-alert-box {
+                    background-color: #f8fafc;
+                    border: 1px dashed #cbd5e1;
+                    border-radius: 12px;
+                    padding: 10px 15px;
+                    margin-bottom: 20px;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    text-align: right;
+                    direction: rtl;
+                }
+
+                .privacy-alert-box i {
+                    color: #10b981;
+                    font-size: 18px;
+                    flex-shrink: 0;
+                }
+
+                .privacy-alert-box span {
+                    font-size: 11px;
+                    color: #64748b;
+                    line-height: 1.4;
+                    font-weight: 600;
+                }
+
+                .privacy-alert-box strong {
+                    color: #334155;
+                }
+            </style>
+            <div id="publicProfileModal" class="modal-overlay" style="z-index: 2147483647 !important;">
+                <div class="modal-box social-profile-box extended-card"
+                    style="font-family: 'Outfit', 'Cairo', sans-serif;">
+
+                    <button onclick="document.getElementById('publicProfileModal').style.display='none'"
+                        class="btn-close-absolute">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+
+                    <div class="social-avatar-wrapper" style="pointer-events: none;">
+                        <div id="publicAvatar" class="social-avatar-img"></div>
+                    </div>
+
+                    <h2 id="publicName" class="social-name" style="font-family: 'Cairo', sans-serif;">--</h2>
+                    <div id="publicRoleBadge" class="social-role-badge">--</div>
+
+                    <div class="stats-tri-grid">
+                    </div>
+
+                    <div class="social-info-grid">
+                        <div class="s-info-item">
+                            <span class="lbl" data-i18n="profile_level">Level / Year</span>
+                            <span class="val" id="publicLevel">--</span>
+                        </div>
+                        <div class="s-info-item">
+                            <span class="lbl" data-i18n="profile_code">Student ID</span>
+                            <span class="val en-font" id="publicCode">--</span>
+                        </div>
+                    </div>
+
+                    <div id="publicExamsSection"
+                        style="margin-top: 15px; width: 100%; border-top: 1px solid #f1f5f9; padding-top: 10px; display:none;">
+                        <h4
+                            style="margin: 0 0 10px 0; font-size: 14px; color: #334155; text-align: left; display: flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-graduation-cap" style="color: #6366f1;"></i>
+                            <span data-i18n="exam_results_title">Exam Results</span>
+                        </h4>
+                        <div id="publicExamsList" style="display: flex; flex-direction: column; gap: 8px;">
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <div id="imageZoomModal" class="modal-overlay"
+                style="z-index: 2147483665 !important; background: rgba(0,0,0,0.95);"
+                onclick="this.style.display='none'">
+                <div id="zoomedAvatarContainer" class="zoomed-img-box"></div>
+            </div>
+
+            <style>
+                .halo-container-v2 {
+                    position: absolute !important;
+                    top: -150px !important;
+                    left: 50% !important;
+                    transform: translateX(-50%) !important;
+                    width: 250px !important;
+                    height: 100px !important;
+                    z-index: 50 !important;
+                    pointer-events: none !important;
+                }
+
+                .halo-item {
+                    position: absolute !important;
+                    width: 45px !important;
+                    height: 45px !important;
+                    border-radius: 50% !important;
+                    background: #ffffff !important;
+                    border: 1px solid #e2e8f0 !important;
+                    box-shadow: 0 5px 15px rgba(14, 165, 233, 0.2) !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    cursor: pointer !important;
+                    pointer-events: auto !important;
+                    font-size: 18px !important;
+                    transition: 0.2s !important;
+                }
+
+                .halo-item:active {
+                    transform: scale(0.9);
+                }
+
+
+                .halo-center {
+                    top: -76px !important;
+                    left: -5% !important;
+                    transform: translateX(-50%) !important;
+                    z-index: 100 !important;
+
+                    background: #ffffff !important;
+                    color: #0f172a !important;
+                    font-weight: 900 !important;
+                    font-size: 12px !important;
+                    border-color: #0ea5e9 !important;
+                    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1) !important;
+                }
+
+                .halo-left {
+                    top: 35px !important;
+                    left: 20px !important;
+                    color: #0ea5e9 !important;
+                }
+
+                .halo-right {
+                    top: 35px !important;
+                    right: 20px !important;
+                    color: #f59e0b !important;
+                }
+
+                .halo-badge-v2 {
+                    position: absolute;
+                    top: -3px;
+                    right: -3px;
+                    background: #ef4444;
+                    color: white;
+                    width: 16px;
+                    height: 16px;
+                    border-radius: 50%;
+                    font-size: 10px;
+                    font-weight: bold;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    border: 2px solid white;
+                }
+            </style>
+
+
+            <div id="signupSuccessModal" class="modal-overlay">
+                <div class="modal-box" style="text-align: center; padding: 30px;">
+                    <div
+                        style="width: 70px; height: 70px; background: #dcfce7; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
+                        <i class="fa-solid fa-envelope-circle-check fa-bounce"
+                            style="font-size: 35px; color: #16a34a;"></i>
+                    </div>
+
+                    <h3 id="successModalTitle"
+                        style="font-size: 20px; font-weight: 900; color: #1e293b; margin-bottom: 10px;">
+                        تم إنشاء الحساب بنجاح!
+                    </h3>
+
+                    <div id="successModalBody" style="font-size: 14px; color: #64748b; line-height: 1.6;">
+                    </div>
+
+                    <button
+                        onclick="document.getElementById('signupSuccessModal').style.display='none'; openAuthDrawer(); toggleAuthMode('login');"
+                        class="btn-main" style="width: 100%; margin-top: 25px; justify-content: center;">
+                        تسجيل الدخول الآن <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="verificationModal" class="modal-overlay">
+                <div class="modal-box" style="text-align: center; padding: 25px;">
+                    <div
+                        style="width: 60px; height: 60px; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
+                        <i class="fa-solid fa-envelope-open-text fa-shake" style="font-size: 30px; color: #ef4444;"></i>
+                    </div>
+
+                    <h3 style="font-size: 18px; font-weight: 800; color: #b91c1c; margin-bottom: 8px;">
+                        الحساب غير مفعل!
+                    </h3>
+
+                    <p style="font-size: 13px; color: #64748b; margin-bottom: 20px;">
+                        لقد تم إنشاء حسابك ولكن لم تقم بتفعيله.<br>
+                        يرجى مراجعة بريدك الإلكتروني والضغط على رابط التفعيل.
+                    </p>
+
+                    <button onclick="document.getElementById('verificationModal').style.display='none';"
+                        class="btn-main" style="width: 100%; background: #ef4444; border: none;">
+                        حسناً، سأتحقق الآن <i class="fa-solid fa-check"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="expulsionModal" class="modal-overlay" style="z-index: 2147483650 !important;">
+                <div class="modal-box" style="text-align: center; padding: 30px; border-top: 5px solid #ef4444;">
+
+                    <div
+                        style="width: 70px; height: 70px; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
+                        <i class="fa-solid fa-ban fa-beat" style="font-size: 35px; color: #b91c1c;"></i>
+                    </div>
+
+                    <h3 id="expelTitle" style="font-size: 22px; font-weight: 900; color: #b91c1c; margin-bottom: 10px;">
+                        تم استبعادك!
+                    </h3>
+
+                    <p id="expelBody" style="font-size: 14px; color: #64748b; line-height: 1.6; margin-bottom: 25px;">
+                        قام المحاضر باستبعادك من الجلسة الحالية.<br>
+                        لا يمكنك العودة لهذه المحاضرة مرة أخرى.
+                    </p>
+
+                    <button onclick="location.reload()" class="btn-main"
+                        style="width: 100%; background: #ef4444; border: none; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);">
+                        مغادرة القاعة <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="floating-refresh-btn" onclick="if(navigator.vibrate) navigator.vibrate(50); location.reload();">
+                <i class="fa-solid fa-rotate-right"></i>
+            </div>
+
+            <div id="superWifiIndicator" class="wifi-status-hidden">
+                <div class="wifi-icon-box">
+                    <i class="fa-solid fa-wifi fa-fade"></i>
+                    <i class="fa-solid fa-slash wifi-slash" id="wifiSlashIcon"></i>
+                </div>
+                <span class="wifi-text">System Initializing...</span>
+            </div>
+            <script src="ramadan_theme.js"></script>
+            <script src="./screen-guard.js"></script>
+
+
+            <div id="academicRecordModal" class="modal-overlay" style="z-index: 2147483647; display: none;">
+                <div class="modal-box"
+                    style="max-width: 380px; padding: 0; border-radius: 20px; overflow: hidden; background: #fff;">
+
+                    <div
+                        style="background: linear-gradient(135deg, #0ea5e9, #3b82f6); padding: 20px; color: white; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <h3 style="margin: 0; font-size: 16px; font-weight: 900;" data-i18n="academic_record_title">
+                                Academic
+                                Record</h3>
+                            <p style="margin: 4px 0 0 0; font-size: 11px; opacity: 0.8;"
+                                data-i18n="academic_record_sub">Theory
+                                subjects only</p>
+                        </div>
+
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <button onclick="window.refreshAcademicData()"
+                                style="background: rgba(255,255,255,0.2); border: none; color: white; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center;">
+                                <i id="refreshBtnIcon" class="fa-solid fa-rotate-right"></i>
+                            </button>
+
+                            <button onclick="document.getElementById('academicRecordModal').style.display='none'"
+                                style="background: rgba(255,255,255,0.2); border: none; color: white; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;">
+                                ✕
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="academicStatsContainer"
+                        style="background: #f8fafc; padding: 10px 5px; border-bottom: 1px solid #e2e8f0; min-height: 50px;">
+                    </div>
+
+                    <div style="display: flex; border-bottom: 2px solid #f1f5f9; background: white;">
+                        <button id="tabAttendance" onclick="switchAcademicTab('attendance')" class="tab-active-att"
+                            style="flex: 1; padding: 12px; border: none; font-weight: 800; cursor: pointer; font-size: 14px; transition: 0.3s;">
+                            ✅ <span data-i18n="academic_tab_attendance">Attendance</span>
+                            <span id="attendanceTabCount"
+                                style="background: rgba(16, 185, 129, 0.1); color: #10b981; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 5px;">0</span>
+                        </button>
+                        <button id="tabAbsence" onclick="switchAcademicTab('absence')" class="tab-inactive"
+                            style="flex: 1; padding: 12px; border: none; font-weight: 800; cursor: pointer; font-size: 14px; transition: 0.3s;">
+                            ❌ <span data-i18n="academic_tab_absence">Absence</span>
+                            <span id="absenceTabCount"
+                                style="background: #f1f5f9; color: #64748b; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 5px;">0</span>
+                        </button>
+                    </div>
+
+                    <div id="academicRecordContent"
+                        style="max-height: 400px; overflow-y: auto; padding: 15px; background: #fff;">
+                        <div style="text-align: center; padding: 30px; color: #94a3b8;">
+                            <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 30px;"></i>
+                            <p data-i18n="academic_loading">Loading Records...</p>
+                        </div>
                     </div>
                 </div>
             </div>
-
-            <div class="royal-stats"
-                style="grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 15px; background: #f8fafc;">
-
-                <div class="r-stat"
-                    style="border: none; background: white; border-radius: 15px; padding: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
-                    <span class="rs-label" data-i18n="present_count_label">الحاضرين</span>
-                    <span id="livePresentCount" class="rs-val green">0</span>
-                </div>
-
-                <div class="r-stat" id="doorControlBtn" onclick="openDoorActionModal()"
-                    style="cursor: pointer; border: 1.5px dashed #0ea5e9; border-radius: 15px; background: #f0f9ff; padding: 10px; transition: 0.3s;">
-                    <span class="rs-label" style="color: #0284c7;" data-i18n="entrance_gate_label">بوابة الدخول</span>
-                    <span id="doorStatusText" class="rs-val blue" style="font-size: 16px;"
-                        data-i18n="gate_closed_status">
-                        <i class="fa-solid fa-door-closed"></i> مغلقة
-                    </span>
-                </div>
-
-                <div class="r-stat" id="codeStatBlock"
-                    style="border: none; background: white; border-radius: 15px; padding: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
-                    <span class="rs-label" data-i18n="session_code_label">كود الجلسة</span>
-                    <span id="liveSessionCodeDisplay" class="rs-val" style="letter-spacing: 2px;">------</span>
-                </div>
-
-                <div class="r-stat" id="extraStatBlock"
-                    style="border: none; background: white; border-radius: 15px; padding: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
-                    <span class="rs-label" data-i18n="extra_count_label">إضافي</span>
-                    <span id="liveExtraCount" class="rs-val" style="color: #94a3b8;">0</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="search-floating-wrapper">
-            <input type="text" id="liveSearchInput" class="modern-search-input"
-                data-i18n-placeholder="live_search_placeholder" placeholder="بحث بالاسم أو الكود..."
-                onkeyup="filterLiveStudents()">
-            <div class="search-icon-box">
-                <i class="fa-solid fa-magnifying-glass"></i>
-            </div>
-        </div>
-
-        <div id="liveStudentsGrid" class="live-students-grid" style="width: 100%; padding: 10px;"></div>
-    </div>
-
-
-</div>
-
-<div id="dailyWelcomeModal" class="modal-overlay" style="z-index: 2147483647; display: none;"
-    onclick="closeDailyWelcome()">
-    <div class="modal-box modern-glass-popup" onclick="event.stopPropagation(); closeDailyWelcome();">
-        <div class="welcome-icon-circle"><i class="fa-solid fa-face-smile-beam"></i></div>
-        <h2 class="welcome-title"><span data-i18n="hi_text">أهلاً</span>، <span id="welcomeUserName">Student</span>! 😊
-        </h2>
-        <div class="welcome-divider"></div>
-        <p class="welcome-text">
-            <span data-i18n="glad_here_text">سعداء بوجودك معنا اليوم.</span><br>
-            <span data-i18n="better_than_yesterday">لنكن أفضل مما كنا عليه بالأمس!</span> ✨
-        </p>
-        <button onclick="closeDailyWelcome()" class="btn-main welcome-btn" data-i18n="lets_go_btn">هيا بنا</button>
-    </div>
-</div>
-
-<style>
-    #urg_normal:checked+label {
-        background: #ffffff;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        color: #1f2937 !important;
-    }
-
-    #urg_high:checked+label {
-        background: #fee2e2;
-        box-shadow: 0 1px 3px rgba(239, 68, 68, 0.2);
-        color: #b91c1c !important;
-    }
-</style>
-<div id="feedbackModal" class="modal-overlay" style="z-index: 2147483647; display: none;">
-    <div class="modal-box" style="text-align: center; max-width: 350px;">
-        <div style="margin-bottom: 15px;">
-            <div
-                style="width: 70px; height: 70px; background: #fffbeb; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto; border: 4px solid #fff;">
-                <i class="fa-solid fa-star" style="font-size: 35px; color: #f59e0b;"></i>
-            </div>
-        </div>
-
-        <h3 class="modal-title" style="color: #1e293b; margin-bottom: 5px;" data-i18n="feedback_title">رأيك يهمنا</h3>
-
-        <p style="color: #64748b; font-size: 13px; margin-bottom: 20px;">
-            <span data-i18n="feedback_subtitle">يرجى تقييم محاضرة اليوم للمتابعة:</span><br>
-            <b id="feedbackSubjectName" style="color: #0ea5e9; font-size: 15px;">--</b> <br>
-
-            <span style="font-size: 12px; background: #f1f5f9; padding: 2px 8px; border-radius: 6px;">
-                <span data-i18n="doctor_prefix">د.</span>
-                <span id="feedbackDocName" class="en-font">--</span>
-            </span>
-        </p>
-
-        <div class="star-rating-container" dir="ltr">
-            <i class="fa-solid fa-star star-btn" data-value="1" onclick="selectStar(1)"></i>
-            <i class="fa-solid fa-star star-btn" data-value="2" onclick="selectStar(2)"></i>
-            <i class="fa-solid fa-star star-btn" data-value="3" onclick="selectStar(3)"></i>
-            <i class="fa-solid fa-star star-btn" data-value="4" onclick="selectStar(4)"></i>
-            <i class="fa-solid fa-star star-btn" data-value="5" onclick="selectStar(5)"></i>
-        </div>
-
-        <div id="ratingText"
-            style="font-size: 12px; font-weight: bold; color: #f59e0b; height: 20px; margin-bottom: 10px;"></div>
-
-        <input type="hidden" id="selectedRating" value="0">
-        <input type="hidden" id="targetAttendanceDocId" value="">
-
-        <div class="privacy-alert-box">
-            <i class="fa-solid fa-user-shield"></i>
-            <span data-i18n="privacy_notice_formal">
-                تنويه: يتم إرسال هذا التقييم للمحاضر بسرية تامة.
-            </span>
-        </div>
-
-        <button onclick="submitFeedback()" class="btn-main"
-            style="width: 100%; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3); background: linear-gradient(135deg, #f59e0b, #d97706);">
-            <span data-i18n="send_feedback_btn">إرسال التقييم</span> <i class="fa-solid fa-paper-plane"></i>
-        </button>
-    </div>
-</div>
-
-<style>
-    .star-rating-container {
-        display: flex;
-        justify-content: center;
-        gap: 12px;
-        margin-bottom: 10px;
-    }
-
-    .star-btn {
-        font-size: 28px;
-        color: #e2e8f0;
-        cursor: pointer;
-        transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), color 0.2s;
-    }
-
-    .star-btn:active {
-        transform: scale(0.8);
-    }
-
-    .star-btn.active {
-        color: #f59e0b;
-        transform: scale(1.1);
-        text-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
-    }
-
-    .privacy-alert-box {
-        background-color: #f8fafc;
-        border: 1px dashed #cbd5e1;
-        border-radius: 12px;
-        padding: 10px 15px;
-        margin-bottom: 20px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        text-align: right;
-        direction: rtl;
-    }
-
-    .privacy-alert-box i {
-        color: #10b981;
-        font-size: 18px;
-        flex-shrink: 0;
-    }
-
-    .privacy-alert-box span {
-        font-size: 11px;
-        color: #64748b;
-        line-height: 1.4;
-        font-weight: 600;
-    }
-
-    .privacy-alert-box strong {
-        color: #334155;
-    }
-</style>
-<div id="publicProfileModal" class="modal-overlay" style="z-index: 2147483647 !important;">
-    <div class="modal-box social-profile-box extended-card" style="font-family: 'Outfit', 'Cairo', sans-serif;">
-
-        <button onclick="document.getElementById('publicProfileModal').style.display='none'" class="btn-close-absolute">
-            <i class="fa-solid fa-xmark"></i>
-        </button>
-
-        <div class="social-avatar-wrapper" style="pointer-events: none;">
-            <div id="publicAvatar" class="social-avatar-img"></div>
-        </div>
-
-        <h2 id="publicName" class="social-name" style="font-family: 'Cairo', sans-serif;">--</h2>
-        <div id="publicRoleBadge" class="social-role-badge">--</div>
-
-        <div class="stats-tri-grid">
-        </div>
-
-        <div class="social-info-grid">
-            <div class="s-info-item">
-                <span class="lbl" data-i18n="profile_level">Level / Year</span>
-                <span class="val" id="publicLevel">--</span>
-            </div>
-            <div class="s-info-item">
-                <span class="lbl" data-i18n="profile_code">Student ID</span>
-                <span class="val en-font" id="publicCode">--</span>
-            </div>
-        </div>
-
-        <div id="publicExamsSection"
-            style="margin-top: 15px; width: 100%; border-top: 1px solid #f1f5f9; padding-top: 10px; display:none;">
-            <h4
-                style="margin: 0 0 10px 0; font-size: 14px; color: #334155; text-align: left; display: flex; align-items: center; gap: 8px;">
-                <i class="fa-solid fa-graduation-cap" style="color: #6366f1;"></i>
-                <span data-i18n="exam_results_title">Exam Results</span>
-            </h4>
-            <div id="publicExamsList" style="display: flex; flex-direction: column; gap: 8px;">
-            </div>
-        </div>
-
-    </div>
-</div>
-
-<div id="imageZoomModal" class="modal-overlay" style="z-index: 2147483665 !important; background: rgba(0,0,0,0.95);"
-    onclick="this.style.display='none'">
-    <div id="zoomedAvatarContainer" class="zoomed-img-box"></div>
-</div>
-
-<style>
-    .halo-container-v2 {
-        position: absolute !important;
-        top: -150px !important;
-        left: 50% !important;
-        transform: translateX(-50%) !important;
-        width: 250px !important;
-        height: 100px !important;
-        z-index: 50 !important;
-        pointer-events: none !important;
-    }
-
-    .halo-item {
-        position: absolute !important;
-        width: 45px !important;
-        height: 45px !important;
-        border-radius: 50% !important;
-        background: #ffffff !important;
-        border: 1px solid #e2e8f0 !important;
-        box-shadow: 0 5px 15px rgba(14, 165, 233, 0.2) !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        cursor: pointer !important;
-        pointer-events: auto !important;
-        font-size: 18px !important;
-        transition: 0.2s !important;
-    }
-
-    .halo-item:active {
-        transform: scale(0.9);
-    }
-
-
-    .halo-center {
-        top: -76px !important;
-        left: -5% !important;
-        transform: translateX(-50%) !important;
-        z-index: 100 !important;
-
-        background: #ffffff !important;
-        color: #0f172a !important;
-        font-weight: 900 !important;
-        font-size: 12px !important;
-        border-color: #0ea5e9 !important;
-        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1) !important;
-    }
-
-    .halo-left {
-        top: 35px !important;
-        left: 20px !important;
-        color: #0ea5e9 !important;
-    }
-
-    .halo-right {
-        top: 35px !important;
-        right: 20px !important;
-        color: #f59e0b !important;
-    }
-
-    .halo-badge-v2 {
-        position: absolute;
-        top: -3px;
-        right: -3px;
-        background: #ef4444;
-        color: white;
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        font-size: 10px;
-        font-weight: bold;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border: 2px solid white;
-    }
-</style>
-
-
-<div id="signupSuccessModal" class="modal-overlay">
-    <div class="modal-box" style="text-align: center; padding: 30px;">
-        <div
-            style="width: 70px; height: 70px; background: #dcfce7; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
-            <i class="fa-solid fa-envelope-circle-check fa-bounce" style="font-size: 35px; color: #16a34a;"></i>
-        </div>
-
-        <h3 id="successModalTitle" style="font-size: 20px; font-weight: 900; color: #1e293b; margin-bottom: 10px;">
-            تم إنشاء الحساب بنجاح!
-        </h3>
-
-        <div id="successModalBody" style="font-size: 14px; color: #64748b; line-height: 1.6;">
-        </div>
-
-        <button
-            onclick="document.getElementById('signupSuccessModal').style.display='none'; openAuthDrawer(); toggleAuthMode('login');"
-            class="btn-main" style="width: 100%; margin-top: 25px; justify-content: center;">
-            تسجيل الدخول الآن <i class="fa-solid fa-arrow-right-to-bracket"></i>
-        </button>
-    </div>
-</div>
-<div id="verificationModal" class="modal-overlay">
-    <div class="modal-box" style="text-align: center; padding: 25px;">
-        <div
-            style="width: 60px; height: 60px; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
-            <i class="fa-solid fa-envelope-open-text fa-shake" style="font-size: 30px; color: #ef4444;"></i>
-        </div>
-
-        <h3 style="font-size: 18px; font-weight: 800; color: #b91c1c; margin-bottom: 8px;">
-            الحساب غير مفعل!
-        </h3>
-
-        <p style="font-size: 13px; color: #64748b; margin-bottom: 20px;">
-            لقد تم إنشاء حسابك ولكن لم تقم بتفعيله.<br>
-            يرجى مراجعة بريدك الإلكتروني والضغط على رابط التفعيل.
-        </p>
-
-        <button onclick="document.getElementById('verificationModal').style.display='none';" class="btn-main"
-            style="width: 100%; background: #ef4444; border: none;">
-            حسناً، سأتحقق الآن <i class="fa-solid fa-check"></i>
-        </button>
-    </div>
-</div>
-<div id="expulsionModal" class="modal-overlay" style="z-index: 2147483650 !important;">
-    <div class="modal-box" style="text-align: center; padding: 30px; border-top: 5px solid #ef4444;">
-
-        <div
-            style="width: 70px; height: 70px; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
-            <i class="fa-solid fa-ban fa-beat" style="font-size: 35px; color: #b91c1c;"></i>
-        </div>
-
-        <h3 id="expelTitle" style="font-size: 22px; font-weight: 900; color: #b91c1c; margin-bottom: 10px;">
-            تم استبعادك!
-        </h3>
-
-        <p id="expelBody" style="font-size: 14px; color: #64748b; line-height: 1.6; margin-bottom: 25px;">
-            قام المحاضر باستبعادك من الجلسة الحالية.<br>
-            لا يمكنك العودة لهذه المحاضرة مرة أخرى.
-        </p>
-
-        <button onclick="location.reload()" class="btn-main"
-            style="width: 100%; background: #ef4444; border: none; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);">
-            مغادرة القاعة <i class="fa-solid fa-arrow-right-from-bracket"></i>
-        </button>
-    </div>
-</div>
-<div class="floating-refresh-btn" onclick="if(navigator.vibrate) navigator.vibrate(50); location.reload();">
-    <i class="fa-solid fa-rotate-right"></i>
-</div>
-
-<div id="superWifiIndicator" class="wifi-status-hidden">
-    <div class="wifi-icon-box">
-        <i class="fa-solid fa-wifi fa-fade"></i>
-        <i class="fa-solid fa-slash wifi-slash" id="wifiSlashIcon"></i>
-    </div>
-    <span class="wifi-text">System Initializing...</span>
-</div>
-<script src="ramadan_theme.js"></script>
-<script src="./screen-guard.js"></script>
-
-
-<div id="academicRecordModal" class="modal-overlay" style="z-index: 2147483647; display: none;">
-    <div class="modal-box"
-        style="max-width: 380px; padding: 0; border-radius: 20px; overflow: hidden; background: #fff;">
-
-        <div
-            style="background: linear-gradient(135deg, #0ea5e9, #3b82f6); padding: 20px; color: white; display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                <h3 style="margin: 0; font-size: 16px; font-weight: 900;" data-i18n="academic_record_title">Academic
-                    Record</h3>
-                <p style="margin: 4px 0 0 0; font-size: 11px; opacity: 0.8;" data-i18n="academic_record_sub">Theory
-                    subjects only</p>
-            </div>
-
-            <div style="display: flex; gap: 8px; align-items: center;">
-                <button onclick="window.refreshAcademicData()"
-                    style="background: rgba(255,255,255,0.2); border: none; color: white; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center;">
-                    <i id="refreshBtnIcon" class="fa-solid fa-rotate-right"></i>
-                </button>
-
-                <button onclick="document.getElementById('academicRecordModal').style.display='none'"
-                    style="background: rgba(255,255,255,0.2); border: none; color: white; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;">
-                    ✕
-                </button>
-            </div>
-        </div>
-
-        <div id="academicStatsContainer"
-            style="background: #f8fafc; padding: 10px 5px; border-bottom: 1px solid #e2e8f0; min-height: 50px;">
-        </div>
-
-        <div style="display: flex; border-bottom: 2px solid #f1f5f9; background: white;">
-            <button id="tabAttendance" onclick="switchAcademicTab('attendance')" class="tab-active-att"
-                style="flex: 1; padding: 12px; border: none; font-weight: 800; cursor: pointer; font-size: 14px; transition: 0.3s;">
-                ✅ <span data-i18n="academic_tab_attendance">Attendance</span>
-                <span id="attendanceTabCount"
-                    style="background: rgba(16, 185, 129, 0.1); color: #10b981; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 5px;">0</span>
-            </button>
-            <button id="tabAbsence" onclick="switchAcademicTab('absence')" class="tab-inactive"
-                style="flex: 1; padding: 12px; border: none; font-weight: 800; cursor: pointer; font-size: 14px; transition: 0.3s;">
-                ❌ <span data-i18n="academic_tab_absence">Absence</span>
-                <span id="absenceTabCount"
-                    style="background: #f1f5f9; color: #64748b; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 5px;">0</span>
-            </button>
-        </div>
-
-        <div id="academicRecordContent" style="max-height: 400px; overflow-y: auto; padding: 15px; background: #fff;">
-            <div style="text-align: center; padding: 30px; color: #94a3b8;">
-                <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 30px;"></i>
-                <p data-i18n="academic_loading">Loading Records...</p>
-            </div>
-        </div>
-    </div>
-</div>
-<style>
-    .tab-active-att {
-        color: #10b981 !important;
-        border-bottom: 3px solid #10b981 !important;
-        background: white !important;
-    }
-
-    .tab-active-abs {
-        color: #ef4444 !important;
-        border-bottom: 3px solid #ef4444 !important;
-        background: white !important;
-    }
-
-    .tab-inactive {
-        color: #94a3b8 !important;
-        border-bottom: none !important;
-        background: #f8fafc !important;
-    }
-
-    #academicStatsContainer::-webkit-scrollbar {
-        display: none;
-    }
-
-    #academicStatsContainer {
-        -ms-overflow-style: none;
-        scrollbar-width: none;
-    }
-</style>
-
-<div id="offlineAlertModal" style="
+            <style>
+                .tab-active-att {
+                    color: #10b981 !important;
+                    border-bottom: 3px solid #10b981 !important;
+                    background: white !important;
+                }
+
+                .tab-active-abs {
+                    color: #ef4444 !important;
+                    border-bottom: 3px solid #ef4444 !important;
+                    background: white !important;
+                }
+
+                .tab-inactive {
+                    color: #94a3b8 !important;
+                    border-bottom: none !important;
+                    background: #f8fafc !important;
+                }
+
+                #academicStatsContainer::-webkit-scrollbar {
+                    display: none;
+                }
+
+                #academicStatsContainer {
+                    -ms-overflow-style: none;
+                    scrollbar-width: none;
+                }
+            </style>
+
+            <div id="offlineAlertModal" style="
     display:none; position:fixed; inset:0; z-index:999999;
     background:rgba(0,0,0,0.6);
     backdrop-filter:blur(4px);
     align-items:center; justify-content:center; padding:20px;
 ">
-    <div style="
+                <div style="
         background:linear-gradient(145deg, #e0f2fe, #f0f9ff);
         border:1px solid #7dd3fc;
         border-radius:24px;
@@ -2051,35 +2063,36 @@
         box-shadow:0 25px 60px rgba(0,0,0,0.3);
         animation: fadeInUp 0.25s ease;
     ">
-        <div style="
+                    <div style="
             font-size:11px; font-weight:700;
             color:#0284c7; letter-spacing:1px;
             margin-bottom:12px;
             display:flex; align-items:center;
             justify-content:center; gap:6px;
         ">
-            <i class="fa-solid fa-wifi" style="text-decoration:line-through;"></i>
-            OFFLINE MODE
-        </div>
+                        <i class="fa-solid fa-wifi" style="text-decoration:line-through;"></i>
+                        OFFLINE MODE
+                    </div>
 
-        <div id="offlineAlertIconWrap" style="
+                    <div id="offlineAlertIconWrap" style="
             width:56px; height:56px; border-radius:50%;
             display:flex; align-items:center; justify-content:center;
             margin:0 auto 16px;
             background:rgba(239,68,68,0.15);
             border:2px solid rgba(239,68,68,0.3);
         ">
-            <i id="offlineAlertIcon" class="fa-solid fa-circle-exclamation" style="font-size:26px; color:#ef4444;"></i>
-        </div>
+                        <i id="offlineAlertIcon" class="fa-solid fa-circle-exclamation"
+                            style="font-size:26px; color:#ef4444;"></i>
+                    </div>
 
-        <div id="offlineAlertMsg" style="
+                    <div id="offlineAlertMsg" style="
             color:#0c4a6e;
             font-size:14px; font-weight:700;
             margin-bottom:24px; line-height:1.9;
             font-family:'Outfit', sans-serif;
         "></div>
 
-        <button onclick="document.getElementById('offlineAlertModal').style.display='none'" style="
+                    <button onclick="document.getElementById('offlineAlertModal').style.display='none'" style="
             width:48px; height:48px;
             border:none; border-radius:50%;
             background:linear-gradient(135deg,#0ea5e9,#0284c7);
@@ -2088,32 +2101,32 @@
             display:flex; align-items:center; justify-content:center;
             box-shadow:0 4px 15px rgba(14,165,233,0.4);
         ">
-            <i class="fa-solid fa-check"></i>
-        </button>
-    </div>
-</div>
+                        <i class="fa-solid fa-check"></i>
+                    </button>
+                </div>
+            </div>
 
-<style>
-    @keyframes fadeInUp {
-        from {
-            opacity: 0;
-            transform: translateY(20px);
-        }
+            <style>
+                @keyframes fadeInUp {
+                    from {
+                        opacity: 0;
+                        transform: translateY(20px);
+                    }
 
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-</style>
+                    to {
+                        opacity: 1;
+                        transform: translateY(0);
+                    }
+                }
+            </style>
 
-<div id="offlinePatternModal" style="
+            <div id="offlinePatternModal" style="
     display:none; position:fixed; inset:0; z-index:2147483648;
     background:rgba(0,0,0,0.7);
     backdrop-filter:blur(6px);
     align-items:center; justify-content:center; padding:20px;
 ">
-    <div style="
+                <div style="
         background:linear-gradient(145deg, #e0f2fe, #f0f9ff);
         border:1px solid #7dd3fc;
         border-radius:24px;
@@ -2123,48 +2136,48 @@
         box-shadow:0 25px 60px rgba(0,0,0,0.4);
         animation: fadeInUp 0.25s ease;
     ">
-        <!-- شريط OFFLINE MODE -->
-        <div style="
+                    <!-- شريط OFFLINE MODE -->
+                    <div style="
             font-size:11px; font-weight:700; color:#0284c7;
             letter-spacing:1px; margin-bottom:12px;
             display:flex; align-items:center; justify-content:center; gap:6px;
         ">
-            <i class="fa-solid fa-wifi" style="text-decoration:line-through;"></i>
-            OFFLINE MODE
-        </div>
+                        <i class="fa-solid fa-wifi" style="text-decoration:line-through;"></i>
+                        OFFLINE MODE
+                    </div>
 
-        <!-- أيقونة + عنوان -->
-        <div style="
+                    <!-- أيقونة + عنوان -->
+                    <div style="
             width:52px; height:52px; border-radius:50%;
             display:flex; align-items:center; justify-content:center;
             margin:0 auto 12px;
             background:rgba(99,102,241,0.15);
             border:2px solid rgba(99,102,241,0.3);
         ">
-            <i class="fa-solid fa-lock" style="font-size:22px; color:#6366f1;"></i>
-        </div>
+                        <i class="fa-solid fa-lock" style="font-size:22px; color:#6366f1;"></i>
+                    </div>
 
-        <div style="
+                    <div style="
             color:#0c4a6e; font-size:15px; font-weight:800;
             margin-bottom:4px; font-family:'Outfit', sans-serif;
         ">نمط الجلسة</div>
 
-        <!-- مؤقت 20 ثانية -->
-        <div style="
+                    <!-- مؤقت 20 ثانية -->
+                    <div style="
             display:flex; align-items:center; justify-content:center; gap:6px;
             margin-bottom:16px;
         ">
-            <i class="fa-solid fa-clock" style="color:#0284c7; font-size:12px;"></i>
-            <span style="color:#0369a1; font-size:12px; font-weight:600;">
-                لديك <span id="offlinePatternTimer" style="
+                        <i class="fa-solid fa-clock" style="color:#0284c7; font-size:12px;"></i>
+                        <span style="color:#0369a1; font-size:12px; font-weight:600;">
+                            لديك <span id="offlinePatternTimer" style="
                     color:#ef4444; font-weight:900; font-size:14px;
                 ">12</span> ثانية لرسم النمط
-            </span>
-        </div>
+                        </span>
+                    </div>
 
-        <!-- شبكة الباترن -->
-        <div style="position:relative; margin:0 auto 16px; width:260px; height:260px;">
-            <div id="offlinePatternGrid" style="
+                    <!-- شبكة الباترن -->
+                    <div style="position:relative; margin:0 auto 16px; width:260px; height:260px;">
+                        <div id="offlinePatternGrid" style="
                 display:grid;
                 grid-template-columns: repeat(4, 1fr);
                 grid-template-rows: repeat(4, 1fr);
@@ -2172,142 +2185,151 @@
                 touch-action:none; cursor:crosshair;
                 position:relative; z-index:2;
             "></div>
-            <svg id="offlinePatternSvg" style="
+                        <svg id="offlinePatternSvg" style="
                 position:absolute; inset:0;
                 width:100%; height:100%;
                 pointer-events:none; z-index:10;
                 overflow:visible;
             "></svg>
-        </div>
+                    </div>
 
-        <div id="offlinePatternHint" style="
+                    <div id="offlinePatternHint" style="
             color:#0369a1; font-size:12px; font-weight:600; margin-bottom:16px;
         ">ارسم النمط بالسحب بين النقاط</div>
 
-        <!-- أزرار -->
-        <div style="display:flex; gap:10px;">
-            <button onclick="resetOfflinePattern()" style="
+                    <!-- أزرار -->
+                    <div style="display:flex; gap:10px;">
+                        <button onclick="resetOfflinePattern()" style="
                 flex:1; padding:12px; border:none; border-radius:14px;
                 background:rgba(239,68,68,0.1); color:#ef4444;
                 font-size:13px; font-weight:700; cursor:pointer;
                 font-family:'Outfit', sans-serif;
             ">
-                <i class="fa-solid fa-rotate-left"></i> إعادة
-            </button>
-            <button onclick="skipOfflinePattern()" style="
+                            <i class="fa-solid fa-rotate-left"></i> إعادة
+                        </button>
+                        <button onclick="skipOfflinePattern()" style="
                 flex:1; padding:12px; border:none; border-radius:14px;
                 background:rgba(100,116,139,0.1); color:#475569;
                 font-size:13px; font-weight:700; cursor:pointer;
                 font-family:'Outfit', sans-serif;
             ">
-                <i class="fa-solid fa-forward"></i> تخطي
-            </button>
-        </div>
-    </div>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@3/dist/fp.min.js"></script>
-<div id="studentEnrollmentModal" class="modal-overlay" style="z-index: 2147483647; display: none;">
-    <div class="modal-box"
-        style="max-width: 420px; padding: 0; border-radius: 20px; overflow: hidden; background: #f8fafc; direction: rtl; text-align: right;">
+                            <i class="fa-solid fa-forward"></i> تخطي
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@3/dist/fp.min.js"></script>
+            <div id="studentEnrollmentModal" class="modal-overlay" style="z-index: 2147483647; display: none;">
+                <div class="modal-box"
+                    style="max-width: 420px; padding: 0; border-radius: 20px; overflow: hidden; background: #f8fafc; direction: rtl; text-align: right;">
 
-        <div
-            style="background: linear-gradient(135deg, #3b82f6, #2563eb); padding: 20px; color: white; display: flex; justify-content: space-between; align-items: center;">
-            <div style="display: flex; align-items: center; gap: 10px;">
+                    <div
+                        style="background: linear-gradient(135deg, #3b82f6, #2563eb); padding: 20px; color: white; display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div
+                                style="width: 40px; height: 40px; background: rgba(255,255,255,0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px;">
+                                <i class="fa-solid fa-book-open"></i>
+                            </div>
+                            <div>
+                                <h3 style="margin: 0; font-size: 16px; font-weight: 900;"
+                                    data-i18n="enrollment_modal_title">تسجيل
+                                    المقررات</h3>
+                                <p style="margin: 2px 0 0 0; font-size: 11px; opacity: 0.9;"
+                                    data-i18n="enrollment_modal_sub">اختر
+                                    موادك بعناية</p>
+                            </div>
+                        </div>
+                        <button onclick="closeStudentEnrollmentModal()"
+                            style="background: rgba(255,255,255,0.2); border: none; color: white; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: 0.2s;">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+
+                    <div id="studentEnrollmentListContainer" style="max-height: 60vh; overflow-y: auto; padding: 15px;">
+                    </div>
+
+                </div>
+            </div>
+
+            <div id="groupHelpModal" onclick="if(event.target===this)this.style.display='none'"
+                style="display:none;position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.5);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:20px;">
                 <div
-                    style="width: 40px; height: 40px; background: rgba(255,255,255,0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px;">
-                    <i class="fa-solid fa-book-open"></i>
+                    style="background:#fff;border-radius:24px;padding:24px;max-width:340px;width:100%;font-family:'Cairo',sans-serif;">
+
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                        <div>
+                            <div style="font-size:16px;font-weight:800;color:#0f172a;" data-i18n="group_help_title">صيغة
+                                الجروب
+                            </div>
+                            <div style="font-size:12px;color:#64748b;margin-top:2px;"><span
+                                    data-i18n="group_help_example_label">مثال</span>: <b
+                                    style="color:#0ea5e9;font-family:'Outfit';">1G12</b></div>
+                        </div>
+                        <button onclick="document.getElementById('groupHelpModal').style.display='none'"
+                            style="width:32px;height:32px;border-radius:50%;border:1px solid #e2e8f0;background:#f8fafc;color:#64748b;font-size:16px;cursor:pointer;">✕</button>
+                    </div>
+
+                    <div
+                        style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:12px 16px;margin-bottom:16px;text-align:center;font-family:'Outfit',sans-serif;">
+                        <span style="font-size:28px;font-weight:900;color:#0ea5e9;letter-spacing:4px;">1 G 12</span>
+                        <div
+                            style="display:flex;justify-content:center;gap:16px;margin-top:6px;font-size:10px;color:#0369a1;font-weight:700;">
+                            <span>↑<br><span data-i18n="group_help_year">الفرقة</span></span>
+                            <span>↑<br><span data-i18n="group_help_college">الكلية</span></span>
+                            <span>↑<br><span data-i18n="group_help_number">رقم الجروب</span></span>
+                        </div>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                        <div
+                            style="background:#e0f2fe;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px;">
+                            <span
+                                style="font-size:20px;font-weight:900;color:#0ea5e9;font-family:'Outfit';min-width:20px;">G</span>
+                            <span style="font-size:12px;font-weight:700;color:#0369a1;">Nursing</span>
+                        </div>
+                        <div
+                            style="background:#d1fae5;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px;">
+                            <span
+                                style="font-size:20px;font-weight:900;color:#10b981;font-family:'Outfit';min-width:20px;">P</span>
+                            <span style="font-size:12px;font-weight:700;color:#047857;">Phys. Therapy</span>
+                        </div>
+                        <div
+                            style="background:#ede9fe;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px;">
+                            <span
+                                style="font-size:20px;font-weight:900;color:#8b5cf6;font-family:'Outfit';min-width:20px;">C</span>
+                            <span style="font-size:12px;font-weight:700;color:#6d28d9;">Pharmacy</span>
+                        </div>
+                        <div
+                            style="background:#fef3c7;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px;">
+                            <span
+                                style="font-size:20px;font-weight:900;color:#f59e0b;font-family:'Outfit';min-width:20px;">D</span>
+                            <span style="font-size:12px;font-weight:700;color:#b45309;">Dentistry</span>
+                        </div>
+                        <div
+                            style="background:#dbeafe;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px;">
+                            <span
+                                style="font-size:20px;font-weight:900;color:#3b82f6;font-family:'Outfit';min-width:20px;">CS</span>
+                            <span style="font-size:12px;font-weight:700;color:#1d4ed8;">Comp. Science</span>
+                        </div>
+                        <div
+                            style="background:#ffedd5;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px;">
+                            <span
+                                style="font-size:20px;font-weight:900;color:#f97316;font-family:'Outfit';min-width:20px;">B</span>
+                            <span style="font-size:12px;font-weight:700;color:#c2410c;">Business</span>
+                        </div>
+                        <div
+                            style="background:#fee2e2;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px;">
+                            <span
+                                style="font-size:20px;font-weight:900;color:#ef4444;font-family:'Outfit';min-width:20px;">H</span>
+                            <span style="font-size:12px;font-weight:700;color:#b91c1c;">Health Sci.</span>
+                        </div>
+                    </div>
+
+                    <button onclick="document.getElementById('groupHelpModal').style.display='none'"
+                        style="width:100%;margin-top:16px;padding:12px;background:#0f172a;color:#fff;border:none;border-radius:12px;font-weight:800;font-size:14px;cursor:pointer;font-family:'Cairo',sans-serif;"
+                        data-i18n="group_help_got_it">فهمت ✓</button>
                 </div>
-                <div>
-                    <h3 style="margin: 0; font-size: 16px; font-weight: 900;" data-i18n="enrollment_modal_title">تسجيل
-                        المقررات</h3>
-                    <p style="margin: 2px 0 0 0; font-size: 11px; opacity: 0.9;" data-i18n="enrollment_modal_sub">اختر
-                        موادك بعناية</p>
-                </div>
             </div>
-            <button onclick="closeStudentEnrollmentModal()"
-                style="background: rgba(255,255,255,0.2); border: none; color: white; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: 0.2s;">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-        </div>
-
-        <div id="studentEnrollmentListContainer" style="max-height: 60vh; overflow-y: auto; padding: 15px;">
-        </div>
-
-    </div>
-</div>
-
-<div id="groupHelpModal" onclick="if(event.target===this)this.style.display='none'"
-    style="display:none;position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.5);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:20px;">
-    <div
-        style="background:#fff;border-radius:24px;padding:24px;max-width:340px;width:100%;font-family:'Cairo',sans-serif;">
-
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-            <div>
-                <div style="font-size:16px;font-weight:800;color:#0f172a;" data-i18n="group_help_title">صيغة الجروب
-                </div>
-                <div style="font-size:12px;color:#64748b;margin-top:2px;"><span
-                        data-i18n="group_help_example_label">مثال</span>: <b
-                        style="color:#0ea5e9;font-family:'Outfit';">1G12</b></div>
-            </div>
-            <button onclick="document.getElementById('groupHelpModal').style.display='none'"
-                style="width:32px;height:32px;border-radius:50%;border:1px solid #e2e8f0;background:#f8fafc;color:#64748b;font-size:16px;cursor:pointer;">✕</button>
-        </div>
-
-        <div
-            style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:12px 16px;margin-bottom:16px;text-align:center;font-family:'Outfit',sans-serif;">
-            <span style="font-size:28px;font-weight:900;color:#0ea5e9;letter-spacing:4px;">1 G 12</span>
-            <div
-                style="display:flex;justify-content:center;gap:16px;margin-top:6px;font-size:10px;color:#0369a1;font-weight:700;">
-                <span>↑<br><span data-i18n="group_help_year">الفرقة</span></span>
-                <span>↑<br><span data-i18n="group_help_college">الكلية</span></span>
-                <span>↑<br><span data-i18n="group_help_number">رقم الجروب</span></span>
-            </div>
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-            <div
-                style="background:#e0f2fe;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px;">
-                <span style="font-size:20px;font-weight:900;color:#0ea5e9;font-family:'Outfit';min-width:20px;">G</span>
-                <span style="font-size:12px;font-weight:700;color:#0369a1;">Nursing</span>
-            </div>
-            <div
-                style="background:#d1fae5;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px;">
-                <span style="font-size:20px;font-weight:900;color:#10b981;font-family:'Outfit';min-width:20px;">P</span>
-                <span style="font-size:12px;font-weight:700;color:#047857;">Phys. Therapy</span>
-            </div>
-            <div
-                style="background:#ede9fe;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px;">
-                <span style="font-size:20px;font-weight:900;color:#8b5cf6;font-family:'Outfit';min-width:20px;">C</span>
-                <span style="font-size:12px;font-weight:700;color:#6d28d9;">Pharmacy</span>
-            </div>
-            <div
-                style="background:#fef3c7;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px;">
-                <span style="font-size:20px;font-weight:900;color:#f59e0b;font-family:'Outfit';min-width:20px;">D</span>
-                <span style="font-size:12px;font-weight:700;color:#b45309;">Dentistry</span>
-            </div>
-            <div
-                style="background:#dbeafe;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px;">
-                <span
-                    style="font-size:20px;font-weight:900;color:#3b82f6;font-family:'Outfit';min-width:20px;">CS</span>
-                <span style="font-size:12px;font-weight:700;color:#1d4ed8;">Comp. Science</span>
-            </div>
-            <div
-                style="background:#ffedd5;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px;">
-                <span style="font-size:20px;font-weight:900;color:#f97316;font-family:'Outfit';min-width:20px;">B</span>
-                <span style="font-size:12px;font-weight:700;color:#c2410c;">Business</span>
-            </div>
-            <div
-                style="background:#fee2e2;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px;">
-                <span style="font-size:20px;font-weight:900;color:#ef4444;font-family:'Outfit';min-width:20px;">H</span>
-                <span style="font-size:12px;font-weight:700;color:#b91c1c;">Health Sci.</span>
-            </div>
-        </div>
-
-        <button onclick="document.getElementById('groupHelpModal').style.display='none'"
-            style="width:100%;margin-top:16px;padding:12px;background:#0f172a;color:#fff;border:none;border-radius:12px;font-weight:800;font-size:14px;cursor:pointer;font-family:'Cairo',sans-serif;"
-            data-i18n="group_help_got_it">فهمت ✓</button>
-    </div>
-</div>
 </body>
 
 </html>
