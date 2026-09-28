@@ -14,6 +14,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0ea5e9">
     <link rel="manifest" href="manifest.json">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
     <link rel="apple-touch-icon" href="icon-192.png">
     <link rel="icon" href="icon-192.png" type="image/png">
 
@@ -628,8 +631,9 @@
                 </div>
             </div>
 
+            <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@3/dist/fp.min.js" defer></script>
             <script src="geo.js?v=7.5.2" defer></script>
-            <script src="dist/ovls.js?v=3" defer></script>
+            <script src="dist/ovls.js?v=4" defer></script>
 
 
             <style>
@@ -1062,7 +1066,6 @@
                     transform: scale(0.9);
                 }
             </style>
-            <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
             <style>
                 .faculty-modal.modal-overlay {
@@ -2218,7 +2221,6 @@
                     </div>
                 </div>
             </div>
-            <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@3/dist/fp.min.js"></script>
             <div id="studentEnrollmentModal" class="modal-overlay" style="z-index: 2147483647; display: none;">
                 <div class="modal-box"
                     style="max-width: 420px; padding: 0; border-radius: 20px; overflow: hidden; background: #f8fafc; direction: rtl; text-align: right;">
