@@ -1,22 +1,41 @@
-const CACHE_NAME = 'proattend-v12.9';
+const CACHE_NAME = 'proattend-v11';
 
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './style.css',
-  './dist/ovls.js',
+  './dist/bundle.js?v=6',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
-  './icon-badge.png',
-  './faculty-logo.png'
+  './faculty-logo.png',
+  './geo.js?v=7.5.2',
+  './notifications.css',
+  './profile-style.css',
+  './ramadan_theme.js',
+  './screen-guard.js',
+  './banner.jpg'
 ];
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
+      console.log('✅ ProAttend: Caching assets...');
+      return Promise.allSettled(
+        ASSETS_TO_CACHE.map((url) =>
+          fetch(url, { cache: 'reload' })
+            .then((response) => {
+              if (!response.ok) {
+                throw new Error(`[404] File not found: ${url}`);
+              }
+              return cache.put(url, response);
+            })
+            .catch((error) => {
+              console.error('❌ Failed to cache asset:', error.message);
+            })
+        )
+      );
     })
   );
 });
@@ -34,32 +53,36 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
-  const isDynamicData =
-    event.request.url.includes('firestore.googleapis.com') ||
-    event.request.url.includes('firebase') ||
-    event.request.url.includes('google-analytics') ||
-    event.request.url.includes('identitytoolkit') ||
-    event.request.url.startsWith('chrome-extension');
-  if (isDynamicData) return;
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      const networkFetch = fetch(event.request)
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const responseToCache = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseToCache);
-            });
-          }
-          return networkResponse;
-        })
-        .catch(() => {
-          console.log('[SW] Network failed, serving from cache');
-          return new Response('', { status: 408, statusText: 'Network error' }); 
-        });
-      return cachedResponse || networkFetch;
-    })
-  );
+  const url = new URL(event.request.url);
+  if (url.origin !== location.origin) return;
+
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      Promise.race([
+        fetch(event.request),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 3000)),
+      ]).then((res) => {
+        if (res && res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE_NAME).then((c) => c.put('./index.html', copy));
+        }
+        return res;
+      }).catch(() => caches.match('./index.html').then((r) => r || caches.match('./')))
+    );
+    return;
+  }
+
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    const cached = await cache.match(event.request);
+    const net = fetch(event.request).then((res) => {
+      if (res && res.ok && res.type === 'basic') cache.put(event.request, res.clone());
+      return res;
+    });
+    if (cached) { event.waitUntil(net.catch(() => { })); return cached; }
+    try { return await net; }
+    catch { return new Response('', { status: 408, statusText: 'Network error' }); }
+  })());
 });
 
 self.addEventListener('push', (event) => {
@@ -67,34 +90,22 @@ self.addEventListener('push', (event) => {
   if (event.data) {
     try {
       data = event.data.json();
-    } catch {
-      data = { notification: { title: 'SAP', body: event.data.text() } };
+    } catch (e) {
+      data = { title: 'إشعار جديد', body: event.data.text() };
     }
   }
-  const notification = data.notification || {};
-  const title = notification.title || 'SAP — Smart Attendance Platform';
+
+  const title = data.notification?.title || data.title || 'ProAttend';
   const options = {
-    body: notification.body || '',
+    body: data.notification?.body || data.body || 'لديك تنبيه جديد من النظام',
     icon: './icon-192.png',
-    badge: './icon-badge.png',
-    vibrate: notification.vibrate || [200, 100, 200],
-    tag: notification.tag || 'sap-notification',
-    renotify: true,
-    dir: notification.dir || 'rtl',
-    lang: notification.lang || 'ar',
-    requireInteraction: true,
-    data: { url: notification.data?.url || './' },
-    actions: [
-      {
-        action: 'open',
-        title: notification.lang === 'en' ? 'Open App' : 'فتح التطبيق'
-      },
-      {
-        action: 'close',
-        title: notification.lang === 'en' ? 'Dismiss' : 'إغلاق'
-      }
-    ]
+    badge: './icon-192.png',
+    vibrate: [100, 50, 100],
+    data: {
+      url: data.data?.url || './index.html'
+    }
   };
+
   event.waitUntil(
     self.registration.showNotification(title, options)
   );
@@ -102,15 +113,12 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  if (event.action === 'close') return;
-  const url = event.notification.data?.url || './';
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true })
-      .then((clientList) => {
-        for (const client of clientList) {
-          if (client.url && 'focus' in client) return client.focus();
-        }
-        if (clients.openWindow) return clients.openWindow(url);
-      })
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url && 'focus' in client) return client.focus();
+      }
+      if (clients.openWindow) return clients.openWindow(event.notification.data.url || './');
+    })
   );
 });
