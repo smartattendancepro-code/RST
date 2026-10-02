@@ -1,4 +1,4 @@
-const CACHE_NAME = 'proattend-v11';
+const CACHE_NAME = 'proattend-v12';
 
 const ASSETS_TO_CACHE = [
   './',
@@ -14,7 +14,11 @@ const ASSETS_TO_CACHE = [
   './profile-style.css',
   './ramadan_theme.js',
   './screen-guard.js',
-  './banner.jpg'
+  './banner.jpg',
+  './fp.min.js',
+  './vendor/fa/css/all.min.css',
+  './vendor/fa/webfonts/fa-solid-900.woff2',
+  './vendor/fa/webfonts/fa-regular-400.woff2'
 ];
 
 self.addEventListener('install', (event) => {
