@@ -1,10 +1,10 @@
-const CACHE_NAME = 'proattend-v12';
+const CACHE_NAME = 'proattend-v13';
 
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './style.css',
-  './dist/bundle.js?v=6',
+  './dist/bundle.js?v=7',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
