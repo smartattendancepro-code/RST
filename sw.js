@@ -23,25 +23,14 @@ const ASSETS_TO_CACHE = [
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log('✅ ProAttend: Caching assets...');
-      return Promise.allSettled(
-        ASSETS_TO_CACHE.map((url) =>
-          fetch(url, { cache: 'reload' })
-            .then((response) => {
-              if (!response.ok) {
-                throw new Error(`[404] File not found: ${url}`);
-              }
-              return cache.put(url, response);
-            })
-            .catch((error) => {
-              console.error('❌ Failed to cache asset:', error.message);
-            })
-        )
-      );
-    })
-  );
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    await Promise.all(ASSETS_TO_CACHE.map(async (url) => {
+      const res = await fetch(url, { cache: 'reload' });
+      if (!res.ok) throw new Error(`[${res.status}] ${url}`);
+      await cache.put(url, res);
+    }));
+  })());
 });
 
 self.addEventListener('activate', (event) => {
@@ -56,36 +45,41 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
-  const url = new URL(event.request.url);
+  const req = event.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
   if (url.origin !== location.origin) return;
 
-  if (event.request.mode === 'navigate') {
+  if (req.mode === 'navigate') {
+    const update = fetch(req).then((res) => {
+      if (res && res.ok) {
+        const copy = res.clone();
+        caches.open(CACHE_NAME).then((c) => c.put('./index.html', copy));
+      }
+      return res;
+    }).catch(() => null);
+    event.waitUntil(update);
     event.respondWith(
-      Promise.race([
-        fetch(event.request),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 3000)),
-      ]).then((res) => {
-        if (res && res.ok) {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then((c) => c.put('./index.html', copy));
-        }
-        return res;
-      }).catch(() => caches.match('./index.html').then((r) => r || caches.match('./')))
+      caches.match('./index.html')
+        .then((c) => c || update.then((r) => r || caches.match('./')))
+        .then((r) => r || Response.error())
     );
     return;
   }
 
+  const isStatic = url.search.includes('v=') || /\.(woff2|png|jpg|ico)$/.test(url.pathname);
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
-    const cached = await cache.match(event.request);
-    const net = fetch(event.request).then((res) => {
-      if (res && res.ok && res.type === 'basic') cache.put(event.request, res.clone());
+    const cached = await cache.match(req);
+    if (cached) {
+      if (!isStatic) fetch(req).then((r) => { if (r.ok && r.type === 'basic') cache.put(req, r); }).catch(() => {});
+      return cached;
+    }
+    try {
+      const res = await fetch(req);
+      if (res.ok && res.type === 'basic') cache.put(req, res.clone());
       return res;
-    });
-    if (cached) { event.waitUntil(net.catch(() => { })); return cached; }
-    try { return await net; }
-    catch { return new Response('', { status: 408, statusText: 'Network error' }); }
+    } catch { return new Response('', { status: 408 }); }
   })());
 });
 
