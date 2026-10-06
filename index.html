@@ -3,6 +3,24 @@
 
 <head>
     <meta charset="UTF-8">
+    <script>
+        (function () {
+            document.addEventListener('click', function (e) {
+                if (typeof window.safeClick === 'function') return;
+                var el = e.target && e.target.closest ? e.target.closest('[onclick]') : null;
+                if (!el) return;
+                e.stopImmediatePropagation();
+                e.preventDefault();
+                var t = document.getElementById('toastNotification');
+                if (!t) return;
+                t.style.backgroundColor = '#f59e0b';
+                t.innerText = '⏳ جاري تحميل النظام، انتظر قليلاً...';
+                t.style.display = 'block';
+                clearTimeout(window.__bootT);
+                window.__bootT = setTimeout(function () { t.style.display = 'none'; }, 2500);
+            }, true);
+        })();
+    </script>
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title data-i18n="app_title">نظام كشف الحضور - جامعة الريادة </title>
@@ -631,24 +649,6 @@
                 </div>
             </div>
 
-            <script>
-                (function () {
-                    document.addEventListener('click', function (e) {
-                        if (typeof window.safeClick === 'function') return;
-                        var el = e.target && e.target.closest ? e.target.closest('[onclick]') : null;
-                        if (!el) return;
-                        e.stopImmediatePropagation();
-                        e.preventDefault();
-                        var t = document.getElementById('toastNotification');
-                        if (!t) return;
-                        t.style.backgroundColor = '#f59e0b';
-                        t.innerText = '⏳ جاري تحميل النظام، انتظر قليلاً...';
-                        t.style.display = 'block';
-                        clearTimeout(window.__bootT);
-                        window.__bootT = setTimeout(function () { t.style.display = 'none'; }, 2500);
-                    }, true);
-                })();
-            </script>
             <script src="./fp.min.js" defer></script>
             <script src="geo.js?v=7.5.2" defer></script>
             <script src="dist/bundle.js?v=7" defer></script>
