@@ -2180,7 +2180,7 @@
                     <div style="
             color:#0c4a6e; font-size:15px; font-weight:800;
             margin-bottom:4px; font-family:'Outfit', sans-serif;
-        ">نمط الجلسة</div>
+        ">Session Pattern</div>
 
                     <!-- مؤقت 20 ثانية -->
                     <div style="
@@ -2189,9 +2189,9 @@
         ">
                         <i class="fa-solid fa-clock" style="color:#0284c7; font-size:12px;"></i>
                         <span style="color:#0369a1; font-size:12px; font-weight:600;">
-                            لديك <span id="offlinePatternTimer" style="
+                            You have <span id="offlinePatternTimer" style="
                     color:#ef4444; font-weight:900; font-size:14px;
-                ">12</span> ثانية لرسم النمط
+                ">20</span> seconds to draw the pattern
                         </span>
                     </div>
 
@@ -2215,25 +2215,17 @@
 
                     <div id="offlinePatternHint" style="
             color:#0369a1; font-size:12px; font-weight:600; margin-bottom:16px;
-        ">ارسم النمط بالسحب بين النقاط</div>
+        ">Draw the pattern by dragging between dots</div>
 
-                    <!-- أزرار -->
-                    <div style="display:flex; gap:10px;">
-                        <button onclick="resetOfflinePattern()" style="
-                flex:1; padding:12px; border:none; border-radius:14px;
-                background:rgba(239,68,68,0.1); color:#ef4444;
-                font-size:13px; font-weight:700; cursor:pointer;
-                font-family:'Outfit', sans-serif;
-            ">
-                            <i class="fa-solid fa-rotate-left"></i> إعادة
-                        </button>
-                        <button onclick="skipOfflinePattern()" style="
-                flex:1; padding:12px; border:none; border-radius:14px;
+                    <!-- Skip button -->
+                    <div style="display:flex; justify-content:center;">
+                        <button type="button" onclick="skipOfflinePattern()" style="
+                padding:12px 36px; border:none; border-radius:14px;
                 background:rgba(100,116,139,0.1); color:#475569;
                 font-size:13px; font-weight:700; cursor:pointer;
                 font-family:'Outfit', sans-serif;
             ">
-                            <i class="fa-solid fa-forward"></i> تخطي
+                            <i class="fa-solid fa-forward"></i> Skip
                         </button>
                     </div>
                 </div>
